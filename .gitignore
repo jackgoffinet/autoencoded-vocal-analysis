@@ -1,0 +1,9 @@
+data/raw/
+data/processed/
+data/models/
+plots/
+*.pdf
+*.jpg
+*.npy
+
+plots
