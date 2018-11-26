@@ -28,38 +28,38 @@ amp_threshold = 0.08 # for STFT denoising, amp = np.max(np.abs(Zxx))
 
 
 def butter_bandpass(lowcut, highcut, fs, order=5):
-    nyq = 0.5 * fs
-    low = lowcut / nyq
-    high = highcut / nyq
-    b, a = signal.butter(order, [low, high], btype='band')
-    return b, a
+	nyq = 0.5 * fs
+	low = lowcut / nyq
+	high = highcut / nyq
+	b, a = signal.butter(order, [low, high], btype='band')
+	return b, a
 
 
 def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
-    b, a = butter_bandpass(lowcut, highcut, fs, order=order)
-    y = signal.lfilter(b, a, data)
-    return y
+	b, a = butter_bandpass(lowcut, highcut, fs, order=order)
+	y = signal.lfilter(b, a, data)
+	return y
 
 
 def get_spectrogram(filename):
-    # Load matlab data.
-    data = loadmat(filename)['spike2Chunk'].reshape(-1)
-    # Apply Butterworth filter.
-    data = butter_bandpass_filter(data, lowcut, highcut, fs, order=6)
-    # Compute STFT.
-    f, t, Zxx = signal.stft(data, fs=fs, nperseg=nperseg, noverlap=noverlap)
-    df = f[1] - f[0]
-    dt = t[1] - t[0]
-    # Denoise by thresholding values.
-    Zxx_denoise = np.where(np.abs(Zxx) >= amp_threshold, Zxx, 0.0)
-    return Zxx, Zxx_denoise, f, df, t, dt
+	# Load matlab data.
+	data = loadmat(filename)['spike2Chunk'].reshape(-1)
+	# Apply Butterworth filter.
+	data = butter_bandpass_filter(data, lowcut, highcut, fs, order=6)
+	# Compute STFT.
+	f, t, Zxx = signal.stft(data, fs=fs, nperseg=nperseg, noverlap=noverlap)
+	df = f[1] - f[0]
+	dt = t[1] - t[0]
+	# Denoise by thresholding values.
+	Zxx_denoise = np.where(np.abs(Zxx) >= amp_threshold, Zxx, 0.0)
+	return Zxx, Zxx_denoise, f, df, t, dt
 
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        print('Usage: $ python denoise.py <filename>')
-        quit()
-    Zxx, f, df, t, dt = get_spectrogram(sys.argv[1])
-    plt.imshow(np.abs(Zxx[:,1500:2000]), cmap="Greys")
-    plt.savefig('temp.pdf')
+	if len(sys.argv) != 2:
+		print('Usage: $ python denoise.py <filename>')
+		quit()
+	Zxx, f, df, t, dt = get_spectrogram(sys.argv[1])
+	plt.imshow(np.abs(Zxx[:,1500:2000]), cmap="Greys")
+	plt.savefig('temp.pdf')

@@ -1,9 +1,9 @@
 data/raw/
 data/processed/
 data/models/
-plots/
+plots/*
 *.pdf
 *.jpg
 *.npy
 
-plots
+
