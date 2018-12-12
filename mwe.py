@@ -18,25 +18,62 @@ BEFORE RUNNING:
 TO DO:
 - Thresholds not being passed
 - Random seed
-- More efficient dataloader implementation
+- More efficient dataloader implementation?
 """
 __author__ = "Jack Goffinet"
-__date__ = "November 2018"
+__date__ = "December 2018"
 
 import numpy as np
 
 spec_shape = (128,128)
 
+# # Zebra Finch
+# preprocess_params = {
+# 	'fs':44100.0,
+# 	'min_freq':300,
+# 	'max_freq':12e3,
+# 	'nperseg':512,
+# 	'noverlap':512-128-64,
+# 	'num_freq_bins':spec_shape[0],
+# 	'num_time_bins':spec_shape[1],
+# 	'meta': {},
+# }
+
+# Marmoset
+freq_response = np.zeros(spec_shape[0])
+freq_response[int(0.55*spec_shape[0]):int(0.70*spec_shape[0])] = 1.0
 preprocess_params = {
-	'fs':44100.0,
-	'min_freq':300,
-	'max_freq':12e3,
-	'min_dur':0.05, # NOTE: translate to time bins later on
-	'max_dur':0.3,
-	'num_freq_bins':spec_shape[0],
-	'num_time_bins':spec_shape[1],
+	# Spectrogram parameters
+	'fs': 96000,
+	'min_freq': 1e3,
+	'max_freq': 22e3,
+	'nperseg': 1024,
+	'noverlap': 0,
+	'spec_percentile': 90.0,
+	'num_freq_bins': spec_shape[0],
+	'num_time_bins': spec_shape[1],
+	'spacing': 'mel',
+	# Segmenting parameters
+	'seg_params': {
+		'a_onset':0.1,
+		'a_offset':0.05,
+		'a_dot_onset':0.0,
+		'a_dot_offset':0.0,
+		'min_var':0.0,
+		'min_dur':0.1,
+		'max_dur':2.0,
+		'freq_smoothing': 3.0,
+		'smoothing_timescale': 0.01,
+		'num_freq_bins': spec_shape[0],
+		'num_time_bins': spec_shape[1],
+		'freq_response': freq_response,
+	},
+	# I/O parameters
+	'max_num_files': 100,
+	'sylls_per_file': 200,
 	'meta': {},
 }
+
 # Set the dimension of the latent space.
 latent_dim = 64
 nf = 8
@@ -69,9 +106,10 @@ network_dims = {
 		'decoder_fc_layers':[i[::-1] for i in encoder_dense_layers[::-1]],
 }
 
-
+"""
 # Visualize some stuff.
-from plotting.longitudinal_gif import make_gif, make_kde_gif, make_projection
+from plotting.longitudinal_gif import make_gif, make_kde_gif, make_projection, make_time_heatmap
+from plotting.step_sizes import make_step_size_plot
 from models.dlgm import DLGM
 from models.dataset import get_partition, get_data_loaders
 
@@ -81,81 +119,65 @@ partition = get_partition(save_directories, split=1.0)
 loader, _ = get_data_loaders(partition, shuffle=(False,False), time_shift=(False, False))
 model = DLGM(network_dims, load_dir='data/models/sam/')
 
-make_kde_gif(loader, model)
+make_step_size_plot(loader, model)
 quit()
-
+"""
 
 """
 # 1) Tune segmenting parameters.
-load_dirs = ['data/raw/bird_data/'+str(i)+'/' for i in range(50,61,1)]
+load_dirs = ['data/raw/marmosets/S'+str(i)+'/' for i in range(1,2,1)]
 from preprocessing.preprocessing import tune_segmenting_params
-seg_params = tune_segmenting_params(load_dirs, **preprocess_params)
+seg_params = tune_segmenting_params(load_dirs, preprocess_params)
 preprocess_params['seg_params'] = seg_params
 
 quit()
 """
 
-
-seg_params = {'th_1':0.12, 'th_2':0.12, 'th_3':0.0, 'min_var':0.2}
-preprocess_params['seg_params'] = seg_params
+"""
 # 2) Segment audio into syllables.
 from preprocessing.preprocessing import process_sylls
-load_directories = ['data/raw/bird_data/'+str(i)+'/' for i in range(52,61,1)] # TEMP
-save_directories = ['data/processed/bird_data/'+str(i)+'/' for i in range(52,61,1)]
+# load_directories = ['data/raw/bird_data/'+str(i)+'/' for i in range(52,61,1)] # TEMP
+# save_directories = ['data/processed/bird_data/'+str(i)+'/' for i in range(52,61,1)]
+load_directories = ['data/raw/marmosets/S'+str(i)+'/' for i in [1,2,3,4,5]]
+save_directories = ['data/processed/hage/S'+str(i)+'/' for i in [1,2,3,4,5]]
 for load_dir, save_dir in zip(load_directories, save_directories):
 	try:
 		preprocess_params['meta'] = np.load(load_dir + 'meta.npy').item()
 	except FileNotFoundError:
 		pass
-	process_sylls(load_dir, save_dir, **preprocess_params)
-
-
-
-load_directories = ['data/raw/bird_data/'+str(i)+'/' for i in range(50,61,1)]
-save_directories = ['data/processed/bird_data/'+str(i)+'/' for i in range(50,61,1)]
+	process_sylls(load_dir, save_dir, preprocess_params)
 quit()
+"""
 
-
+save_directories = ['data/processed/hage/S'+str(i)+'/' for i in [1,2,3,4,5]]
+"""
 # 3) Train a generative model on these syllables.
 from models.dlgm import DLGM
 from models.dataset import get_partition, get_data_loaders
-partition = get_partition(save_directories, split=0.8)
-model = DLGM(network_dims, partition=partition, save_dir='data/models/sam/')
+partition = get_partition(save_directories, split=0.80)
+model = DLGM(network_dims, partition=partition, save_dir='data/models/hage/', sylls_per_file=preprocess_params['sylls_per_file'])
 model.train(epochs=100)
-
 quit()
-
+"""
 from models.dlgm import DLGM
 from models.dataset import get_partition, get_data_loaders
-model = DLGM(network_dims, load_dir='data/models/sam/')
+model = DLGM(network_dims, load_dir='data/models/hage/', sylls_per_file=preprocess_params['sylls_per_file'])
 
 # 4) Use the model to get a latent representation of these syllables.
-save_directories = ['data/processed/bird_data/'+str(i)+'/' for i in range(59,61,1)]
+# save_directories = ['data/processed/bird_data/'+str(i)+'/' for i in range(59,61,1)]
 
 partition = get_partition(save_directories, split=1.0)
-loader, _ = get_data_loaders(partition, shuffle=(False,False), time_shift=(False, False))
-latent = model.get_latent(loader, n=9000)
-np.save('latent.npy', latent)
+loader, _ = get_data_loaders(partition, shuffle=(False,False), time_shift=(False, False), sylls_per_file=preprocess_params['sylls_per_file'])
+# latent = model.get_latent(loader, n=10000)
+# np.save('latent.npy', latent)
+
 
 
 # 5) Visualize these latent representations.
-import umap
-from sklearn.manifold import TSNE
-# transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean')
-transform = TSNE(n_components=2, n_iter=1000)
-embedding = transform.fit_transform(latent)
-np.save('embedding.npy', embedding)
-
-
-embedding = np.load('embedding.npy')
-import matplotlib.pyplot as plt
-plt.switch_backend('agg')
-x = embedding[:,0]
-y = embedding[:,1]
-plt.scatter(x, y, alpha=0.3, s=0.5)
-axes = plt.gca()
-plt.savefig('temp.pdf')
+from plotting.longitudinal_gif import generate_syllables
+generate_syllables(loader, model)
 quit()
+
 
 # 6) Generate novel audio.
 from generate.inversion import invert_spec

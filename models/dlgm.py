@@ -13,6 +13,7 @@ https://arxiv.org/abs/1401.4082
 
 TO DO: make GPU optional
 TO DO: clean up <train>
+TO DO: take a look at the 0.02 scale
 """
 __author__ = "Jack Goffinet"
 __date__ = "November 2018"
@@ -145,7 +146,7 @@ class Decoder(nn.Module):
 class DLGM(nn.Module):
 	"""Deep Latent Gaussian Model"""
 
-	def __init__(self, network_dims, partition=None, test_freq=5, save_dir=None, load_dir=None):
+	def __init__(self, network_dims, partition=None, test_freq=5, save_dir=None, load_dir=None, sylls_per_file=1000):
 		"""
 		Construct a DLGM.
 
@@ -162,6 +163,7 @@ class DLGM(nn.Module):
 		self.latent_dim = self.params['latent_dim']
 		self.test_freq = test_freq
 		self.save_dir = save_dir
+		self.sylls_per_file = sylls_per_file
 		if self.save_dir is not None:
 			if self.save_dir[-1] != '/':
 				self.save_dir += '/'
@@ -178,7 +180,8 @@ class DLGM(nn.Module):
 			self.partition = checkpoint['partition']
 		self.encoder = Encoder(self.params)
 		self.decoder = Decoder(self.params)
-		self.train_loader, self.test_loader = get_data_loaders(self.partition)
+		self.train_loader, self.test_loader = get_data_loaders(self.partition, \
+				time_shift=(False,False), sylls_per_file=self.sylls_per_file)
 		self.cuda()
 
 
@@ -217,7 +220,6 @@ class DLGM(nn.Module):
 
 			try:
 				db = RankOneNormal(mu, log_d, u)
-				# db = dist.Normal(mu, torch.exp(log_d)).independent(1)
 			except:
 				print("caught in guide")
 				for group in [self.encoder.fc_layers]:
@@ -233,7 +235,7 @@ class DLGM(nn.Module):
 			pyro.sample("latent_3", db)
 
 
-	def train(self, epochs, lr=2.0e-5, tf=2):
+	def train(self, epochs, lr=3.0e-5, tf=2):
 		"""Train the DLGM for some number of epochs."""
 		# Set up the optimizer.
 		optimizer = Adam({"lr": lr})
@@ -251,19 +253,21 @@ class DLGM(nn.Module):
 			test_elbo = checkpoint['test_elbo']
 			start_epoch = checkpoint['epoch'] + 1
 			self.partition = checkpoint['partition']
-			self.train_loader, self.test_loader = get_data_loaders(self.partition)
+			self.train_loader, self.test_loader = get_data_loaders(self.partition, \
+					time_shift=(False,False), sylls_per_file=self.sylls_per_file)
 
 		# Set up the inference algorithm.
 		elbo = Trace_ELBO()
 		svi = SVI(self.model, self.guide, optimizer, loss=elbo)
 
+		print("dataset length: ", len(self.train_loader.dataset))
 		for epoch in range(start_epoch, start_epoch+epochs+1, 1):
 			train_loss = 0.0
-			# Iterate over the train dataset.
+			# Iterate over the training data.
 			for i, temp in enumerate(self.train_loader):
 				x = temp['image'].cuda().view(-1, self.input_dim)
 				train_loss += svi.step(x)
-			# report train diagnostics
+			# Report training diagnostics.
 			normalizer_train = len(self.train_loader.dataset)
 			total_epoch_loss_train = train_loss / normalizer_train
 			train_elbo[epoch] = total_epoch_loss_train
@@ -272,10 +276,11 @@ class DLGM(nn.Module):
 
 			if (epoch + 1) % tf == 0:
 				test_loss = 0.0
+				# Iterate over the test set.
 				for i, temp in enumerate(self.test_loader):
 					x = temp['image'].cuda().view(-1, self.input_dim)
 					test_loss += svi.evaluate_loss(x)
-				# report test diagnostics
+				# Report test diagnostics.
 				normalizer_test = len(self.test_loader.dataset)
 				total_epoch_loss_test = test_loss / normalizer_test
 				test_elbo[epoch] = total_epoch_loss_test
@@ -297,8 +302,10 @@ class DLGM(nn.Module):
 					torch.save(state, filename)
 
 
-	def reconstruct_img(self, v):
+	def reconstruct_img(self, v, from_numpy=False):
 		# Encode image <v>.
+		if from_numpy:
+			v = torch.from_numpy(v).type(torch.FloatTensor)
 		mu, log_d, u = self.encoder.forward(v)
 		db = RankOneNormal(mu, log_d, u)
 		# db = dist.Normal(mu, torch.exp(log_d)).independent(1)
@@ -306,7 +313,15 @@ class DLGM(nn.Module):
 		xi_2 = pyro.sample("latent_2", db)
 		xi_3 = pyro.sample("latent_3", db)
 		loc_img = self.decoder.forward((xi_1, xi_2, xi_3))
+		if from_numpy:
+			return loc_img.detach().cpu().numpy()
 		return loc_img
+
+
+	def generate_from_latent(self, latent):
+		latent = torch.from_numpy(latent).type(torch.FloatTensor)
+		loc_img = self.decoder.forward((latent, latent, latent))
+		return loc_img.detach().cpu().numpy()
 
 
 	def get_latent(self, loader, n=3000):
@@ -345,7 +360,7 @@ class DLGM(nn.Module):
 				temp_im = reconstructed[im_num].detach().cpu().numpy().reshape(self.input_shape)
 				big_img[:temp_im.shape[1],i1:i2] = temp_im
 			break
-		plt.imshow(big_img, aspect='equal', origin='lower')
+		plt.imshow(big_img, aspect='equal', origin='lower', interpolation='none')
 		plt.axis('off')
 		plt.savefig(filename)
 		plt.close('all')

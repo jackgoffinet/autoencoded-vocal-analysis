@@ -3,79 +3,83 @@ from __future__ import print_function, division
 Amplitude based syllable segmentation.
 
 TO DO: Add lambda filtering
-TO DO: kwargs
-TO DO: check imports
-TO DO: polish this
 """
 __author__ ="Jack Goffinet"
-__date__ = "November 2018"
+__date__ = "December 2018"
 
-import matplotlib.pyplot as plt # TEMP!
-plt.switch_backend('agg')
 
 import numpy as np
-from os import listdir
 from scipy.ndimage.filters import gaussian_filter, gaussian_filter1d
-from scipy.signal import convolve2d, stft, medfilt
-from scipy.stats import linregress
+from scipy.signal import convolve2d
 
 
 
-# thresholds for syllable onset & offset
-seg_params = {
-	'th_1':0.12,
-	'th_2':0.12,
+# Segmenting parameters.
+default_seg_params = {
+	'a_onset':0.1,
+	'a_offset':0.05,
+	'a_dot_onset':0.0,
+	'a_dot_offset':0.0,
 	'min_var':0.2,
+	'min_dur':0.1,
+	'max_dur':2.0,
+	'freq_smoothing': 3.0,
+	'smoothing_timescale': 0.02,
+	'num_time_bins': 128,
+	'num_freq_bins': 128,
+	'freq_response': np.ones(128),
 }
-max_syll_len = 128
-min_syll_len = 20
 
 
-def get_onsets_offsets(spec, seg_params=seg_params, return_traces=False):
+def get_onsets_offsets(spec, dt, seg_params, return_traces=False):
 	"""
 	Segment the spectrogram using hard thresholds on its ampltiude & derivative.
 
 	TO DO: pass filtering functions
 	"""
+	p = {**default_seg_params, **seg_params}
+	min_syll_len = int(np.floor(p['min_dur'] / dt))
+	max_syll_len = min(p['num_time_bins'], int(np.ceil(p['max_dur'] / dt)))
 	onsets, offsets = [], []
 	# Get amplitude data and its derivative.
-	smooth = gaussian_filter(spec, [3,3])
-	amps = np.mean(smooth, axis=0)
+	time_smoothing = p['smoothing_timescale'] / dt
+	smooth = gaussian_filter(spec, [p['freq_smoothing'], time_smoothing])
+	amps = np.einsum('ij,i->j', smooth, p['freq_response'])
+	# amps = np.mean(smooth, axis=0)
 	filter = np.array([[1,0,-1]]) # Sobel filter
 	amps_dot = convolve2d(smooth, filter, mode='same', boundary='symm')
 
-	amps_dot_dot = convolve2d(amps_dot, filter, mode='same', boundary='symm')
-	amps_dot_dot = np.mean(amps_dot_dot, axis=0)
-	amps_dot_dot = gaussian_filter1d(amps_dot_dot, 8.0)
+	# amps_dot_dot = convolve2d(amps_dot, filter, mode='same', boundary='symm')
+	# amps_dot_dot = np.mean(amps_dot_dot, axis=0)
+	# amps_dot_dot = gaussian_filter1d(amps_dot_dot, 8.0)
 
 	amps_dot = np.mean(amps_dot, axis=0)
-	amps_dot = gaussian_filter1d(amps_dot, 8.0)
+	amps_dot = gaussian_filter1d(amps_dot, time_smoothing)
 
 	# Normalize.
 	amps -= np.min(amps)
 	amps /= np.max(np.abs(amps))
-	amps = gaussian_filter1d(amps, 2.0)
+	amps = gaussian_filter1d(amps, time_smoothing)
 	amps_dot /= np.max(np.abs(amps_dot))
-	amps_dot_dot /= np.max(np.abs(amps_dot_dot))
+	# amps_dot_dot /= np.max(np.abs(amps_dot_dot))
 
-	# Collect syllable times using hard thresholds for detecting onsets and
-	# offsets.
-	th_1 = seg_params['th_1']
-	th_2 = seg_params['th_2']
+	# Collect syllable times using hard thresholds for detecting onsets/offsets.
+	a_onset = seg_params['a_onset']
+	a_offset = seg_params['a_offset']
+	# a_dot_onset = seg_params['a_dot_onset']
+	# a_dot_offset = seg_params['a_dot_offset']
 	min_var = seg_params['min_var']
 	var_trace = np.zeros(len(amps))
 	last = 'off'
 	for i in range(1,len(amps)-1,1):
 		if last == 'off':
-			if amps_dot[i] > th_1:
+			if amps[i] > a_onset:
 				onsets.append(i)
 				last = 'on'
 		else:
 			long_enough = i - onsets[-1] >= min_syll_len
-			quiet = amps[i] < th_2
-			amp_local_min = amps[i] == min(amps[i-1:i+2])
-			# if  long_enough and (quiet or (big_accel and amp_accel_local_max)):
-			if long_enough and quiet and amp_local_min:
+			# amp_local_min = amps[i] == min(amps[i-1:i+2])
+			if long_enough and amps[i] < a_offset:
 				var = np.mean(np.var(spec[:,onsets[-1]:i], axis=0))
 				var_trace[onsets[-1]:i] = var
 				if var < min_var:
@@ -96,11 +100,14 @@ def get_onsets_offsets(spec, seg_params=seg_params, return_traces=False):
 		if t2 - t1 + 1 <= max_syll_len and t2 - t1 + 1 >= min_syll_len:
 			new_onsets.append(t1)
 			new_offsets.append(t2)
+
+	# Return everything else.
 	if return_traces:
 		return new_onsets, new_offsets, amps, amps_dot, var_trace
 	return new_onsets, new_offsets
 
 
-
+if __name__ == '__main__':
+	pass
 
 ###
