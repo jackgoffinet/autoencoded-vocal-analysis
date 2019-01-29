@@ -64,24 +64,40 @@ class SyllableDataset(Dataset):
 		return len(self.filenames) * self.sylls_per_file
 
 	def __getitem__(self, index):
-		# First find the file.
-		filename = self.filenames[index // self.sylls_per_file]
-		file_index = index % self.sylls_per_file
-		# Then the image is a slice of the file's spectrogram.
-		with h5py.File(filename, 'r') as f:
-			image = f['syll_specs'][file_index]
-			duration = f['syll_lens'][file_index]
-			time = f['syll_times'][file_index]
-		individual = int(filename.split('/')[-2][1])
-		sample = {
-				'image': image,
-				'duration': duration,
-				'time': time,
-				'individual': individual,
-		}
-		if self.transform:
-			sample = self.transform(sample)
-		return sample
+		result = []
+		single_index = False
+		try:
+			iterator = iter(index)
+		except TypeError:
+			index = [index]
+			single_index = True
+		for i in index:
+			# First find the file.
+			filename = self.filenames[i // self.sylls_per_file]
+			file_index = i % self.sylls_per_file
+			# Then the image is a slice of the file's spectrogram.
+			with h5py.File(filename, 'r') as f:
+				image = f['syll_specs'][file_index]
+				duration = f['syll_lens'][file_index]
+				time = f['syll_times'][file_index]
+			# individual = int(filename.split('/')[-2][1])
+			# individual = int(filename.split('/')[-2].split('_')[1]) # for helium mice
+			# session = int(filename.split('/')[-2].split('_')[2][1:])
+			# condition = int(session != 1)
+			sample = {
+					'image': image,
+					'duration': duration,
+					'time': time,
+					# 'individual': individual,
+					# 'session': session,
+					# 'conddition': condition,
+			}
+			if self.transform:
+				sample = self.transform(sample)
+			result.append(sample)
+		if single_index:
+			return result[0]
+		return result
 
 
 class ToTensor(object):

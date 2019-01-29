@@ -1,4 +1,3 @@
-from __future__ import print_function, division
 """
 A Deep Latent Gaussian Model (DLGM) for image data implemented using Pyro &
 PyTorch.
@@ -13,7 +12,7 @@ https://arxiv.org/abs/1401.4082
 
 TO DO: make GPU optional
 TO DO: clean up <train>
-TO DO: take a look at the 0.02 scale
+TO DO: take a look at the 0.02
 """
 __author__ = "Jack Goffinet"
 __date__ = "November 2018"
@@ -31,8 +30,6 @@ from pyro.optim import Adam
 pyro.enable_validation(True)
 
 import os
-import argparse
-from tqdm import tqdm
 
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
@@ -222,13 +219,6 @@ class DLGM(nn.Module):
 				db = RankOneNormal(mu, log_d, u)
 			except:
 				print("caught in guide")
-				for group in [self.encoder.fc_layers]:
-					for layer in group:
-						print(torch.min(layer.weight), torch.max(layer.weight))
-						print(torch.min(layer.bias), torch.max(layer.bias))
-				print(torch.min(x), torch.max(x))
-				print(torch.sum(torch.isnan(mu)))
-				print(torch.sum(torch.isnan(log_d)))
 				quit()
 			pyro.sample("latent_1", db)
 			pyro.sample("latent_2", db)
@@ -324,21 +314,45 @@ class DLGM(nn.Module):
 		return loc_img.detach().cpu().numpy()
 
 
-	def get_latent(self, loader, n=3000):
+	def get_latent(self, loader, n=3000, random_subset=False, return_times=False, return_images=False):
 		n = min(n, len(loader.dataset))
 		print("len(loader.dataset)", len(loader.dataset))
+		latent = np.zeros((n, self.latent_dim))
 		filename = self.load_dir + 'checkpoint.tar'
 		checkpoint = torch.load(filename)
 		self.encoder.load_state_dict(checkpoint['encoder_state_dict'])
-		latent = np.zeros((n, self.latent_dim))
-		i = 0
-		for temp in loader:
-			x = temp['image'].cuda().view(-1, self.input_dim)
-			mu, _, _ = self.encoder.forward(x)
-			mu = mu.detach().cpu().numpy()
-			index = min(n-i,len(mu))
-			latent[i:i+index] = mu[:index]
-			i += index
+		if random_subset:
+			np.random.seed(42)
+			indices = np.random.permutation(len(loader.dataset))[:n]
+			images = [i['image'].detach().cpu().numpy() for i in loader.dataset[indices]]
+			times = np.array([i['time'] for i in loader.dataset[indices]])
+			images = torch.from_numpy(np.array(images)).type(torch.FloatTensor)
+			for i in range(len(images) // 1000):
+				x = images[i*1000:(i+1)*1000].cuda()
+				mu, _, _ = self.encoder.forward(x)
+				latent[i*1000:(i+1)*1000] = mu.detach().cpu().numpy()
+			if len(images) % 1000 != 0:
+				x = images[-1 * (len(images)%1000):].cuda()
+				mu, _, _ = self.encoder.forward(x)
+				latent[-1 * (len(images)%1000):] = mu.detach().cpu().numpy()
+		else:
+			i = 0
+			for temp in loader:
+				x = temp['image'].cuda().view(-1, self.input_dim)
+				mu, _, _ = self.encoder.forward(x)
+				mu = mu.detach().cpu().numpy()
+				index = min(n-i,len(mu))
+				latent[i:i+index] = mu[:index]
+				i += index
+				if i > n:
+					break
+
+		if return_times:
+			if return_images:
+				return latent, times, images
+			return latent, times
+		if return_images:
+			return latent, images
 		return latent
 
 

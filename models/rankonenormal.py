@@ -1,5 +1,4 @@
-from __future__ import absolute_import, division, print_function
-
+"""normal distribution with a rank-1 covariance structure."""
 import numpy as np
 import torch
 from torch.autograd import Variable
@@ -29,7 +28,6 @@ class RankOneNormal(Distribution):
 
 	def construct_matrix(self, log_d, u):
 		# define R, caching stuff in case R^-1 needs to be calculated.
-		# assert not torch.eq(log_d, ).any() # Doesn't make sense
 		d = torch.exp(log_d)
 		d_inv = torch.reciprocal(d)
 		d_rsqrt = torch.rsqrt(d)
