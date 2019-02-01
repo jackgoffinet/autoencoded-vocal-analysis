@@ -143,6 +143,7 @@ encoder_conv_layers =	[
 		[3*nf,3*nf,3,2,1],
 		[3*nf,4*nf,3,1,1],
 ]
+
 # [in_features, out_features]
 encoder_dense_layers =	[
 		[2**13, 2**10],
@@ -164,6 +165,11 @@ network_dims = {
 }
 
 
+# 0) Tune noise detection.
+load_dirs = ['data/raw/bird_data/grn151/'+i+'/' for i in ['4040']]
+from preprocessing.preprocessing import tune_noise_detection
+tune_noise_detection(load_dirs, preprocess_params, 'labeled.npy', load_filename=None)
+quit()
 
 # 1) Tune segmenting parameters.
 load_dirs = ['data/raw/bird_data/grn151/'+i+'/' for i in ['4020','4030','4040','4070']]
@@ -172,8 +178,6 @@ seg_params = tune_segmenting_params(load_dirs, preprocess_params)
 preprocess_params['seg_params'] = seg_params
 
 quit()
-
-
 
 
 # 2) Segment audio into syllables.
