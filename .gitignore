@@ -5,5 +5,5 @@ plots/*
 *.pdf
 *.jpg
 *.npy
-
+*.sh
 

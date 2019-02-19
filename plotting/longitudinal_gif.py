@@ -1,10 +1,10 @@
 from __future__ import print_function, division
 """
-Make a .gif of birdsong trajectories.
+Make a gif of birdsong trajectories.
 
 """
 __author__ = "Jack Goffinet"
-__date__ = "November 2018"
+__date__ = "November 2018 - February 2019"
 
 
 import numpy as np
@@ -48,66 +48,23 @@ def get_mean_freqs(loader, n=10**4):
 	return results
 
 
-def make_projection(loader, model):
+def make_projection(loader, model, latent=None, title="", save_filename='temp.pdf'):
 	# First get latent representations.
-	latent, times = model.get_latent(loader, n=30000, random_subset=True, return_times=True)
-	# indices = np.where(times > 8*31)
-	# print("total:", len(latent))
-	# latent = latent[indices]
-	# print("kept:", len(latent))
-	# times = times[indices]
-	# conditions = get_conditions(loader, n=10000)
-	# individuals = get_conditions(loader, n=10000, query='individual')
-	# sessions = get_conditions(loader, n=10000, query='session')
-	# mean_freqs = get_mean_freqs(loader, n=10000)
+	if latent is None:
+		latent, filenames = model.get_latent(loader, n=30000, random_subset=True, return_fields=['filename'])
+	# cmap = plt.get_cmap('tab20')
+	# print(filenames[:5])
+	# quit()
+	# colors = [cmap((hash(f.split('/')[-2])%256) / 256.0) for f in filenames]
 
-	# transform = TSNE(n_components=2, n_iter=1000)
 	transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
-	print("fitting transform")
 	embedding = transform.fit_transform(latent)
-	print("done")
-	np.save('embedding.npy', embedding)
-	# rgba_colors = np.zeros((len(embedding),4))
-	# rgba_colors[:,2] = conditions
-	# rgba_colors[:,3] = 0.2
-	patches = [mpatches.Patch(color=[0.0,0.0,0.0,0.2], label='air'),
-		mpatches.Patch(color=[0.0,0.0,1.0,0.2], label='heliox')]
-	# cmap = plt.cm.get_cmap('Set1', 3)
-	# patches = [mpatches.Patch(color=cmap(i), label='BM00'+str(i+4)) for i in range(3)]
-	# colors = cmap(individuals - 3)
-	colors = []
 	X, Y = embedding[:,0], embedding[:,1]
-	# X, Y = [], []
-	temp_cmap = plt.get_cmap('viridis')
-	# colors = temp_cmap(mean_freqs)
-	# patches = []
-	latent_by_session = [[],[],[],[],[],[],[],[],[],[]]
-	# for i in range(5):
-		# patches.append(mpatches.Patch(color=temp_cmap(i/4.0), label='Session '+str(i+1)))
-	# patches = [mpatches.Patch(color='r', label='Session 1 (air)'),
-			# mpatches.Patch(color='b', label='Sessions 2-9 (heliox)'),
-			# mpatches.Patch(color='k', label='Session 10 (air)')]
-	# for i, point in enumerate(embedding):
-	# 	if individuals[i] == 5:
-	# 		X.append(point[0])
-	# 		Y.append(point[1])
-	# 		temp = 'b'
-	# 		if sessions[i] == 1:
-	# 			temp = 'r'
-	# 		elif sessions[i] == 10:
-	# 			temp = 'k'
-	# 		colors.append(temp)
-	# 		latent_by_session[int(round(sessions[i]-1))].append(latent[i])
-	# np.save('BM005_latent_by_session.npy', latent_by_session)
-	# print("found: ", len(X))
-	plt.scatter(X, Y, c='b', alpha=0.1, s=1) #rgba_colors
-	# plt.legend(handles=patches, loc='best')
-	# plt.ylim((0,14))
-	# plt.xlim((5,25))
-	plt.title('pur224 projection, 90 dph')
-	# plt.title('USV Mean Frequencies')
+	plt.scatter(X, Y, c='b', alpha=0.1, s=0.7) #rgba_colors
+	if len(title) > 0:
+		plt.title(title)
 	plt.axis('off')
-	plt.savefig('temp.pdf')
+	plt.savefig(save_filename)
 	plt.close('all')
 
 
@@ -116,11 +73,6 @@ def generate_syllables(loader, model):
 	height, width = 4, 6
 	# First get the latent projection used to define the transform.
 	latent, times = model.get_latent(loader, n=30000, random_subset=True, return_times=True)
-	indices = np.where(times > 8*31)
-	print("total:", len(latent))
-	latent = latent[indices]
-	print("kept:", len(latent))
-	times = times[indices]
 	transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
 	print("fitting transform")
 	transform.fit(latent)
@@ -164,14 +116,12 @@ def generate_syllables(loader, model):
 	plt.close('all')
 
 
-def get_embeddings_times(loader, model):
+def get_embeddings_times(loader, model, return_latent=False, return_images=False):
 	# First get latent representations.
-	latent, times = model.get_latent(loader, n=30000, random_subset=True, return_times=True)
-	indices = np.where(times > 8*31)
-	print("total:", len(latent))
-	latent = latent[indices]
-	print("kept:", len(latent))
-	times = times[indices]
+	if return_images:
+		latent, times, images = model.get_latent(loader, n=30000, random_subset=True, return_times=True, return_images=True)
+	else:
+		latent, times = model.get_latent(loader, n=30000, random_subset=True, return_times=True, return_images=False)
 	# perm = np.random.permutation(len(latent))
 	# latent = latent[perm]
 	# times = times[perm]
@@ -181,6 +131,12 @@ def get_embeddings_times(loader, model):
 	transform.fit(latent)
 	print("done")
 	embeddings = transform.transform(latent)
+	if return_latent:
+		if return_images:
+			return embeddings, times, latent, images
+		return embeddings, times, latent
+	if return_images:
+		return embeddings, times, images
 	return embeddings, times
 
 
@@ -213,11 +169,13 @@ def make_time_heatmap(loader, model):
 # Make a gif w/ query times, not orderings
 def make_kde_gif(loader, model):
 	embeddings, times = get_embeddings_times(loader, model)
-	times -= 8*13
-	xmin, xmax, ymin, ymax = -7, 15, -7, 15
+	times -= 290
+	xmin, xmax, ymin, ymax = np.min(embeddings[:,0]), np.max(embeddings[:,0]), np.min(embeddings[:,1]), np.max(embeddings[:,1])
+	gap = 4
+	xmin, xmax, ymin, ymax = xmin-gap, xmax+gap, ymin-gap,ymax+gap
 	# Write a bunch of jpgs.
-	num_segs = (56-14) * 2 + 1
-	query_times = np.linspace(14.0, 56.0, num_segs, endpoint=True)
+	num_segs = (99-59+1) * 2 + 1
+	query_times = np.linspace(59.0, 99.0, num_segs, endpoint=True)
 	delta = query_times[1] - query_times[0]
 	for i, query_time in enumerate(query_times):
 		m1, m2 = [], []
@@ -245,11 +203,12 @@ def make_kde_gif(loader, model):
 		# ax.plot(m1, m2, 'k.', markersize=2)
 		ax.set_xlim([xmin, xmax])
 		ax.set_ylim([ymin, ymax])
-		if query_time < 32:
-			plt.text(-14, 6, "August "+str(int(np.floor(query_time))))
-		else:
-			plt.text(-14, 6, "September "+str(int(np.floor(query_time - 31.0))))
-		plt.text(-14, 9, str(int(np.floor(query_time)+35))+' dph')
+		# if query_time < 32:
+		# 	plt.text(-14, 6, "August "+str(int(np.floor(query_time))))
+		# else:
+		# 	plt.text(-14, 6, "September "+str(int(np.floor(query_time - 31.0))))
+		plt.text(-8, 9, str(int(np.floor(query_time)))+' dph')
+		plt.title("blu258 Development")
 		plt.savefig(str(i).zfill(2)+'.jpg')
 		plt.close('all')
 	# Turn them into a gif.
@@ -262,96 +221,42 @@ def make_kde_gif(loader, model):
 	imageio.mimsave('temp.gif', images, duration=0.15)
 
 
-# def make_kde_gif(loader, model):
+# Make a gif w/ query times, not orderings
+def make_dot_gif(loader, model):
 	embeddings, times = get_embeddings_times(loader, model)
-	xmin, xmax, ymin, ymax = -10, 15, -14, 12
+	print("times:", np.min(times), np.max(times))
+	xmin, xmax, ymin, ymax = np.min(embeddings[:,0]), np.max(embeddings[:,0]), np.min(embeddings[:,1]), np.max(embeddings[:,1])
+	gap = 4
+	xmin, xmax, ymin, ymax = xmin-gap, xmax+gap, ymin-gap,ymax+gap
 	# Write a bunch of jpgs.
-	num_points = 1800
-	delta = 200
-	p = times.argsort()
-	times = times[p]
-	embeddings = embeddings[p]
-	print("num points", len(times))
-	fig_num, j = 0, 0
-	while j + num_points < len(times):
-		X, Y = np.mgrid[xmin:xmax:100j, ymin:ymax:100j]
-		positions = np.vstack([X.ravel(), Y.ravel()])
-		m1 = embeddings[j:j+num_points,0]
-		m2 = embeddings[j:j+num_points,1]
-		values = np.vstack([m1, m2])
-		scott = 0.5 * len(m1) ** (-1./6.) # half scott
-		kernel = gaussian_kde(values, bw_method=scott)
-		Z = np.reshape(kernel(positions).T, X.shape)
-		fig = plt.figure()
-		ax = fig.add_subplot(111)
-		ax.imshow(np.rot90(Z), cmap=plt.cm.gist_earth_r,
-				extent=[xmin, xmax, ymin, ymax])
-		ax.plot(embeddings[:,0], embeddings[:,1], 'k.', alpha=0.07, markersize=0.5)
-		ax.set_xlim([xmin, xmax])
-		ax.set_ylim([ymin, ymax])
-		plt.axis('off')
-		med_time = times[j + delta // 2] - 8*31
-		if med_time < 32:
-			plt.text(-14, 6, "August "+str(int(np.floor(med_time))))
-		else:
-			plt.text(-14, 6, "September "+str(int(np.floor(med_time - 31.0))))
-		plt.text(-14, 9, str(int(np.floor(med_time)+35))+' dph')
-		plt.savefig(str(fig_num).zfill(2)+'.jpg')
+	num_segs = (69-47) * 4 + 1
+	query_times = np.linspace(47.0, 69.0, num_segs, endpoint=False)
+	delta = query_times[1] - query_times[0]
+	window = 4*delta
+	for i, query_time in enumerate(query_times):
+		m1, m2 = [], []
+		ds = []
+		for time, embedding in zip(times, embeddings):
+			if time > query_time and time < query_time + window:
+				m1.append(embedding[0])
+				m2.append(embedding[1])
+				ds.append(1.0 - (time - query_time)/window)
+		plt.scatter(embeddings[:,0], embeddings[:,1], c='k', alpha=0.04, s=0.5)
+		rgba_colors = np.zeros((len(ds),4))
+		rgba_colors[:,0] = 1.0
+		rgba_colors[:,3] = np.array(ds) ** 2
+		plt.scatter(m1, m2, color=rgba_colors, s=0.8)
+		plt.xlim([xmin, xmax])
+		plt.ylim([ymin, ymax])
+		plt.text(-8, 9, str(int(np.floor(query_time)))+' dph')
+		plt.title("grn288 Development")
+		plt.savefig(str(i).zfill(2)+'.jpg')
 		plt.close('all')
-		fig_num += 1
-		j += delta
 	# Turn them into a gif.
 	import imageio
 	images = []
-	for j in range(fig_num):
-		image = imageio.imread(str(j).zfill(2) + '.jpg')
+	for i in range(num_segs):
+		image = imageio.imread(str(i).zfill(2) + '.jpg')
 		images.append(image)
 	print('saving gif')
-	imageio.mimsave('temp.gif', images, duration=0.15)
-
-
-
-# def make_gif(loader, model):
-# 	embeddings, times = get_latent_times(loader, model)
-#
-# 	# Write a bunch of jpgs.
-# 	num_segs = 27-15
-# 	query_times = np.linspace(15.0, 27.0, num_segs, endpoint=False)
-# 	delta = query_times[1] - query_times[0]
-# 	print((np.max(times)-np.min(times)))
-# 	min_time = np.min(times)
-# 	max_time = np.max(times)
-#
-# 	for i, query_time in enumerate(query_times):
-# 		X = []
-# 		Y = []
-# 		rgba_colors = np.zeros((len(embeddings),4))
-# 		for j, time, embedding in zip(range(len(times)), times, embeddings):
-# 			X.append(embedding[0])
-# 			Y.append(embedding[1])
-# 			if time >= query_time and time < query_time + delta:
-# 				rgba_colors[j,0] = (time - min_time) / (max_time - min_time)
-# 				rgba_colors[j,2] = 1 - (time - min_time) / (max_time - min_time)
-# 				rgba_colors[j,3] = 0.7
-# 			else:
-# 				rgba_colors[j,3] = 0.04
-#
-#
-# 		plt.scatter(X, Y, color=rgba_colors, s=0.5)
-# 		plt.title("pur224 projection")
-# 		axes = plt.gca()
-# 		axes.set_xlim([-14,9])
-# 		axes.set_ylim([-11,13])
-# 		plt.text(-14, 6, "August "+str(int(np.floor(query_time))))
-# 		plt.text(-14, 9, str(int(np.floor(query_time)+35))+' dph')
-# 		plt.savefig(str(i).zfill(2)+'.jpg')
-# 		plt.close('all')
-#
-# 	# Turn them into a gif.
-# 	import imageio
-# 	images = []
-# 	for i in range(num_segs):
-# 		image = imageio.imread(str(i).zfill(2) + '.jpg')
-# 		images.append(image)
-# 	print('saving gif')
-# 	imageio.mimsave('temp.gif', images, duration=1)
+	imageio.mimsave('temp.gif', images, duration=0.1)

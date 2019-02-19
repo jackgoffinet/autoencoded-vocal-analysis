@@ -15,7 +15,7 @@ from bokeh.models.glyphs import ImageURL
 plt.switch_backend('agg')
 
 
-def save_image(data, fn):
+def save_image(data, filename):
 	"""https://fengl.org/2014/07/09/matplotlib-savefig-without-borderframe/"""
 	sizes = np.shape(data)
 	height = float(sizes[0])
@@ -28,7 +28,7 @@ def save_image(data, fn):
 	fig.add_axes(ax)
 
 	ax.imshow(data, cmap='viridis', origin='lower')
-	plt.savefig(fn, dpi = height)
+	plt.savefig(filename, dpi=height)
 	plt.close('all')
 
 
@@ -36,11 +36,7 @@ def write_images(loader, model, output_dir='temp/', num_imgs=100):
 	if not os.path.exists(output_dir):
 		os.makedirs(output_dir)
 	# First get latent representations.
-	latent, times, images = model.get_latent(loader, n=30000, random_subset=True, return_times=True, return_images=True)
-	# indices = np.where(times > 8*31)
-	# latent = latent[indices]
-	# times = times[indices]
-	# images = images[indices]
+	latent, times, images = model.get_latent(loader, n=30000, random_subset=True, return_fields=['time', 'image'])
 	transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
 	embedding = transform.fit_transform(latent)
 	np.save('embedding.npy', embedding)
@@ -49,8 +45,7 @@ def write_images(loader, model, output_dir='temp/', num_imgs=100):
 	return embedding
 
 
-
-def make_html_plot(loader, model, output_dir='temp/', num_imgs=1000):
+def make_html_plot(loader, model, output_dir='temp/', num_imgs=1000, title=""):
 	embedding = write_images(loader, model, output_dir=output_dir, num_imgs=num_imgs)
 	output_file(output_dir + "main.html")
 	source = ColumnDataSource(
@@ -68,7 +63,7 @@ def make_html_plot(loader, model, output_dir='temp/', num_imgs=1000):
 			)
 		)
 
-	p = figure(plot_width=800, plot_height=600, title="heliox & air projection")
+	p = figure(plot_width=800, plot_height=600, title=title)
 	p.scatter('x', 'y', size=3, fill_color='blue', fill_alpha=0.1, source=source2)
 	tooltip_points = p.scatter('x', 'y', size=5, fill_color='red', source=source)
 	hover = HoverTool(
