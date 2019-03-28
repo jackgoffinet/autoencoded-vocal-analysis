@@ -33,14 +33,14 @@ def get_data_loaders(partition, batch_size=64, num_time_bins=128, \
 			transform=ToTensor(),
 			sylls_per_file=sylls_per_file)
 	train_dataloader = DataLoader(train_dataset, batch_size=batch_size, \
-			shuffle=shuffle[0], num_workers=4)
+			shuffle=shuffle[0], num_workers=3)
 	if not partition['test']:
 		return train_dataloader, None
 	test_dataset = SyllableDataset(filenames=partition['test'], \
 			transform=ToTensor(),
 			sylls_per_file=sylls_per_file)
 	test_dataloader = DataLoader(test_dataset, batch_size=batch_size, \
-			shuffle=shuffle[1], num_workers=4)
+			shuffle=shuffle[1], num_workers=3)
 	return train_dataloader, test_dataloader
 
 
@@ -73,6 +73,7 @@ class SyllableDataset(Dataset):
 					'image': f['specs'][file_index],
 					'duration': f['durations'][file_index],
 					'time': f['times'][file_index],
+					'file_time': f['file_times'][file_index],
 					'filename': str(f['filenames'][file_index]),
 				}
 			if self.transform:

@@ -4,66 +4,146 @@ Make a gif of birdsong trajectories.
 
 """
 __author__ = "Jack Goffinet"
-__date__ = "November 2018 - February 2019"
+__date__ = "November 2018 - March 2019"
 
 
+import time
 import numpy as np
 import umap
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 from sklearn.decomposition import PCA
-from sklearn.manifold import TSNE
 from scipy.stats import gaussian_kde
 plt.switch_backend('agg')
 
 
-def get_conditions(loader, query='condition', n=10**10):
-	n = min(n, len(loader.dataset))
-	conditions = np.zeros(len(loader.dataset))
-	for i, temp in enumerate(loader):
-		i1 = min(n, i*len(temp[query]))
-		i2 = min(n, (i+1)*len(temp[query]))
-		conditions[i1:i2] = temp[query]
-	return conditions
 
+def make_projection(loader, model, latent=None, title="", save_filename='temp.pdf', n=30000, axis=False):
+	# # First get latent representations.
+	# if latent is None:
+	# 	latent, filenames, images = model.get_latent(loader, n=n, random_subset=True, return_fields=['filename', 'image']) # image is TEMP!
+	# transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
+	# embedding = transform.fit_transform(latent)
+	# X, Y = embedding[:,0], embedding[:,1]
+	#
+	# # TEMP!
+	# indices = []
+	# for i, embed in enumerate(embedding):
+	# 	if embed[0] > 4.0:
+	# 		indices.append(i)
+	# indices = np.array(indices, dtype='int')
+	# transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
+	# embedding = transform.fit_transform(latent[indices])
+	#
+	# d = {'latent': latent[indices], 'embedding':embedding, 'filenames':filenames[indices], 'images':images[indices]}
+	# np.save('data.npy', d)
 
-def get_mean_freqs(loader, n=10**4):
-	results = []
-	for temp in loader:
-		specs = temp['image'].detach().cpu().numpy()
-		freq_weights = np.arange(128)
-		time_weights = np.sum(specs, axis=1)
-		results += np.einsum('j,ik,ijk->i',freq_weights, time_weights, specs).tolist()
-		if len(results) >= n:
-			break
-	results = results[:n]
-	# results -= np.percentile(results, 5.0)
-	# results /= np.percentile(results, 95.0)
-	# results[results<0.0] = 0.0
-	# results[results>1.0] = 1.0
-	# results = 1.0 - results
-	results -= np.mean(results)
-	results /= -1.0*np.std(results)
-	return results
+	d = np.load('data.npy').item()
+	latent = d['latent']
+	embedding = d['embedding']
+	filenames = d['filenames']
+	images = d['images']
 
-
-def make_projection(loader, model, latent=None, title="", save_filename='temp.pdf'):
-	# First get latent representations.
-	if latent is None:
-		latent, filenames = model.get_latent(loader, n=30000, random_subset=True, return_fields=['filename'])
-	# cmap = plt.get_cmap('tab20')
-	# print(filenames[:5])
-	# quit()
-	# colors = [cmap((hash(f.split('/')[-2])%256) / 256.0) for f in filenames]
-
-	transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
-	embedding = transform.fit_transform(latent)
 	X, Y = embedding[:,0], embedding[:,1]
-	plt.scatter(X, Y, c='b', alpha=0.1, s=0.7) #rgba_colors
+
+	# # TEMP!
+	temp = np.sum(images, axis=2)
+	mean_freqs = []
+	for i in range(len(temp)):
+		temp[i] /= np.sum(temp[i])
+		mean_freqs.append(np.dot(temp[i], np.arange(128)))
+	mean_freqs -= np.percentile(mean_freqs, 5)
+	mean_freqs /= np.percentile(mean_freqs, 95)
+	mean_freqs[mean_freqs < 0.0] = 0.0
+	mean_freqs[mean_freqs > 1.0] = 1.0
+
+	# durations = []
+	# # from scipy.special import softmax
+	# filter = np.zeros(128)
+	# filter[:64] = np.linspace(1.0,0.0,64)
+	# filter[64:] = np.linspace(0.0,1.0,64)
+	# for image in images:
+	# 	temp = np.max(image, axis=0)
+	# 	temp /= np.sum(temp)
+	# 	durations.append(np.dot(filter, temp))
+	# durations -= np.percentile(durations, 5)
+	# durations /= np.percentile(durations, 95)
+	# durations[durations < 0.0] = 0.0
+	# durations[durations > 1.0] = 1.0
+
+
+	# sizes = np.zeros(len(filenames))
+	# rgba_colors = np.zeros((len(filenames),4))
+	# rgba_colors[:,3] = 0.4
+	# for i, filename in enumerate(filenames):
+	#
+	# 	# Male/female
+	# 	if 'Ai_14' in filename or 'RAm_2' in filename or 'RAm_6' in filename or 'RAm_female' in filename or 'VM_8' in filename:
+	# 		rgba_colors[i,:] = [70/255,240/255,240/255,0.4]
+	# 	elif 'opto' not in filename and '7d' not in filename and '14d' not in filename:
+	# 		rgba_colors[i,:] = [245/255,130/255,48/255,0.3]
+	#
+	# 	else:
+	# 		rgba_colors[i,3] = 0.01
+	# 	sizes[i] = 1.2
+
+
+		# if 'TVA_28_fd' in filename:
+		# 	rgba_colors[i,:3] = [128/255,0.0,0.0]
+		# 	sizes[i] = 4.0
+		# if 'VM_31_fd' in filename:
+		# 	rgba_colors[i,:3] = [170/255,110/255,40/255]
+		# 	sizes[i] = 4.0
+		# if 'Ai_14' in filename:
+		# 	rgba_colors[i,:3] = [128/255,128/255,0.0]
+		# 	sizes[i] = 4.0
+		# if 'VM_47_fd' in filename:
+		# 	rgba_colors[i,:3] = [210/255,245/255,60/255]
+		# 	sizes[i] = 4.0
+		# if 'VM_75_fd' in filename:
+		# 	rgba_colors[i,:3] = [60/255,180/255,75/255]
+		# 	sizes[i] = 4.0
+		# if 'VM_8_fd' in filename:
+		# 	rgba_colors[i,:3] = [70/255,240/255,240/255]
+		# 	sizes[i] = 4.0
+		# if 'RAm_2_fd' in filename:
+		# 	rgba_colors[i,:3] = [0/255,130/255,200/255]
+		# 	sizes[i] = 4.0
+		# if 'RAm_female' in filename:
+		# 	rgba_colors[i,:3] = [145/255,30/255,180/255]
+		# 	sizes[i] = 4.0
+		# if 'RAm_6_fd' in filename:
+		# 	rgba_colors[i,:3] = [240/255,50/255,230/255]
+		# 	sizes[i] = 4.0
+		# else:
+		# 	rgba_colors[i,3] = 0.02
+		# 	sizes[i] = 1.2
+
+		# # Opto
+		# sizes[i] = 1.2
+		# if 'opto' in filename:
+		# 	rgba_colors[i,:] = [0.0,0.0,1.0,0.2]
+		# else:
+		# 	rgba_colors[i,:] = [1.0,0.0,0.0,0.2]
+
+		# # TVA
+		# if 'TVA' in filename:
+		# 	rgba_colors[i,3] = 0.25
+		# 	if '28_fd' in filename:
+		# 		rgba_colors[i,0] = 1.0
+		# 	elif '28_7d' in filename:
+		# 		rgba_colors[i,1] = 0.6
+		# 	elif '28_14d' in filename:
+		# 		rgba_colors[i,2] = 1.0
+
+	# patches = [mpatches.Patch(color=[1.0,0.0,0.0], label='female-directed'), mpatches.Patch(color=[0.0,0.0,1.0], label='opto-elicited')]
+	plt.scatter(X, Y, c=mean_freqs, cmap='viridis', s=1.2, alpha=0.5)
 	if len(title) > 0:
 		plt.title(title)
-	plt.axis('off')
+	if not axis:
+		plt.axis('off')
+	# plt.legend(handles=patches, loc='best')
 	plt.savefig(save_filename)
 	plt.close('all')
 
@@ -116,15 +196,14 @@ def generate_syllables(loader, model):
 	plt.close('all')
 
 
-def get_embeddings_times(loader, model, return_latent=False, return_images=False):
+def get_embeddings_times(loader, model, return_latent=False, return_images=False, n=30000):
 	# First get latent representations.
 	if return_images:
-		latent, times, images = model.get_latent(loader, n=30000, random_subset=True, return_times=True, return_images=True)
+		return_fields = ['time', 'image']
+		latent, times, images = model.get_latent(loader, n=n, random_subset=True, return_fields=return_fields)
 	else:
-		latent, times = model.get_latent(loader, n=30000, random_subset=True, return_times=True, return_images=False)
-	# perm = np.random.permutation(len(latent))
-	# latent = latent[perm]
-	# times = times[perm]
+		return_fields = ['time']
+		latent, times = model.get_latent(loader, n=n, random_subset=True, return_fields=return_fields)
 	# Fit UMAP on a random subset, get embedding.
 	transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
 	print("fitting transform")
@@ -166,49 +245,39 @@ def make_time_heatmap(loader, model):
 	plt.close('all')
 
 
-# Make a gif w/ query times, not orderings
-def make_kde_gif(loader, model):
-	embeddings, times = get_embeddings_times(loader, model)
-	times -= 290
+
+# Make a gif w/ query times.
+def make_dot_gif(loader, model, title="", n=30000):
+	embeddings, times = get_embeddings_times(loader, model, n=n)
+	tmax, tmin = np.max(times), np.min(times)
+	print(tmin, tmax)
+	print(time.gmtime(tmin))
+	print(time.gmtime(tmax))
 	xmin, xmax, ymin, ymax = np.min(embeddings[:,0]), np.max(embeddings[:,0]), np.min(embeddings[:,1]), np.max(embeddings[:,1])
 	gap = 4
 	xmin, xmax, ymin, ymax = xmin-gap, xmax+gap, ymin-gap,ymax+gap
 	# Write a bunch of jpgs.
-	num_segs = (99-59+1) * 2 + 1
-	query_times = np.linspace(59.0, 99.0, num_segs, endpoint=True)
+	num_segs = int(round(4.0 * (tmax-tmin) / (60*60*24)))
+	query_times = np.linspace(tmin, tmax, num_segs, endpoint=False)
 	delta = query_times[1] - query_times[0]
+	window = 4*delta
 	for i, query_time in enumerate(query_times):
 		m1, m2 = [], []
-		for time, embedding in zip(times, embeddings):
-			if abs(time - query_time) < 3*delta:
+		ds = []
+		for t, embedding in zip(times, embeddings):
+			if t > query_time and t < query_time + window:
 				m1.append(embedding[0])
 				m2.append(embedding[1])
-		X, Y = np.mgrid[xmin:xmax:100j, ymin:ymax:100j]
-		positions = np.vstack([X.ravel(), Y.ravel()])
-		if len(m1) == 0:
-			Z = np.zeros(X.shape)
-		else:
-			values = np.vstack([np.array(m1), np.array(m2)])
-			scott = 0.5 * len(m1) ** (-1./6.)
-			kernel = gaussian_kde(values, bw_method=scott)
-			Z = np.reshape(kernel(positions).T, X.shape)
-		fig = plt.figure()
-		ax = fig.add_subplot(111)
-		ax.imshow(np.rot90(Z), cmap=plt.cm.gist_earth_r,
-				extent=[xmin, xmax, ymin, ymax])
-		# rgba_colors = np.zeros((len(embeddings),4))
-		# rgba_colors[:,3] = 0.04
-		ax.plot(embeddings[:,0], embeddings[:,1], 'k.', alpha=0.07, markersize=0.5)
-		# (embedding[0], embedding[1], color=rgba_colors, s=0.5)
-		# ax.plot(m1, m2, 'k.', markersize=2)
-		ax.set_xlim([xmin, xmax])
-		ax.set_ylim([ymin, ymax])
-		# if query_time < 32:
-		# 	plt.text(-14, 6, "August "+str(int(np.floor(query_time))))
-		# else:
-		# 	plt.text(-14, 6, "September "+str(int(np.floor(query_time - 31.0))))
-		plt.text(-8, 9, str(int(np.floor(query_time)))+' dph')
-		plt.title("blu258 Development")
+				ds.append(1.0 - (t - query_time)/window)
+		plt.scatter(embeddings[:,0], embeddings[:,1], c='k', alpha=0.04, s=0.5)
+		rgba_colors = np.zeros((len(ds),4))
+		rgba_colors[:,0] = 1.0
+		rgba_colors[:,3] = np.array(ds) ** 2
+		plt.scatter(m1, m2, color=rgba_colors, s=0.8)
+		plt.xlim([xmin, xmax])
+		plt.ylim([ymin, ymax])
+		plt.text(xmin+2, ymin-5, time.strftime('%b %d', time.gmtime(query_time)))
+		plt.title(title)
 		plt.savefig(str(i).zfill(2)+'.jpg')
 		plt.close('all')
 	# Turn them into a gif.
@@ -219,44 +288,3 @@ def make_kde_gif(loader, model):
 		images.append(image)
 	print('saving gif')
 	imageio.mimsave('temp.gif', images, duration=0.15)
-
-
-# Make a gif w/ query times, not orderings
-def make_dot_gif(loader, model):
-	embeddings, times = get_embeddings_times(loader, model)
-	print("times:", np.min(times), np.max(times))
-	xmin, xmax, ymin, ymax = np.min(embeddings[:,0]), np.max(embeddings[:,0]), np.min(embeddings[:,1]), np.max(embeddings[:,1])
-	gap = 4
-	xmin, xmax, ymin, ymax = xmin-gap, xmax+gap, ymin-gap,ymax+gap
-	# Write a bunch of jpgs.
-	num_segs = (69-47) * 4 + 1
-	query_times = np.linspace(47.0, 69.0, num_segs, endpoint=False)
-	delta = query_times[1] - query_times[0]
-	window = 4*delta
-	for i, query_time in enumerate(query_times):
-		m1, m2 = [], []
-		ds = []
-		for time, embedding in zip(times, embeddings):
-			if time > query_time and time < query_time + window:
-				m1.append(embedding[0])
-				m2.append(embedding[1])
-				ds.append(1.0 - (time - query_time)/window)
-		plt.scatter(embeddings[:,0], embeddings[:,1], c='k', alpha=0.04, s=0.5)
-		rgba_colors = np.zeros((len(ds),4))
-		rgba_colors[:,0] = 1.0
-		rgba_colors[:,3] = np.array(ds) ** 2
-		plt.scatter(m1, m2, color=rgba_colors, s=0.8)
-		plt.xlim([xmin, xmax])
-		plt.ylim([ymin, ymax])
-		plt.text(-8, 9, str(int(np.floor(query_time)))+' dph')
-		plt.title("grn288 Development")
-		plt.savefig(str(i).zfill(2)+'.jpg')
-		plt.close('all')
-	# Turn them into a gif.
-	import imageio
-	images = []
-	for i in range(num_segs):
-		image = imageio.imread(str(i).zfill(2) + '.jpg')
-		images.append(image)
-	print('saving gif')
-	imageio.mimsave('temp.gif', images, duration=0.1)

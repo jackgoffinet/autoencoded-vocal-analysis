@@ -9,19 +9,17 @@ __date__ = "December 2018 - February 2019"
 import os
 import numpy as np
 import h5py
-from tqdm import tqdm
 
 from scipy.io import wavfile, loadmat
 from scipy.signal import stft
 
-from time import strptime, mktime
+from time import strptime, mktime, localtime
 
 from skimage.transform import resize
 
 from scipy.interpolate import interp1d
 
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 plt.switch_backend('agg')
 
 
@@ -53,6 +51,23 @@ default_params = {
 def process_sylls(load_dir, save_dir, p, noise_detector=None):
 	"""
 	Main method: process files in <load_dir> and save to <save_dir>.
+
+	Parameters
+	----------
+	load_dir : string
+		Directory to load files from
+	save_fir : string
+		Directory to save files to
+	p : dictionary
+		Parameters
+	noise_detector : noise_detection.NoiseDetector or None
+		Throws away bad syllables
+		
+	Returns
+	-------
+
+	Notes
+	-----
 	"""
 	if save_dir[-1] != '/':
 		save_dir += '/'
@@ -69,17 +84,25 @@ def process_sylls(load_dir, save_dir, p, noise_detector=None):
 	syll_data = {
 		'specs':[],
 		'times':[],
+		'file_times':[],
 		'durations':[],
 		'filenames':[],
 	}
-	print("Processing .wav files in", load_dir)
-	for load_filename in tqdm(filenames):
+	print("Processing audio files in", load_dir)
+	for load_filename in filenames:
 		start_time = time_from_filename(load_filename)
 		# Get a spectrogram.
 		spec, f, dt, i1, i2 = get_spec(load_filename, p)
 		# Collect syllable onsets and offsets.
 		if 'f' not in p['seg_params']:
 			p['seg_params']['f'] = f
+		# Add file-level segmentation parameters if they exist.
+		try:
+			temp = '/'.join(load_filename.split('/')[:-1])+'/seg_params.npy'
+			temp = np.load(temp).item()
+			p['seg_params'] = {**p['seg_params'], **temp}
+		except FileNotFoundError:
+			pass
 		t_onsets, t_offsets = p['seg_params']['algorithm'](spec, dt, p['seg_params'])
 		t_durations = [(b-a+1)*dt for a,b in zip(t_onsets, t_offsets)]
 		# Retrieve spectrograms and start times for each detected syllable.
@@ -96,6 +119,7 @@ def process_sylls(load_dir, save_dir, p, noise_detector=None):
 		syll_data['durations'] += t_durations
 		syll_data['specs'] += t_specs
 		syll_data['times'] += t_times
+		syll_data['file_times'] += [i - start_time for i in t_times]
 		syll_data['filenames'] += len(t_durations)*[load_filename.split('/')[-1]]
 		# Write a file when we have enough syllables.
 		while len(syll_data['durations']) >= sylls_per_file:
@@ -107,11 +131,18 @@ def process_sylls(load_dir, save_dir, p, noise_detector=None):
 						dtype='float')
 				syll_specs = syll_data['specs']
 				for i in range(sylls_per_file):
-					gap = (num_time_bins - syll_specs[i].shape[1]) // 2
-					temp[i,:,gap:gap+syll_specs[i].shape[1]] = syll_specs[i]
+					gap = max(0, (num_time_bins - syll_specs[i].shape[1]) // 2)
+					try:
+						temp[i,:,gap:gap+syll_specs[i].shape[1]] = syll_specs[i][:,:num_time_bins]
+					except:
+						print("caught in process_sylls")
+						print(temp.shape)
+						print(gap)
+						print(syll_specs[i].shape)
+						quit()
 				f.create_dataset('specs', data=temp)
 				# Then add the rest.
-				for k in ['durations', 'times']:
+				for k in ['durations', 'times', 'file_times']:
 					f.create_dataset(k, data=np.array(syll_data[k][:sylls_per_file]))
 				temp = [save_dir + i for i in syll_data['filenames'][:sylls_per_file]]
 				f.create_dataset('filenames', data=np.array(temp).astype('S'))
@@ -134,7 +165,7 @@ def get_syll_specs(onsets, offsets, spec, start_time, dt, p):
 		temp_spec -= np.percentile(temp_spec, 10.0)
 		temp_spec[temp_spec<0.0] = 0.0
 		temp_spec /= np.max(temp_spec)
-		# Switch to sqrt duration.
+		# Switch to square root duration.
 		if p['time_stretch']:
 			new_dur = int(round(temp_spec.shape[1]**0.5 * p['num_time_bins']**0.5))
 			temp_spec = resize(temp_spec, (temp_spec.shape[0], new_dur), anti_aliasing=True, mode='reflect')
@@ -178,7 +209,7 @@ def get_spec(filename, p, start_index=None, end_index=None):
 	# Switch to mel frequency spacing.
 	if p['mel']:
 		new_f = np.linspace(mel(f[0]), mel(f[-1]), p['num_freq_bins'], endpoint=True)
-		new_f = inv_mel(mel_f)
+		new_f = inv_mel(new_f)
 		new_f[0] = f[0] # Correct for numerical errors.
 		new_f[-1] = f[-1]
 	else:
@@ -253,9 +284,9 @@ def tune_segmenting_params(load_dirs, p):
 					time = offsets[j] * dt
 					for k in [0,1]:
 						axarr[k].axvline(x=time, c='r', lw=0.5)
-			axarr[1].axhline(y=seg_params['th_1'], lw=0.5, c='b')
-			axarr[1].axhline(y=seg_params['th_2'], lw=0.5, c='b')
-			axarr[1].axhline(y=seg_params['th_3'], lw=0.5, c='b')
+			for key in ['th_1', 'th_2', 'th_3']:
+				if key in seg_params:
+					axarr[1].axhline(y=seg_params[key], lw=0.5, c='b')
 			xvals = np.linspace(t1, t2, i2-i1)
 			for trace in traces:
 				axarr[1].plot(xvals, trace[i1:i2])
@@ -319,8 +350,11 @@ def get_wav_len(filename):
 def time_from_filename(filename):
 	"""Return time in seconds."""
 	try:
-		temp = ' '.join(filename.split('/')[-1][:-4].split('_')[2:])
-		time = mktime(strptime(temp))
+		anchor = mktime(strptime("1899 12 29 19", "%Y %m %d %H")) #SAP anchor time
+		temp = filename.split('/')[-1].split('_')[1].split('.')
+		day = float(temp[0])
+		millisecond = float(temp[1])
+		time = anchor + 24*60*60*day + 1e-3*millisecond
 		return time
 	except:
 		return 0.0

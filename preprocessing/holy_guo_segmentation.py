@@ -4,12 +4,10 @@ Implementation of algorithm described in Holy & Guo (2005)
 
 """
 __author__ = "Jack Goffinet"
-__date__ = "August-September 2018"
+__date__ = "August 2018 - February 2019"
 
 import numpy as np
 from scipy.signal import medfilt, istft
-import matplotlib.pyplot as plt
-plt.switch_backend('agg')
 from scipy.stats import zscore
 
 
@@ -19,14 +17,13 @@ def get_onsets_offsets(spec, dt, seg_params, return_traces=False):
 	Segment the spectrogram using thresholds on three acoustic features.
 
 	"""
-	bit_vector = get_syllables(spec, seg_params['f'], dt)
+	bit_vector = get_syllables(spec, dt, seg_params)
 	onsets, offsets = get_syllable_times(bit_vector)
 	if return_traces:
 		tr_1 = medfilt(get_spectral_purities(spec), 7)
 		tr_2 = medfilt(np.concatenate((get_spectral_discontinuities(spec), [0.0])), 7)
 		return onsets, offsets, [tr_1, tr_2]
 	return onsets, offsets
-
 
 
 def get_spectral_purities(spectrogram):
@@ -38,6 +35,7 @@ def get_spectral_purities(spectrogram):
 			result[i] =  max_vals[i] / temp[i]
 	return result
 
+
 def get_mean_frequencies(spec, f):
 	sums = np.sum(spec, axis=0)
 	temp = np.einsum('ij,i->j', spec[:], f)
@@ -45,11 +43,6 @@ def get_mean_frequencies(spec, f):
 		if sums[i] > 0.0:
 			temp[i] = temp[i] / sums[i]
 	return temp
-
-
-def get_mean_frequencies2(spectrogram, f):
-	return f[np.argmax(spectrogram[:-1], axis=1)]
-
 
 
 def get_spectral_discontinuities(spec):
@@ -72,22 +65,20 @@ def get_spectral_discontinuities(spec):
 	return result
 
 
-
-
-def get_syllables(spectrogram, f, dt, filter_size=7):
+def get_syllables(spectrogram, dt, params, filter_size=7):
 	"""
 	Return a bit vector representing the syllable structure
 
 	...
 	"""
 	sp = medfilt(get_spectral_purities(spectrogram), filter_size)
-	mf = medfilt(get_mean_frequencies(spectrogram, f=f), filter_size)
+	mf = medfilt(get_mean_frequencies(spectrogram, f=params['f']), filter_size)
 	sd = medfilt(get_spectral_discontinuities(spectrogram), filter_size)
 	sp, mf = sp[:-1], mf[:-1]
 	# See where conditions are met.
-	result = np.where(sp > 0.1, 1, 0)      # paper: 0.25    katie: 0.3  ()was 0.05
-	result *= np.where(mf > 35e3, 1, 0)     # paper: 35e3   katie: 45e3
-	result *= np.where(sd < 1.3, 1, 0)      # paper: 1.0   katie: 0.85 (was commented out)
+	result = np.where(sp > params['th_1'], 1, 0)	# paper: 0.25    katie: 0.3  m
+	result *= np.where(mf > 45e3, 1, 0)     		# paper: 35e3   katie: 45e3
+	result *= np.where(sd < params['th_2'], 1, 0)	# paper: 1.0   katie: 0.85 (was commented out)
 	# Weed out candidates less than 5ms.
 	mask_len = int(round(0.007 / dt))       # paper: 0.005
 	i = 0

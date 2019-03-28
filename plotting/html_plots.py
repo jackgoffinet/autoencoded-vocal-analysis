@@ -20,33 +20,43 @@ def save_image(data, filename):
 	sizes = np.shape(data)
 	height = float(sizes[0])
 	width = float(sizes[1])
-
 	fig = plt.figure()
 	fig.set_size_inches(width/height, 1, forward=False)
 	ax = plt.Axes(fig, [0., 0., 1., 1.])
 	ax.set_axis_off()
 	fig.add_axes(ax)
-
 	ax.imshow(data, cmap='viridis', origin='lower')
 	plt.savefig(filename, dpi=height)
 	plt.close('all')
 
 
-def write_images(loader, model, output_dir='temp/', num_imgs=100):
+def write_images(loader, model, output_dir='temp/', num_imgs=100, n=30000):
 	if not os.path.exists(output_dir):
 		os.makedirs(output_dir)
 	# First get latent representations.
-	latent, times, images = model.get_latent(loader, n=30000, random_subset=True, return_fields=['time', 'image'])
+	latent, images = model.get_latent(loader, n=n, random_subset=True, return_fields=['image'])
 	transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
 	embedding = transform.fit_transform(latent)
+
+
+	indices = []
+	for i, embed in enumerate(embedding):
+		if embed[0] > 4.0:
+			indices.append(i)
+	indices = np.array(indices, dtype='int')
+	transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
+	embedding = transform.fit_transform(latent[indices])
+	images = images[indices]
+	num_imgs = min(num_imgs, len(images))
+
 	np.save('embedding.npy', embedding)
 	for i in range(num_imgs):
 		save_image(images[i], output_dir + str(i) + '.jpg')
 	return embedding
 
 
-def make_html_plot(loader, model, output_dir='temp/', num_imgs=1000, title=""):
-	embedding = write_images(loader, model, output_dir=output_dir, num_imgs=num_imgs)
+def make_html_plot(loader, model, output_dir='temp/', num_imgs=1000, title="", n=30000):
+	embedding = write_images(loader, model, output_dir=output_dir, num_imgs=num_imgs, n=n)
 	output_file(output_dir + "main.html")
 	source = ColumnDataSource(
 			data=dict(

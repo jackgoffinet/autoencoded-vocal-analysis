@@ -1,11 +1,15 @@
 """
 Semisupervised noise detection.
 
+
+TO DO:
+	- parallelize audio segmenting
 """
 __author__ = "Jack Goffinet"
 __date__ = "February 2019"
 
-from os import listdir
+
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
@@ -14,10 +18,12 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.gaussian_process import GaussianProcessClassifier
 from sklearn.gaussian_process.kernels import RBF
 
-
 from tqdm import tqdm
 import umap
 import hdbscan
+
+from multiprocessing import Pool
+from itertools import repeat
 
 
 
@@ -54,27 +60,16 @@ class NoiseDetector():
 		}
 		filenames = []
 		for load_dir in load_dirs:
-			filenames += [load_dir + i for i in listdir(load_dir) if i[-4:] in ['.wav', '.mat']]
+			filenames += [load_dir + i for i in os.listdir(load_dir) if i[-4:] in ['.wav', '.mat']]
 		filenames = np.array(filenames)
 		assert len(filenames) > 0
 		np.random.shuffle(filenames)
-		for filename in tqdm(filenames[:max_num_files]):
-			spec, f, dt, i1, i2 = self.funcs['get_spec'](filename, self.p)
-			# audio = self.funcs['get_audio'](filename, self.p)
-			if 'f' not in self.p['seg_params']:
-				self.p['seg_params']['f'] = f
-			onsets, offsets = self.funcs['get_onsets_offsets'](spec, dt, self.p['seg_params'])
-			# Remove the data that's already been labeled.
-			mask = np.array([i for i in range(len(onsets)) if (filename, onsets[i]) not in labeled_set], dtype='int')
-			onsets, offsets = np.array(onsets)[mask].tolist(), np.array(offsets)[mask].tolist()
-			# Get spectrograms.
-			syll_specs, _ = self.funcs['get_syll_specs'](onsets, offsets, spec, 0.0, dt, self.p)
-			# Append stuff to <unlabeled_data>.
-			unlabeled_data['specs'] += syll_specs
-			unlabeled_data['filenames'] += [filename] * len(onsets)
-			unlabeled_data['onsets'] += onsets
-			unlabeled_data['offsets'] += offsets
-			unlabeled_data['labels'] += [-1] * len(onsets)
+		filenames = filenames[:max_num_files]
+		with Pool(os.cpu_count()-1) as pool:
+			results = pool.starmap(segment_audio_in_file, zip(repeat(self), filenames, repeat(labeled_set)))
+		for result in results:
+			for key in unlabeled_data:
+				unlabeled_data[key] += result[key]
 		for field in unlabeled_data:
 			if field == 'filenames':
 				unlabeled_data[field] = np.array(unlabeled_data[field])
@@ -82,7 +77,7 @@ class NoiseDetector():
 				temp = np.empty(len(unlabeled_data[field]), dtype=labeled_data[field].dtype)
 				temp[:] = unlabeled_data[field]
 				unlabeled_data[field] = temp
-		np.save('unlabeled_data.npy', unlabeled_data)
+		# np.save('unlabeled_data.npy', unlabeled_data)
 		# print("dt", dt)
 		# unlabeled_data = np.load('unlabeled_data.npy').item()
 		# dt = 0.004096
@@ -94,11 +89,10 @@ class NoiseDetector():
 		self.N_l = len(labeled_data['specs'])
 		self.N_ul = len(unlabeled_data['specs'])
 		self.N = self.N_l + self.N_ul
-		self.p['dt'] = dt
 
 
 	def ask_for_label(self, index):
-		"""Get true labels from the user."""
+		"""Get a true label from the user."""
 		dt, fs = self.p['dt'], self.p['fs']
 		dur_seconds = 1.0
 		dur_samples = int(round(dur_seconds * fs))
@@ -251,72 +245,40 @@ class NoiseDetector():
 
 
 
-class NaiveBayesDetector(NoiseDetector):
-	"""
-	Classify spectrograms using dimensionality reduction and Naive Bayes.
-	"""
-
-
-	def __init__(self, load_dirs, load_filename, save_filename, params, funcs):
-		super(NaiveBayesDetector, self).__init__(load_dirs, load_filename, save_filename, params, funcs, prefit=True)
-		self.clf = None
-		self.reducer = None
-
-
-	def pre_iteration_computation(self):
-		"""Do computation before a training iteration."""
-		# Fit the classifier.
-		self.dim_reduce()
-		embedding = self.reducer.embedding_
-		self.clf = GaussianNB()
-		if self.N_l > 0:
-			self.clf.partial_fit(embedding[:self.N_l], self.labels[:self.N_l], classes=[0,1])
-		else:
-			self.clf.partial_fit([[0,0],[1,1]], [0,1], classes=[0,1])
-
-
-	def new_label_computation(self, index, label):
-		"""Adjust beliefs given a new label."""
-		# Update classifier.
-		self.clf.partial_fit([self.reducer.embedding_[index]], [label])
-
-
-	def get_spec_scores(self):
-		"""Score the unlabeled spectrograms."""
-		temp = self.reducer.embedding_[self.N_l:].reshape(self.N_ul,-1)
-		spec_probs = self.clf.predict_proba(temp)[:,1]
-		return -1.0 * np.abs(spec_probs - 0.5)
-
-
-	def dim_reduce(self):
-		"""Run spectrograms through UMAP."""
-		all_specs = specs_to_block_array(self.specs, self.p['num_freq_bins'], self.p['num_time_bins'])
-		all_specs = all_specs.reshape(self.N, -1)
-		self.reducer = umap.UMAP().fit(all_specs, y=self.labels)
-
-
-	def batch_classify(self, specs):
-		"""Classify the given an array of spectrograms."""
-		raise NotImplementedError
-
-
-	def plot(self):
-		h = 0.25 # mesh step size
-		gap = 1.0
-		if self.reducer is None:
-			self.dim_reduce()
-		cmap = plt.cm.RdBu
-		embedding = self.reducer.embedding_
-		x_min, x_max = np.min(embedding[:,0])-gap, np.max(embedding[:,0])+gap
-		y_min, y_max = np.min(embedding[:,1])-gap, np.max(embedding[:,1])+gap
-		xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
-		Z = self.clf.predict_proba(np.c_[xx.ravel(), yy.ravel()])[:, 1]
-		Z = Z.reshape(xx.shape)
-		plt.contourf(xx, yy, Z, cmap=cmap, alpha=0.8)
-		plt.scatter(embedding[self.N_l:,0], embedding[self.N_l:,1], c='k', alpha=0.3, s=0.5)
-		plt.scatter(embedding[:self.N_l,0], embedding[:self.N_l,1], c=self.labels[:self.N_l], alpha=0.9, s=0.8)
-		plt.savefig('temp.pdf')
-		plt.close('all')
+def segment_audio_in_file(self, filename, labeled_set):
+	unlabeled_data = {
+			'specs':[],
+			'filenames':[],
+			'onsets':[],
+			'offsets':[],
+			'labels':[]
+	}
+	spec, f, dt, i1, i2 = self.funcs['get_spec'](filename, self.p)
+	# audio = self.funcs['get_audio'](filename, self.p)
+	if 'f' not in self.p['seg_params']:
+		self.p['seg_params']['f'] = f
+	if 'dt' not in self.p:
+		self.p['dt'] = dt
+	# Add file-level segmentation parameters if they exist.
+	try:
+		temp = '/'.join(filename.split('/')[:-1])+'/seg_params.npy'
+		temp = np.load(temp).item()
+		self.p['seg_params'] = {**self.p['seg_params'], **temp}
+	except FileNotFoundError:
+		pass
+	onsets, offsets = self.funcs['get_onsets_offsets'](spec, dt, self.p['seg_params'])
+	# Remove the data that's already been labeled.
+	mask = np.array([i for i in range(len(onsets)) if (filename, onsets[i]) not in labeled_set], dtype='int')
+	onsets, offsets = np.array(onsets)[mask].tolist(), np.array(offsets)[mask].tolist()
+	# Get spectrograms.
+	syll_specs, _ = self.funcs['get_syll_specs'](onsets, offsets, spec, 0.0, dt, self.p)
+	# Append stuff to <unlabeled_data>.
+	unlabeled_data['specs'] += syll_specs
+	unlabeled_data['filenames'] += [filename] * len(onsets)
+	unlabeled_data['onsets'] += onsets
+	unlabeled_data['offsets'] += offsets
+	unlabeled_data['labels'] += [-1] * len(onsets)
+	return unlabeled_data
 
 
 
@@ -403,126 +365,186 @@ class GaussianProcessDetector(NoiseDetector):
 
 
 
-class ClusteringDetector(NoiseDetector):
-	"""
-	Classify spectrograms using dimensionality reduction and clustering.
-	"""
+# class ClusteringDetector(NoiseDetector):
+# 	"""
+# 	Classify spectrograms using dimensionality reduction and clustering.
+# 	"""
+#
+# 	def __init__(self, load_dirs, load_filename, save_filename, params, funcs):
+# 		super(ClusteringDetector, self).__init__(load_dirs, load_filename, save_filename, params, funcs, prefit=False)
+# 		self.reducer, self.clusterer = None, None
+#
+#
+# 	def batch_classify(self, specs, threshold=0.5):
+# 		"""Classify the spectrograms."""
+# 		if len(specs) == 0:
+# 			return []
+# 		if self.reducer is None or self.clusterer is None:
+# 			self.dim_reduce_and_cluster()
+# 		self.cluster_prob = (self.cluster_positive_counts + 0.5) / (self.cluster_counts + 1.0)
+# 		specs = specs_to_block_array(specs, self.p['num_freq_bins'], self.p['num_time_bins'])
+# 		specs = specs.reshape(len(specs), -1)
+# 		embedding = self.reducer.transform(specs)
+# 		temp = hdbscan.prediction.membership_vector(self.clusterer, embedding.astype(np.float64))
+# 		soft_labels = np.zeros((temp.shape[0], temp.shape[1]+1))
+# 		soft_labels[:,:-1] = temp
+# 		soft_labels[:,-1] = 1.0 - np.sum(soft_labels, axis=1)
+# 		spec_probs = np.einsum('ic,c->i', soft_labels, self.cluster_prob)
+# 		return [prob > threshold for prob in spec_probs]
+#
+#
+# 	def pre_iteration_computation(self):
+# 		"""Do computation before a training iteration."""
+# 		self.dim_reduce_and_cluster()
+# 		self.compute_cluster_scores()
+#
+#
+# 	def get_spec_scores(self):
+# 		"""Score the unlabeled spectrograms."""
+# 		return np.einsum('ij,j->i', self.soft_labels[self.N_l:], self.cluster_scores)
+#
+#
+# 	def new_label_computation(self, index, label):
+# 		"""Adjust beliefs given a new label."""
+# 		self.cluster_counts += self.soft_labels[index]
+# 		if label == 1:
+# 			self.cluster_positive_counts += self.soft_labels[index]
+# 		self.compute_cluster_scores()
+#
+#
+# 	def compute_cluster_scores(self):
+# 		"""Weighted expected change in accuracy, w/ Jeffreys prior"""
+# 		self.cluster_prob = (self.cluster_positive_counts + 0.5) / (self.cluster_counts + 1.0)
+# 		cluster_prob_pos = (self.cluster_positive_counts + 1.5) / (self.cluster_counts + 2.0)
+# 		cluster_prob_neg = (self.cluster_positive_counts + 0.5) / (self.cluster_counts + 2.0)
+# 		cluster_g = 2.0*self.cluster_prob**2 - 2.0*self.cluster_prob + 1.0
+# 		cluster_g_pos = 2.0*cluster_prob_pos**2 - 2.0*cluster_prob_pos + 1.0
+# 		cluster_g_neg = 2.0*cluster_prob_neg**2 - 2.0*cluster_prob_neg + 1.0
+# 		cluster_delta_g = self.cluster_prob * (cluster_g_pos - cluster_g) + \
+# 						(1.0 - self.cluster_prob) * (cluster_g_neg - cluster_g)
+# 		self.cluster_scores = self.cluster_weights * cluster_delta_g
+#
+#
+# 	def dim_reduce_and_cluster(self):
+# 		# Perform semisupervised dimensionality reduction.
+# 		all_specs = specs_to_block_array(self.specs, self.p['num_freq_bins'], self.p['num_time_bins'])
+# 		all_specs = all_specs.reshape(self.N, -1)
+# 		self.reducer = umap.UMAP().fit(all_specs, y=self.labels)
+# 		embedding = self.reducer.embedding_
+# 		# Then cluster.
+# 		self.clusterer = hdbscan.HDBSCAN(prediction_data=True)
+# 		self.clusterer.fit(embedding.astype(np.float64))
+# 		# Precompute some things.
+# 		temp = hdbscan.all_points_membership_vectors(self.clusterer)
+# 		self.soft_labels = np.zeros((temp.shape[0], temp.shape[1]+1))
+# 		print("soft_labels", self.soft_labels.shape)
+# 		self.soft_labels[:,:-1] = temp
+# 		self.soft_labels[:,-1] = 1.0 - np.sum(self.soft_labels, axis=1)
+# 		n_clusters = self.soft_labels.shape[1]
+# 		print("n clusters", n_clusters)
+# 		self.cluster_weights = np.sum(self.soft_labels, axis=0)
+# 		self.cluster_counts = np.zeros(n_clusters)
+# 		self.cluster_positive_counts = np.zeros(n_clusters)
+# 		for i, label in enumerate(self.labels[:self.N_l]):
+# 			if label == 1:
+# 				self.cluster_positive_counts[:] += self.soft_labels[i]
+# 			self.cluster_counts[:] += self.soft_labels[i]
+#
+#
+# 	def plot(self, filename='temp.pdf'):
+# 		"""Plot the embedding and assigned probabilities."""
+# 		if self.reducer is None or self.clusterer is None:
+# 			self.dim_reduce_and_cluster()
+# 		_, axarr = plt.subplots(3,1, sharex=True)
+# 		axarr[0].set_title("HDBSCAN Clustering")
+# 		embedding = self.reducer.embedding_
+# 		axarr[0].scatter(embedding[:,0], embedding[:,1], c=self.clusterer.labels_, cmap='Spectral', alpha=0.3, s=0.5)
+# 		axarr[2].set_title("Inferred Labels")
+# 		predictions = np.einsum('ij,j->i', self.soft_labels, self.cluster_prob)
+# 		plot1 = axarr[2].scatter(embedding[:,0], embedding[:,1], c=predictions, cmap='viridis', vmin=0, vmax=1, alpha=0.3, s=0.5)
+# 		cbar = plt.colorbar(plot1,ax=axarr[2])
+# 		cbar.solids.set_rasterized(True)
+# 		axarr[1].set_title("True Labels")
+# 		axarr[1].scatter(embedding[self.N_l:,0], embedding[self.N_l:,1], c='k', alpha=0.04, s=0.5)
+# 		axarr[1].scatter(embedding[:self.N_l,0], embedding[:self.N_l,1], c=self.labels[:self.N_l], cmap='viridis', vmin=0, vmax=1, alpha=0.8, s=0.8)
+# 		plt.savefig(filename)
+# 		plt.close('all')
 
-	def __init__(self, load_dirs, load_filename, save_filename, params, funcs):
-		super(ClusteringDetector, self).__init__(load_dirs, load_filename, save_filename, params, funcs, prefit=False)
-		self.reducer, self.clusterer = None, None
 
 
-	def batch_classify(self, specs, threshold=0.5):
-		"""Classify the spectrograms."""
-		if len(specs) == 0:
-			return []
-		if self.reducer is None or self.clusterer is None:
-			self.dim_reduce_and_cluster()
-		self.cluster_prob = (self.cluster_positive_counts + 0.5) / (self.cluster_counts + 1.0)
-		specs = specs_to_block_array(specs, self.p['num_freq_bins'], self.p['num_time_bins'])
-		specs = specs.reshape(len(specs), -1)
-		embedding = self.reducer.transform(specs)
-		temp = hdbscan.prediction.membership_vector(self.clusterer, embedding.astype(np.float64))
-		soft_labels = np.zeros((temp.shape[0], temp.shape[1]+1))
-		soft_labels[:,:-1] = temp
-		soft_labels[:,-1] = 1.0 - np.sum(soft_labels, axis=1)
-		spec_probs = np.einsum('ic,c->i', soft_labels, self.cluster_prob)
-		return [prob > threshold for prob in spec_probs]
-
-
-	def pre_iteration_computation(self):
-		"""Do computation before a training iteration."""
-		self.dim_reduce_and_cluster()
-		self.compute_cluster_scores()
-
-
-	def get_spec_scores(self):
-		"""Score the unlabeled spectrograms."""
-		return np.einsum('ij,j->i', self.soft_labels[self.N_l:], self.cluster_scores)
-
-
-	def new_label_computation(self, index, label):
-		"""Adjust beliefs given a new label."""
-		self.cluster_counts += self.soft_labels[index]
-		if label == 1:
-			self.cluster_positive_counts += self.soft_labels[index]
-		self.compute_cluster_scores()
-
-
-	def compute_cluster_scores(self):
-		"""Weighted expected change in accuracy, w/ Jeffreys prior"""
-		self.cluster_prob = (self.cluster_positive_counts + 0.5) / (self.cluster_counts + 1.0)
-		cluster_prob_pos = (self.cluster_positive_counts + 1.5) / (self.cluster_counts + 2.0)
-		cluster_prob_neg = (self.cluster_positive_counts + 0.5) / (self.cluster_counts + 2.0)
-		cluster_g = 2.0*self.cluster_prob**2 - 2.0*self.cluster_prob + 1.0
-		cluster_g_pos = 2.0*cluster_prob_pos**2 - 2.0*cluster_prob_pos + 1.0
-		cluster_g_neg = 2.0*cluster_prob_neg**2 - 2.0*cluster_prob_neg + 1.0
-		cluster_delta_g = self.cluster_prob * (cluster_g_pos - cluster_g) + \
-						(1.0 - self.cluster_prob) * (cluster_g_neg - cluster_g)
-		self.cluster_scores = self.cluster_weights * cluster_delta_g
-
-
-	def dim_reduce_and_cluster(self):
-		# Perform semisupervised dimensionality reduction.
-		all_specs = specs_to_block_array(self.specs, self.p['num_freq_bins'], self.p['num_time_bins'])
-		all_specs = all_specs.reshape(self.N, -1)
-		self.reducer = umap.UMAP().fit(all_specs, y=self.labels)
-		embedding = self.reducer.embedding_
-		# Then cluster.
-		self.clusterer = hdbscan.HDBSCAN(prediction_data=True)
-		self.clusterer.fit(embedding.astype(np.float64))
-		# Precompute some things.
-		temp = hdbscan.all_points_membership_vectors(self.clusterer)
-		self.soft_labels = np.zeros((temp.shape[0], temp.shape[1]+1))
-		print("soft_labels", self.soft_labels.shape)
-		self.soft_labels[:,:-1] = temp
-		self.soft_labels[:,-1] = 1.0 - np.sum(self.soft_labels, axis=1)
-		n_clusters = self.soft_labels.shape[1]
-		print("n clusters", n_clusters)
-		self.cluster_weights = np.sum(self.soft_labels, axis=0)
-		self.cluster_counts = np.zeros(n_clusters)
-		self.cluster_positive_counts = np.zeros(n_clusters)
-		for i, label in enumerate(self.labels[:self.N_l]):
-			if label == 1:
-				self.cluster_positive_counts[:] += self.soft_labels[i]
-			self.cluster_counts[:] += self.soft_labels[i]
-
-
-	def plot(self, filename='temp.pdf'):
-		"""Plot the embedding and assigned probabilities."""
-		if self.reducer is None or self.clusterer is None:
-			self.dim_reduce_and_cluster()
-		_, axarr = plt.subplots(3,1, sharex=True)
-		axarr[0].set_title("HDBSCAN Clustering")
-		embedding = self.reducer.embedding_
-		axarr[0].scatter(embedding[:,0], embedding[:,1], c=self.clusterer.labels_, cmap='Spectral', alpha=0.3, s=0.5)
-		axarr[2].set_title("Inferred Labels")
-		predictions = np.einsum('ij,j->i', self.soft_labels, self.cluster_prob)
-		plot1 = axarr[2].scatter(embedding[:,0], embedding[:,1], c=predictions, cmap='viridis', vmin=0, vmax=1, alpha=0.3, s=0.5)
-		cbar = plt.colorbar(plot1,ax=axarr[2])
-		cbar.solids.set_rasterized(True)
-		axarr[1].set_title("True Labels")
-		axarr[1].scatter(embedding[self.N_l:,0], embedding[self.N_l:,1], c='k', alpha=0.04, s=0.5)
-		axarr[1].scatter(embedding[:self.N_l,0], embedding[:self.N_l,1], c=self.labels[:self.N_l], cmap='viridis', vmin=0, vmax=1, alpha=0.8, s=0.8)
-		plt.savefig(filename)
-		plt.close('all')
-
-
+# class NaiveBayesDetector(NoiseDetector):
+# 	"""
+# 	Classify spectrograms using dimensionality reduction and Naive Bayes.
+# 	"""
+#
+#
+# 	def __init__(self, load_dirs, load_filename, save_filename, params, funcs):
+# 		super(NaiveBayesDetector, self).__init__(load_dirs, load_filename, save_filename, params, funcs, prefit=True)
+# 		self.clf = None
+# 		self.reducer = None
+#
+#
+# 	def pre_iteration_computation(self):
+# 		"""Do computation before a training iteration."""
+# 		# Fit the classifier.
+# 		self.dim_reduce()
+# 		embedding = self.reducer.embedding_
+# 		self.clf = GaussianNB()
+# 		if self.N_l > 0:
+# 			self.clf.partial_fit(embedding[:self.N_l], self.labels[:self.N_l], classes=[0,1])
+# 		else:
+# 			self.clf.partial_fit([[0,0],[1,1]], [0,1], classes=[0,1])
+#
+#
+# 	def new_label_computation(self, index, label):
+# 		"""Adjust beliefs given a new label."""
+# 		# Update classifier.
+# 		self.clf.partial_fit([self.reducer.embedding_[index]], [label])
+#
+#
+# 	def get_spec_scores(self):
+# 		"""Score the unlabeled spectrograms."""
+# 		temp = self.reducer.embedding_[self.N_l:].reshape(self.N_ul,-1)
+# 		spec_probs = self.clf.predict_proba(temp)[:,1]
+# 		return -1.0 * np.abs(spec_probs - 0.5)
+#
+#
+# 	def dim_reduce(self):
+# 		"""Run spectrograms through UMAP."""
+# 		all_specs = specs_to_block_array(self.specs, self.p['num_freq_bins'], self.p['num_time_bins'])
+# 		all_specs = all_specs.reshape(self.N, -1)
+# 		self.reducer = umap.UMAP().fit(all_specs, y=self.labels)
+#
+#
+# 	def batch_classify(self, specs):
+# 		"""Classify the given an array of spectrograms."""
+# 		raise NotImplementedError
+#
+#
+# 	def plot(self):
+# 		h = 0.25 # mesh step size
+# 		gap = 1.0
+# 		if self.reducer is None:
+# 			self.dim_reduce()
+# 		cmap = plt.cm.RdBu
+# 		embedding = self.reducer.embedding_
+# 		x_min, x_max = np.min(embedding[:,0])-gap, np.max(embedding[:,0])+gap
+# 		y_min, y_max = np.min(embedding[:,1])-gap, np.max(embedding[:,1])+gap
+# 		xx, yy = np.meshgrid(np.arange(x_min, x_max, h), np.arange(y_min, y_max, h))
+# 		Z = self.clf.predict_proba(np.c_[xx.ravel(), yy.ravel()])[:, 1]
+# 		Z = Z.reshape(xx.shape)
+# 		plt.contourf(xx, yy, Z, cmap=cmap, alpha=0.8)
+# 		plt.scatter(embedding[self.N_l:,0], embedding[self.N_l:,1], c='k', alpha=0.3, s=0.5)
+# 		plt.scatter(embedding[:self.N_l,0], embedding[:self.N_l,1], c=self.labels[:self.N_l], alpha=0.9, s=0.8)
+# 		plt.savefig('temp.pdf')
+# 		plt.close('all')
 
 
 def specs_to_block_array(specs, height, width):
 	"""Turn an object array into a proper zero-padded array."""
 	result = np.zeros((len(specs), height, width))
 	for i, spec in enumerate(specs):
-		try:
-			result[i,:spec.shape[0],:spec.shape[1]] = spec
-		except:
-			print("caught")
-			print(result.shape)
-			print(i)
-			print(spec.shape)
-			quit()
+		result[i,:spec.shape[0],:spec.shape[1]] = spec[:height,:width]
 	return result
 
 
