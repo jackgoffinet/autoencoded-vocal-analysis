@@ -17,6 +17,9 @@ from scipy.io import loadmat
 from scipy.stats import gaussian_kde
 from sklearn.decomposition import PCA
 
+import matplotlib.pyplot as plt
+plt.switch_backend('agg')
+
 
 def helper(kde_1, kde_2, n=10**4):
 	"""Helper function"""
@@ -27,7 +30,7 @@ def helper(kde_1, kde_2, n=10**4):
 	return np.mean(log_p_1) - np.mean(log_sum) + np.log(2.0)
 
 
-def estimate_jensen_shannon_distance(cloud_1, cloud_2, num_dims=5, n=3*10**4, pca=None):
+def estimate_jsd(cloud_1, cloud_2, num_dims=5, n=3*10**4, pca=None):
 	assert(num_dims <= min(cloud_1.shape[1], cloud_2.shape[1]))
 	# First take the first <num_dims> principal components.
 	if pca is None:
@@ -46,6 +49,32 @@ def estimate_jensen_shannon_distance(cloud_1, cloud_2, num_dims=5, n=3*10**4, pc
 	return jsd
 
 
+def plot_jsd_matrix(d):
+	# First fit PCA on all the data.
+	pca = PCA(n_components=10, random_state=0)
+	all_points = tuple(np.array(d[i]) for i in d)
+	pca.fit(np.concatenate(all_points, axis=0))
+	individuals = sorted(list(d.keys()))
+	# result = np.zeros((len(individuals), len(individuals)))
+	# for i in range(len(individuals)):
+	# 	print(i)
+	# 	cloud_1 = np.array(d[individuals[i]])
+	# 	for j in range(i+1,len(individuals),1):
+	# 		cloud_2 = np.array(d[individuals[j]])
+	# 		jsd = estimate_jsd(cloud_1, cloud_2, pca=pca)
+	# 		result[i,j] = jsd
+	# 		result[j,i] = jsd
+	# np.save('jsds.npy', result)
+	result = np.load('jsds.npy')
+	plt.imshow(result)
+	plt.title('Estimated Jensen-Shannon Divergences')
+	plt.xticks(list(range(5)), individuals)
+	plt.colorbar()
+	plt.yticks(list(range(5)), individuals)
+	plt.savefig('temp.pdf')
+	plt.close('all')
+
+
 def split_latent_by_individual(load_filename, split_func):
 	d = loadmat(load_filename)
 	latent = d['latent']
@@ -62,8 +91,14 @@ def split_latent_by_individual(load_filename, split_func):
 def mouse_filename_to_individual(filename):
 	return filename.split('/')[-2]
 
+def marmoset_filename_to_individual(filename):
+	return filename.split('/')[-2]
 
 if __name__ == '__main__':
+	d = split_latent_by_individual('marmoset.mat', marmoset_filename_to_individual)
+	plot_jsd_matrix(d)
+	quit()
+	# # MICE STUFF
 	# Collect all the latent data.
 	d = {}
 	for fn in ['all_mice.mat', 'retest_mice.mat', 'female_mice.mat']:
@@ -110,7 +145,7 @@ if __name__ == '__main__':
 	for pair in pairs:
 		cloud_0 = np.array(d[pair[0]])
 		cloud_1 = np.array(d[pair[1]])
-		jsd = estimate_jensen_shannon_distance(cloud_0, cloud_1, num_dims=10)
+		jsd = estimate_jsd(cloud_0, cloud_1, num_dims=10)
 		print(jsd)
 
 # Day/day pairs, 3d:

@@ -3,7 +3,7 @@ Process syllables and save data.
 
 """
 __author__ = "Jack Goffinet"
-__date__ = "December 2018 - February 2019"
+__date__ = "December 2018 - April 2019"
 
 
 import os
@@ -27,25 +27,6 @@ plt.switch_backend('agg')
 # Constants
 EPS = 1e-12
 
-# Default parameters
-default_params = {
-	# Spectrogram parameters
-	'fs': 44100,
-	'min_freq': 50,
-	'max_freq': 15e3,
-	'nperseg': 512,
-	'noverlap': 0,
-	'num_freq_bins': 128,
-	'num_time_bins': 128,
-	'mel': True,
-	'time_stretch': False,
-	# Segmenting parameters
-	'seg_params': {},
-	# I/O parameters
-	'max_num_files': 100,
-	'sylls_per_file': 500,
-}
-
 
 
 def process_sylls(load_dir, save_dir, p, noise_detector=None):
@@ -62,7 +43,7 @@ def process_sylls(load_dir, save_dir, p, noise_detector=None):
 		Parameters
 	noise_detector : noise_detection.NoiseDetector or None
 		Throws away bad syllables
-		
+
 	Returns
 	-------
 
@@ -71,7 +52,6 @@ def process_sylls(load_dir, save_dir, p, noise_detector=None):
 	"""
 	if save_dir[-1] != '/':
 		save_dir += '/'
-	max_num_files = p['max_num_files']
 	sylls_per_file = p['sylls_per_file']
 	num_freq_bins = p['num_freq_bins']
 	num_time_bins = p['num_time_bins']
@@ -79,7 +59,8 @@ def process_sylls(load_dir, save_dir, p, noise_detector=None):
 		os.makedirs(save_dir)
 	filenames = [load_dir + i for i in os.listdir(load_dir) if i[-4:] in ['.wav', '.mat']]
 	np.random.shuffle(filenames)
-	filenames = filenames[:max_num_files]
+	if p['seg_params']['algorithm'] == get_onsets_offsets_from_file:
+		filenames = [i for i in filenames if os.path.exists('.'.join(i.split('.')[:-1]) + '.txt')]
 	write_file_num = 0
 	syll_data = {
 		'specs':[],
@@ -103,7 +84,11 @@ def process_sylls(load_dir, save_dir, p, noise_detector=None):
 			p['seg_params'] = {**p['seg_params'], **temp}
 		except FileNotFoundError:
 			pass
-		t_onsets, t_offsets = p['seg_params']['algorithm'](spec, dt, p['seg_params'])
+		# Get onsets and offsets.
+		if p['seg_params']['algorithm'] == get_onsets_offsets_from_file:
+			t_onsets, t_offsets = get_onsets_offsets_from_file(load_filename, dt)
+		else:
+			t_onsets, t_offsets = p['seg_params']['algorithm'](spec, dt, p['seg_params'])
 		t_durations = [(b-a+1)*dt for a,b in zip(t_onsets, t_offsets)]
 		# Retrieve spectrograms and start times for each detected syllable.
 		t_specs, t_times = get_syll_specs(t_onsets, t_offsets, spec, start_time, dt, p)
@@ -150,6 +135,8 @@ def process_sylls(load_dir, save_dir, p, noise_detector=None):
 			for k in syll_data:
 				syll_data[k] = syll_data[k][sylls_per_file:]
 			write_file_num += 1
+			if 'max_num_syllables' in p and write_file_num*sylls_per_file >= p['max_num_syllables']:
+				return
 
 
 def get_syll_specs(onsets, offsets, spec, start_time, dt, p):
@@ -182,7 +169,7 @@ def get_audio(filename, p, start_index=None, end_index=None):
 		temp_fs, audio = wavfile.read(filename)
 	elif filename[-4:] == '.mat':
 		d = loadmat(filename)
-		audio = d['spike2Chunk'].reshape(-1)
+		audio = d['spike2Chunk'].flatten()
 		temp_fs = d['fs'][0,0]
 	assert temp_fs == p['fs'], "found fs: "+str(temp_fs)+", expected: "+str(p['fs'])
 	if len(audio.shape) > 1:
@@ -233,6 +220,8 @@ def tune_segmenting_params(load_dirs, p):
 	if len(filenames) == 0:
 		print("Found no audio files!")
 		return
+	if p['seg_params']['algorithm'] == get_onsets_offsets_from_file:
+		filenames = [i for i in filenames if os.path.exists('.'.join(i.split('.')[:-1]) + '.txt')]
 	filenames = np.array(filenames)
 	filenames = np.random.choice(filenames, min(1000, len(filenames)), replace=False)
 	file_lens = [get_wav_len(filename) for filename in filenames]
@@ -262,9 +251,17 @@ def tune_segmenting_params(load_dirs, p):
 			start_index = np.random.randint(file_lens[file_index] - 3*dur_samples)
 			end_index = start_index + 3*dur_samples
 			spec, f, dt, _, _ = get_spec(filename, p, start_index=start_index, end_index=end_index)
+
 			if 'f' not in seg_params:
 				seg_params['f'] = f
-			onsets, offsets, traces = seg_params['algorithm'](spec, dt, seg_params=seg_params, return_traces=True)
+			if seg_params['algorithm'] == get_onsets_offsets_from_file:
+				onsets, offsets = get_onsets_offsets_from_file(filename, dt)
+				traces = []
+				temp = int(round(start_index/fs/dt))
+				onsets = [i-temp for i in onsets]
+				offsets = [i-temp for i in offsets]
+			else:
+				onsets, offsets, traces = seg_params['algorithm'](spec, dt, seg_params=seg_params, return_traces=True)
 			dur_t_bins = int(dur_seconds / dt)
 
 			# Plot.
@@ -272,6 +269,7 @@ def tune_segmenting_params(load_dirs, p):
 			i2 = 2 * dur_t_bins
 			t1, t2 = i1 * dt, i2 * dt
 			_, axarr = plt.subplots(2,1, sharex=True)
+			axarr[0].set_title(filename)
 			axarr[0].imshow(spec[:,i1:i2], origin='lower', \
 					aspect='auto', \
 					extent=[t1, t2, f[0], f[-1]])
@@ -302,13 +300,16 @@ def tune_segmenting_params(load_dirs, p):
 
 
 def get_onsets_offsets_from_file(audio_filename, dt):
-	filename = audio_filename.split('.')[0] + '.txt'
-	d = np.loadtxt(filename)
 	onsets = []
 	offsets = []
+	filename = '.'.join(audio_filename.split('.')[:-1]) + '.txt'
+	try:
+		d = np.loadtxt(filename).reshape(-1,3)
+	except:
+		return onsets, offsets
 	for i in range(len(d)):
 		onsets.append(int(np.floor(d[i,1]/dt)))
-		offsets.append(int(np.ceil(d[i,2]/dt)))
+		offsets.append(int(np.ceil(d[i,2]/dt))+1)
 		if offsets[-1] - onsets[-1] >= 128:
 			onsets = onsets[:-1]
 			offsets = offsets[:-1]

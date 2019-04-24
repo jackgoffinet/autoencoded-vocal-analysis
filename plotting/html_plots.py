@@ -37,17 +37,23 @@ def write_images(loader, model, output_dir='temp/', num_imgs=100, n=30000):
 	latent, images = model.get_latent(loader, n=n, random_subset=True, return_fields=['image'])
 	transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
 	embedding = transform.fit_transform(latent)
+	X = embedding[:,0]
+	Y = embedding[:,1]
+	Y[X < -10] += 5.0
+	X[X < -10] += 10.0
+	embedding[:,0] = X
+	embedding[:,1] = Y
 
 
-	indices = []
-	for i, embed in enumerate(embedding):
-		if embed[0] > 4.0:
-			indices.append(i)
-	indices = np.array(indices, dtype='int')
-	transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
-	embedding = transform.fit_transform(latent[indices])
-	images = images[indices]
-	num_imgs = min(num_imgs, len(images))
+	# indices = []
+	# for i, embed in enumerate(embedding):
+	# 	if embed[0] > 4.0:
+	# 		indices.append(i)
+	# indices = np.array(indices, dtype='int')
+	# transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
+	# embedding = transform.fit_transform(latent[indices])
+	# images = images[indices]
+	# num_imgs = min(num_imgs, len(images))
 
 	np.save('embedding.npy', embedding)
 	for i in range(num_imgs):

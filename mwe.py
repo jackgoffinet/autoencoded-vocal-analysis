@@ -19,7 +19,7 @@ TO DO:
 - Noise detection and preprocessing.process_sylls have redundant segmentation
 """
 __author__ = "Jack Goffinet"
-__date__ = "December 2018 - February 2019"
+__date__ = "December 2018 - April 2019"
 
 import numpy as np
 
@@ -36,20 +36,23 @@ marmoset_params = {
 	# Spectrogram parameters
 	'fs': 96000,
 	'min_freq': 1e3,
-	'max_freq': 22e3,
-	'nperseg': 1024,
-	'noverlap': 0,
+	'max_freq': 25e3,
+	'nperseg': 2048,
+	'noverlap': 512-64,
 	'num_freq_bins': spec_shape[0],
 	'num_time_bins': spec_shape[1],
-	'spacing': 'mel',
+	'mel': True,
 	'time_stretch': True,
 	# Segmenting parameters
 	'seg_params': {
 		'algorithm': read_from_file_alg,
+		'max_dur': 3.0,
+		'min_dur': 1e-6,
+		'spec_thresh': 0.0,
 	},
 	# I/O parameters
-	'max_num_files': 100,
-	'sylls_per_file': 200,
+	'max_num_syllables': 1200, # per directory
+	'sylls_per_file': 25,
 }
 
 
@@ -80,7 +83,7 @@ heliox_mice_params = {
 		'num_time_bins': spec_shape[1],
 	},
 	# I/O parameters
-	'max_num_files': 100,
+	'max_num_syllables': 1200, # per directory
 	'sylls_per_file': 25,
 }
 
@@ -110,7 +113,7 @@ mouse_params = {
 		'num_time_bins': spec_shape[1],
 	},
 	# I/O parameters
-	'max_num_files': 200,
+	'max_num_syllables': 1200, # per directory
 	'sylls_per_file': 25,
 }
 
@@ -141,15 +144,26 @@ mouse_params2 = {
 		'num_time_bins': spec_shape[1],
 	},
 	# I/O parameters
-	'max_num_files': 100,
+	'max_num_syllables': 1200, # per directory
 	'sylls_per_file': 25,
 }
 
 
+# 'spec_thresh': 0.0,
+# 'th_1':3.0,
+# 'th_2':3.5,
+# 'th_3':3.8,
+# 'min_dur':0.05,
+# 'max_dur':2.0,
+# 'freq_smoothing': 3.0,
+# 'softmax': True,
+# 'temperature': 0.5,
+# 'smoothing_timescale': 0.01,
+
 # Zebra Finches
 zebra_finch_params = {
 	# Spectrogram parameters
-	'fs': 44100,
+	'fs': 44100, # 44100/32000
 	'min_freq': 300,
 	'max_freq': 12e3,
 	'nperseg': 512, # FFT
@@ -160,23 +174,23 @@ zebra_finch_params = {
 	'time_stretch': True,
 	# Segmenting parameters
 	'seg_params': {
-		'algorithm': amp_alg,
-		'spec_thresh': 0.0,
-		'th_1':3.0,
-		'th_2':3.5,
-		'th_3':3.8,
+		'algorithm': read_from_file_alg, # amp_alg
+		'spec_thresh': 2.5,
+		'th_1':0.9,
+		'th_2':1.0,
+		'th_3':1.4,
 		'min_dur':0.05,
 		'max_dur':2.0,
 		'freq_smoothing': 3.0,
 		'softmax': True,
-		'temperature': 0.5,
-		'smoothing_timescale': 0.01,
+		'temperature': 0.35,
+		'smoothing_timescale': 0.008,
 		'num_freq_bins': spec_shape[0],
 		'num_time_bins': spec_shape[1],
 	},
 	# I/O parameters
-	'max_num_files': 100,
 	'sylls_per_file': 50,
+	'max_num_syllables': 1200, # per directory
 }
 
 
@@ -215,13 +229,15 @@ network_dims = {
 
 
 # Set which set of parameters to use.
-preprocess_params = mouse_params2
+preprocess_params = zebra_finch_params
 
+
+load_dirs = ['data/raw/bird_data/'+str(i)+'/' for i in range(42,85)]
+save_dirs = ['data/processed/bird_data/'+str(i)+'/' for i in range(42,85)]
 """
 # 1) Tune segmenting parameters.
 from os import listdir
 from preprocessing.preprocessing import tune_segmenting_params
-load_dirs = ['data/raw/mice_data/TVA_28_fd/']
 seg_params = tune_segmenting_params(load_dirs, preprocess_params)
 preprocess_params['seg_params'] = seg_params
 quit()
@@ -250,116 +266,80 @@ quit()
 # 3) Segment audio into syllables.
 import os
 
-mice = ['Ai_14_female', 'RAm_2_fd', 'RAm_female_2', 'RAm_6_fd', 'VM_8_fd', 'VM_31_fd', 'VM_31_opto', 'VM_47_fd', 'VM_47_opto', 'VM_75_fd', 'VM_75_opto', 'TVA_28_fd', 'TVA_28_7d_retest', 'TVA_28_14d_retest']
-
-load_dirs = ['data/raw/mice_data/'+mouse+'/' for mouse in mice]
-save_dirs = ['data/processed/mice_data/'+mouse+'/' for mouse in mice]
 """
-from preprocessing.noise_detection import GaussianProcessDetector
-from preprocessing.preprocessing import get_spec, get_syll_specs, get_wav_len, default_params
-funcs = {
-		'get_spec': get_spec,
-		'get_onsets_offsets': preprocess_params['seg_params']['algorithm'],
-		'get_syll_specs': get_syll_specs,
-		'get_wav_len': get_wav_len,
-		'default_params': default_params,
-}
 from preprocessing.preprocessing import process_sylls
-# noise_detector = GaussianProcessDetector(load_dirs, 'mouse_labels.npy', None, \
-# 			preprocess_params, funcs, ndims=3, max_num_files=100)
 noise_detector = None
 from multiprocessing import Pool
 from itertools import repeat
-# NOTE: watch the memory usage here!
 with Pool(min(3, os.cpu_count()-1)) as pool:
 	pool.starmap(process_sylls, zip(load_dirs, save_dirs, repeat(preprocess_params), repeat(noise_detector)))
-# for load_dir, save_dir in zip(load_dirs, save_dirs):
-	# process_sylls(load_dir, save_dir, preprocess_params, noise_detector=noise_detector)
-quit()
-"""
+# quit()
 
-"""
+
 # 4) Train a generative model on these syllables.
-# save_dirs = ['data/processed/bird_data/grn288/'+str(i)+'/' for i in range(43,82,1)]
 from models.dlgm import DLGM
 from models.dataset import get_partition, get_data_loaders
 partition = get_partition(save_dirs, split=0.95)
 # Check load_dir vs. save_dir!
-model = DLGM(network_dims, partition=partition, load_dir='data/models/all_mice/', sylls_per_file=preprocess_params['sylls_per_file'])
-model.train(epochs=100, lr=2e-5)
+model = DLGM(network_dims, partition=partition, save_dir='data/models/red291/', sylls_per_file=preprocess_params['sylls_per_file'])
+model.train(epochs=250, lr=2e-5)
 quit()
 """
 
 # 5) Use the model to get a latent representation of these syllables.
 from models.dlgm import DLGM
 from models.dataset import get_partition, get_data_loaders
-model = DLGM(network_dims, load_dir='data/models/all_mice/', sylls_per_file=preprocess_params['sylls_per_file'])
+model = DLGM(network_dims, load_dir='data/models/red291', sylls_per_file=preprocess_params['sylls_per_file'])
 partition = get_partition(save_dirs, split=1.0)
 loader, _ = get_data_loaders(partition, shuffle=(False,False), batch_size=32, sylls_per_file=preprocess_params['sylls_per_file'])
 
-from plotting.longitudinal_gif import make_projection, generate_syllables, make_dot_gif, get_embeddings_times
-from plotting.html_plots import make_html_plot
+d = {'model':model, 'loader':loader}
 
-title = ""
+from plotting.longitudinal_gif import make_projection, plot_generated_cluster_means, make_dot_gif, make_html_plot
 
-n = 10**5
+load_dirs = ['data/raw/bird_data/'+str(i)+'/' for i in range(42,85)]
+save_dirs = ['hdf5_files/'+str(i)+'/' for i in range(42,85)]
+
+
+title = "red291"
+n = 3*10**4
+
+"""
 print("making projection")
-make_projection(loader, model, title=title, n=n, axis=False)
-quit()
-# print("making gif")
-# make_dot_gif(loader, model, title=title, n=n)
+d = make_projection(d, title=title, n=n, axis=False)
+
+
+print("making gif")
+d = make_dot_gif(d, title=title, n=n)
+
 # quit()
 print("making html")
-make_html_plot(loader, model, output_dir='temp/', num_imgs=2000, title=title, n=n)
-quit()
-
+make_html_plot(d, output_dir='temp/', n=n, num_imgs=2000, title=title)
+# quit()
 
 
 print("Saving everything...")
 # Save a bunch of data.
 from scipy.io import savemat
-import umap
-return_fields = ['time', 'image', 'filename', 'duration', 'file_time']
-latent, times, images, filenames, durations, file_times = \
-		model.get_latent(loader, random_subset=True, return_fields=return_fields, n=10**10)
-reducer = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
-n = len(latent)
-embedding = reducer.fit_transform(latent[:n])
-np.save('grn288_reducer.npy', reducer)
 
-d = {
-	'latent':latent[:n//3],
-	'times':times[:n//3],
-	'file_time':file_times[:n//3],
-	'images':images[:n//3],
-	'filenames': filenames[:n//3],
-	'durations': durations[:n//3],
-	'embedding':embedding[:n//3],
-}
-savemat('grn288_1.mat', d)
-d = {
-	'latent':latent[n//3:2*n//3],
-	'times':times[n//3:2*n//3],
-	'file_time':file_times[n//3:2*n//3],
-	'images':images[n//3:2*n//3],
-	'filenames': filenames[n//3:2*n//3],
-	'durations': durations[n//3:2*n//3],
-	'embedding':embedding[n//3:2*n//3],
-}
-savemat('grn288_2.mat', d)
-d = {
-	'latent':latent[2*n//3:],
-	'times':times[2*n//3:],
-	'file_time':file_times[2*n//3:],
-	'images':images[2*n//3:],
-	'filenames': filenames[2*n//3:],
-	'durations': durations[2*n//3:],
-	'embedding':embedding[2*n//3:],
-}
-savemat('grn288_3.mat', d)
+from plotting.longitudinal_gif import update_data
+keys = ['latent', 'file_time', 'time', 'filename', 'duration', 'embedding']
+d = update_data(d, keys, n=n) # + ['image']
+
+# savemat('images.mat', {'images':d['image']})
+# del d['image']
+
+del d['model']
+del d['loader']
+savemat('data.mat', d)
+"""
+
+import joblib
+reducer = joblib.load('temp_reducer.sav')
+from save_stuff import save_everything
+for i in range(len(load_dirs)):
+	save_everything(model, load_dirs[i], save_dirs[i], preprocess_params, reducer)
 quit()
-
-
 
 
 # 7) Generate novel audio.

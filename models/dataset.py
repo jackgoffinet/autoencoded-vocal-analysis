@@ -1,8 +1,6 @@
 from __future__ import print_function, division
-"""Dataset for animal vocalization syllables
+"""Dataset for animal vocalization syllables"""
 
-TO DO: time shift transform
-"""
 __author__ = "Jack Goffinet"
 __date__ = "November 2018"
 
@@ -42,6 +40,7 @@ def get_data_loaders(partition, batch_size=64, num_time_bins=128, \
 	test_dataloader = DataLoader(test_dataset, batch_size=batch_size, \
 			shuffle=shuffle[1], num_workers=3)
 	return train_dataloader, test_dataloader
+
 
 
 class SyllableDataset(Dataset):
@@ -85,7 +84,6 @@ class SyllableDataset(Dataset):
 
 
 class ToTensor(object):
-	"""Convert spectrograms to pytorch tensors."""
 
 	def __call__(self, sample):
 		image = sample['image']
@@ -98,9 +96,8 @@ class ToTensor(object):
 
 
 
-
-
-
-
 if __name__ == '__main__':
 	pass
+
+
+###
