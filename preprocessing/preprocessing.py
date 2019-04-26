@@ -50,14 +50,12 @@ def process_sylls(load_dir, save_dir, p, noise_detector=None):
 	Notes
 	-----
 	"""
-	if save_dir[-1] != '/':
-		save_dir += '/'
 	sylls_per_file = p['sylls_per_file']
 	num_freq_bins = p['num_freq_bins']
 	num_time_bins = p['num_time_bins']
 	if not os.path.exists(save_dir):
 		os.makedirs(save_dir)
-	filenames = [load_dir + i for i in os.listdir(load_dir) if i[-4:] in ['.wav', '.mat']]
+	filenames = [os.path.join(load_dir, i) for i in os.listdir(load_dir) if i[-4:] in ['.wav', '.mat']]
 	np.random.shuffle(filenames)
 	if p['seg_params']['algorithm'] == get_onsets_offsets_from_file:
 		filenames = [i for i in filenames if os.path.exists('.'.join(i.split('.')[:-1]) + '.txt')]
@@ -108,7 +106,7 @@ def process_sylls(load_dir, save_dir, p, noise_detector=None):
 		syll_data['filenames'] += len(t_durations)*[load_filename.split('/')[-1]]
 		# Write a file when we have enough syllables.
 		while len(syll_data['durations']) >= sylls_per_file:
-			save_filename = save_dir + "syllables_"
+			save_filename = os.path.join(save_dir, "syllables_")
 			save_filename += str(write_file_num).zfill(3) + '.hdf5'
 			with h5py.File(save_filename, "w") as f:
 				# Zero-pad the spectrograms and add them to the file.
@@ -129,7 +127,7 @@ def process_sylls(load_dir, save_dir, p, noise_detector=None):
 				# Then add the rest.
 				for k in ['durations', 'times', 'file_times']:
 					f.create_dataset(k, data=np.array(syll_data[k][:sylls_per_file]))
-				temp = [save_dir + i for i in syll_data['filenames'][:sylls_per_file]]
+				temp = [os.path.join(save_dir, i) for i in syll_data['filenames'][:sylls_per_file]]
 				f.create_dataset('filenames', data=np.array(temp).astype('S'))
 			# Remove the written data from temporary storage.
 			for k in syll_data:
@@ -216,7 +214,7 @@ def tune_segmenting_params(load_dirs, p):
 	seg_params = p['seg_params']
 	filenames = []
 	for load_dir in load_dirs:
-		filenames += [load_dir + i for i in os.listdir(load_dir) if i[-4:] in ['.wav', '.mat']]
+		filenames += [os.path.join(load_dir, i) for i in os.listdir(load_dir) if i[-4:] in ['.wav', '.mat']]
 	if len(filenames) == 0:
 		print("Found no audio files!")
 		return

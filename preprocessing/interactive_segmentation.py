@@ -20,6 +20,9 @@ from scipy.signal import stft, welch
 
 from time import sleep
 
+# import matplotlib
+# matplotlib.use('qt4agg')
+# matplotlib.use('TkAgg')
 import matplotlib.pyplot as plt
 from matplotlib.widgets import RectangleSelector
 # plt.switch_backend('agg')
@@ -30,16 +33,22 @@ from bokeh.plotting import figure, output_file, show, ColumnDataSource
 from bokeh.models import HoverTool
 from bokeh.models.glyphs import ImageURL
 
-FS = 44100 # 44100 homer
-SPEC_THRESH = -9.0 # -8.5 homer, 4.0 mouse, -9 marmoset
+
+from preprocessing import time_from_filename
+
+
+FS = 44100
+SPEC_THRESH = 1.0 # -8.5 homer, 4.0 mouse, -9 marmoset, -3.5 zebra finch
 EPSILON = 1e-9
 
-DOWNSAMPLE_TUPLE = (1,2) # marmoset (1,2)
+DOWNSAMPLE_TUPLE = (1,1) # marmoset (1,2)
 
-MIN_FREQ, MAX_FREQ = 40e3, 110e3 # 40k-110k mouse, 350-13k marmoset
+MIN_FREQ, MAX_FREQ = 300, 12e3 # 40k-110k mouse, 350-13k marmoset
 
-# PSD_DUR, SPEC_DUR = 0.18, 0.25
-PSD_DUR, SPEC_DUR = 0.5, 0.5 # 0.1 mouse, 0.5 marmoset
+PSD_DUR, SPEC_DUR = 0.5, 0.5 # 0.1 mouse, 0.5 marmoset, 0.5 zebra finch
+
+CENTER_T = 0.5 # how far into the song are we looking?
+SONG_DURATION = 2.0 # how long is the song?
 
 X1, Y1, X2, Y2 = 0, 0, 0, 0
 LINES = []
@@ -52,58 +61,90 @@ def segment(load_dirs):
 	filenames = []
 	for load_dir in load_dirs:
 		filenames += [os.path.join(load_dir,i) for i in os.listdir(load_dir) if i[-4:] in ['.wav', '.mat']]
-	# filenames = [i for i in filenames if wavfile.read(i)[0] == FS]
 
 	"""
-	# Collect PSDs and spectrograms.
-	psds, specs = [], []
-	np.random.seed(42)
-	psd_f_ind, spec_f_ind = None, None
-	print("Collecting data...")
+	run_num = 0
+	while True:
+		run_num += 1
+		# Collect PSDs and spectrograms.
+		psds, specs = [], []
+		np.random.seed(42)
+		psd_f_ind, spec_f_ind = None, None
+		print("Collecting data...")
 
-	# from multiprocessing import Pool
-	# from itertools import repeat
-	# with Pool(min(3, os.cpu_count()-1)) as pool:
-	# 	pool.starmap(get_rand_psds_specs, zip())
-	# # quit()
+		# from multiprocessing import Pool
+		# from itertools import repeat
+		# with Pool(min(3, os.cpu_count()-1)) as pool:
+		# 	pool.starmap(get_rand_psds_specs, zip())
+		# # quit()
 
-	for i in tqdm(range(500)): #10000
-		filename = filenames[np.random.randint(len(filenames))]
-		psd, spec, psd_f_ind, spec_f_ind = get_rand_psd_spec(filename, psd_dur=PSD_DUR, spec_dur=SPEC_DUR, psd_f_ind=psd_f_ind, spec_f_ind=spec_f_ind)
-		# print("psd", psd.shape)
-		# print("spec", spec.shape)
-		# print(np.min(spec), np.max(spec))
-		# plt.imshow(spec, aspect='auto', origin='lower')
-		# plt.savefig('temp.pdf')
-		# plt.close('all')
-		# sleep(2)
-		# if i == 10:
-		# 	quit()
-		psds.append(psd)
-		specs.append(spec)
-	psds = np.array(psds)
-	np.save('psds.npy', psds)
-	specs = np.array(specs)
-	np.save('specs.npy', specs)
-	# UMAP the PSDs.
-	print("Dimensionality reduction...")
-	transform_1 = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
-	embedding = transform_1.fit_transform(psds)
-	joblib.dump(transform_1, 'transform_1.sav')
-	perm = np.random.permutation(len(embedding))
-	embedding, specs = embedding[perm], specs[perm]
-	np.save('embedding.npy', embedding)
+		for i in tqdm(range(5000)): #10000
 
-	# Make an HTML mouse-over plot.
-	print("Making HTML...")
-	make_html_plot(embedding, specs, output_dir='temp2')
-	embedding = np.load('embedding.npy')
+			flag = True
+			while flag:
+				filename = filenames[np.random.randint(len(filenames))]
+				psd, spec, psd_f_ind, spec_f_ind = get_rand_psd_spec(filename, psd_dur=PSD_DUR, spec_dur=SPEC_DUR, psd_f_ind=psd_f_ind, spec_f_ind=spec_f_ind)
+				if run_num > 1:
+					flag = not psd_in_region(spec, transform, boundaries)
+				else:
+					flag = False
+			# print("psd", psd.shape)
+			# print("spec", spec.shape)
+			# print(np.min(spec), np.max(spec))
+			# plt.imshow(spec, aspect='auto', origin='lower')
+			# plt.savefig('temp.pdf')
+			# plt.close('all')
+			# sleep(2)
+			# if i == 10:
+			# 	quit()
+			psds.append(psd)
+			specs.append(spec)
+		psds = np.array(psds)
+		np.save('psds.npy', psds)
+		specs = np.array(specs)
+		np.save('specs.npy', specs)
+		# UMAP the PSDs.
+		print("Dimensionality reduction...")
+		transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
+		embedding = transform.fit_transform(specs.reshape(len(specs), -1))
+		joblib.dump(transform, 'transform_'+str(run_num)+'.sav')
+		perm = np.random.permutation(len(embedding))
+		embedding, specs = embedding[perm], specs[perm]
+		np.save('embedding.npy', embedding)
 
+		# Make an HTML mouse-over plot.
+		print("Making HTML...")
+		make_html_plot(embedding, specs, output_dir='temp2', num_imgs=400)
+		embedding = np.load('embedding.npy')
+
+		# Non-interactive:
+		plt.title("Select relevant audio")
+		plt.scatter(embedding[:,0], embedding[:,1], c='b', alpha=0.1, s=0.7)
+		plt.savefig('temp.pdf')
+		plt.close('all')
+		x1 = float(input("x1: "))
+		x2 = float(input("x2: "))
+		y1 = float(input("y1: "))
+		y2 = float(input("y2: "))
+		x1s, x2s, y1s, y2s = [x1], [x2], [y1], [y2]
+
+		boundaries = {'x1s':x1s, 'y1s':y1s, 'x2s':x2s, 'y2s':y2s}
+		np.save('boundaries.npy', boundaries)
+
+
+		if input("q for quit ") == 'q':
+			quit()
+
+	"""
+
+	"""
 	# Plot an interactive selcting tool.
 	print("Interactive plot...")
 	x1s, y1s, x2s, y2s = [], [], [], []
 	colors = np.array(['b'] * len(embedding))
+	X1 = 0
 	while X1 is not None:
+		print("here")
 		X1 = None
 		for i, embed in enumerate(embedding):
 			if colors[i] == 'r':
@@ -121,49 +162,65 @@ def segment(load_dirs):
 				interactive=True)
 		plt.title("Select relevant audio")
 		plt.connect('key_press_event', toggle_selector)
+		print("making plot 1")
 		plt.scatter(embedding[:,0], embedding[:,1], c=colors, alpha=0.1, s=0.7)
 		plt.show()
+		sleep(20)
+		print("making plot 2")
 		if X1 is not None:
 			x1s.append(X1)
 			y1s.append(Y1)
 			x2s.append(X2)
 			y2s.append(Y2)
+		"""
+
+	"""
 	boundaries = {'x1s':x1s, 'y1s':y1s, 'x2s':x2s, 'y2s':y2s}
 	np.save('boundaries.npy', boundaries)
-
-
-	transform_1 = joblib.load('transform_1.sav')
-	boundaries = np.load('boundaries.npy').item()
 	"""
+
+
+	"""
+	PART II
+	-------
+	"""
+
+	"""
+	transform = joblib.load('transform_'+str(run_num)+'.sav')
+	boundaries = np.load('boundaries.npy').item()
+
 	# Find segmentation boundaries.
 	specs = []
 	np.random.seed(42)
 	psd_f_ind, spec_f_ind = None, None
 	print("Collecting data...")
-	# Collect non-random spectrograms.
-	delta_t = 0.025
-	fs, audio = wavfile.read('001.wav')
-	t = 0.0
-	f_ind = None
-	specs = []
-	print("len(audio)", len(audio)/fs)
-	while t + SPEC_DUR + 0.01 < min(len(audio)/fs, 2000):
-		i1, i2 = int(fs*t), int(fs*(t+SPEC_DUR))
-		spec, f_ind = get_spec(audio[i1:i2], f_ind=f_ind, min_freq=MIN_FREQ, max_freq=MAX_FREQ)
-		specs.append(spec)
-		t += delta_t
-	print("f_ind", f_ind)
-	# # Collect random spectrograms.
-	# for i in tqdm(range(5000)): # 100000
-	# 	flag = True
-	# 	while flag:
-	# 		filename = filenames[np.random.randint(len(filenames))]
-	# 		psd, spec, psd_f_ind, spec_f_ind = get_rand_psd_spec(filename, psd_dur=PSD_DUR, spec_dur=SPEC_DUR, psd_f_ind=psd_f_ind, spec_f_ind=spec_f_ind)
-	# 		flag = not psd_in_region(psd, transform_1, boundaries)
+
+	# # Collect non-random spectrograms.
+	# delta_t = 0.025
+	# fs, audio = wavfile.read('001.wav')
+	# t = 0.0
+	# f_ind = None
+	# specs = []
+	# print("len(audio)", len(audio)/fs)
+	# while t + SPEC_DUR + 0.01 < min(len(audio)/fs, 2000):
+	# 	i1, i2 = int(fs*t), int(fs*(t+SPEC_DUR))
+	# 	spec, f_ind = get_spec(audio[i1:i2], f_ind=f_ind, min_freq=MIN_FREQ, max_freq=MAX_FREQ)
 	# 	specs.append(spec)
-	# 	if (i + 1) % 500 == 0:
-	# 		np.save('specs.npy', np.array(specs))
+	# 	t += delta_t
+	# print("f_ind", f_ind)
+
+	# Collect random spectrograms.
+	for i in tqdm(range(5000)): # 100000
+		flag = True
+		while flag:
+			filename = filenames[np.random.randint(len(filenames))]
+			psd, spec, psd_f_ind, spec_f_ind = get_rand_psd_spec(filename, psd_dur=PSD_DUR, spec_dur=SPEC_DUR, psd_f_ind=psd_f_ind, spec_f_ind=spec_f_ind)
+			flag = not psd_in_region(spec, transform, boundaries)
+		specs.append(spec)
+		if (i + 1) % 500 == 0:
+			np.save('specs.npy', np.array(specs))
 	print("spec_f_ind:", spec_f_ind)
+
 	specs = np.array(specs)
 	np.save('specs.npy', specs)
 
@@ -174,10 +231,10 @@ def segment(load_dirs):
 	# 		weighted_specs[i,j,:specs.shape[2]//2] *= np.linspace(0,1,specs.shape[2]//2)
 	# 		weighted_specs[i,j,specs.shape[2]//2:] *= np.linspace(1,0,specs.shape[2]-specs.shape[2]//2)
 	print("Dimensionality reduction...")
-	transform_2 = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
+	transform_final = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
 	print("specs shape:", specs.shape)
-	embedding = transform_2.fit_transform(specs.reshape(len(specs), -1))
-	joblib.dump(transform_2, 'transform_2.sav')
+	embedding = transform_final.fit_transform(specs.reshape(len(specs), -1))
+	joblib.dump(transform_final, 'transform_2.sav')
 	perm = np.random.permutation(len(embedding))
 	embedding, specs = embedding[perm], specs[perm]
 	np.save('embedding_2.npy', embedding)
@@ -187,6 +244,19 @@ def segment(load_dirs):
 	marked_specs = get_marked_specs(specs)
 	make_html_plot(embedding, marked_specs, output_dir='temp3')
 
+	# Non-interactive:
+	plt.scatter(embedding[:,0], embedding[:,1], c='b', alpha=0.1, s=0.7)
+	plt.savefig('temp.pdf')
+	plt.close('all')
+	center_x = float(input("center x: "))
+	center_y = float(input("center y: "))
+	radius = float(input("radius: "))
+	radii = [radius]
+	centers = [[center_x, center_y]]
+	"""
+
+
+	"""
 	# Plot an interactive selcting tool.
 	print("Interactive plot...")
 	x1s, y1s, x2s, y2s = [], [], [], []
@@ -209,9 +279,7 @@ def segment(load_dirs):
 			plt.plot([x1,x2], [y1,y2], c='r')
 			circle = plt.Circle(tuple(center), radius, color='r', fill=False)
 			current_ax.add_artist(circle)
-		print("AA")
 		plt.show()
-		print("BB")
 		if X1 is not None:
 			x1s.append(X1)
 			y1s.append(Y1)
@@ -219,41 +287,112 @@ def segment(load_dirs):
 			y2s.append(Y2)
 			centers.append([(X1+X2)/2,(Y1+Y2)/2])
 			radii.append(0.5 * ((X1-X2)**2+(Y1-Y2)**2)**0.5)
-	print("radii", radii)
-	# seg_stuff = {'x1s':x1s, 'y1s':y1s, 'x2s':x2s, 'y2s':y2s, 'radii':radii, 'centers':np.array(centers)}
-	# np.save('seg_stuff.npy', seg_stuff)
+	"""
+
+	# TEMP!
+	centers = [[12.5,7]]
+	radii = [2]
+
+
+	seg_stuff = {'radii':radii, 'centers':np.array(centers)}
+	np.save('seg_stuff.npy', seg_stuff)
+
+
+	# Parse through all the files, collecting
 	seg_stuff = np.load('seg_stuff.npy').item()
+	radius = seg_stuff['radii'][0]
+	center = seg_stuff['centers'][0]
+
+	transform = joblib.load('transform_2.sav')
 
 	# Segment a file.
-	fs, audio = wavfile.read('data/raw/bird_data/BF01/001.wav')
-	temp = segment_audio(audio, transform_2, seg_stuff)
+	segment_audio('data/raw/bird_data/79', 'temp_save', transform, center, radius)
+	quit()
+	fs, audio = wavfile.read('data/raw/bird_data/79/red291_43566.27672737_4_11_7_41_12.wav')
+	print(filenames[0])
+	temp = segment_audio_chunk(audio, transform, center, radius)
 	print(temp)
+	quit()
+
+
+def segment_audio(load_dir, save_dir, transform, center, radius):
+	"""Save all the song bouts."""
+	load_filenames = [os.path.join(load_dir,i) for i in os.listdir(load_dir) if i[-4:] in ['.wav', '.mat']]
+	# load_filenames = ['data/raw/bird_data/79/red291_43566.27672737_4_11_7_41_12.wav']
+	audio_segs, filenames, file_times, times = [], [], [], []
+	num_audio_frames = int(SONG_DURATION*FS)
+	write_file_num = 0
+	songs_per_file = 10
+	max_num_songs = 2000
+	for load_filename in load_filenames:
+		print(load_filename, len(audio_segs))
+		filename_time = time_from_filename(load_filename)
+		start_t = 0.0
+		center_ts = []
+		audio = get_audio(load_filename)
+		while True:
+			result = segment_audio_chunk(audio[int(FS*start_t):], transform, center, radius)
+			if result == -1:
+				continue
+			if result is None:
+				break
+			center_ts.append(result + start_t)
+			start_t += result + SONG_DURATION / 2
+		for center_t in center_ts:
+			t1 = int((center_t - CENTER_T)*FS)
+			t2 = t1 + num_audio_frames
+			audio_segs.append(audio[t1:t2])
+			filenames.append(load_filename)
+			file_times.append(center_t - CENTER_T)
+			times.append(filename_time + center_t - CENTER_T)
+		while len(audio_segs) >= songs_per_file:
+			save_filename = os.path.join(save_dir, str(write_file_num).zfill(2)+'.hdf5')
+			wavfile.write(os.path.join(save_dir, 'temp.wav'), FS, np.concatenate(audio_segs, axis=0))
+			with h5py.File(save_filename, "w") as f:
+				f.create_dataset('audio', data=np.array(audio_segs[:songs_per_file]))
+				f.create_dataset('filename', data=np.array(filenames[:songs_per_file]).astype('S'))
+				f.create_dataset('file_time', data=np.array(file_times[:songs_per_file]))
+				f.create_dataset('time', data=np.array(times[:songs_per_file]))
+			audio_segs = audio_segs[songs_per_file:]
+			filenames = filenames[songs_per_file:]
+			file_times = file_times[songs_per_file:]
+			times = times[songs_per_file:]
+			write_file_num += 1
+			if write_file_num * songs_per_file >= max_num_songs:
+				return
 
 
 
-def segment_audio(audio, transform, p):
+def segment_audio_chunk(audio, transform, center, radius):
+	r2 = radius*radius
 	f_ind = None
-	STEP = 0.05
-	SMALL_STEP = 0.05
-	t = 0.0
-	centers = p['centers']
+	STEP = 0.01
+	SMALL_STEP = 0.002
+	t = CENTER_T
 	while t + SPEC_DUR + 0.01 < len(audio)/FS:
 		embed, f_ind = get_embed_from_time(audio, t, f_ind, transform)
-		indices = [i for i in range(len(centers)) if np.sum(np.power(embed-centers[i],2)) < p['radii'][i]**2]
-		assert len(indices) <= 1
-		if len(indices) == 0:
+		current_r2 = np.sum(np.power(embed-center,2))
+		# print(t, current_r2)
+		if current_r2 > r2:
 			t += STEP
 			continue
 		# Step until radius increases.
-		center = centers[indices[0]]
-		prev_radius2 = np.sum(np.power(embed-center,2))
+		prev_r2 = current_r2
 		while True:
 			t += SMALL_STEP
 			embed, f_ind = get_embed_from_time(audio, t, f_ind, transform)
-			radius2 = np.sum(np.power(embed-center,2))
-			if radius2 > prev_radius2:
-				return t - SMALL_STEP
-			prev_radius2 = radius2
+			current_r2 = np.sum(np.power(embed-center,2))
+			# print(t, current_r2, "inside loop")
+			if current_r2 > prev_r2:
+				t -= SMALL_STEP
+				# print(t)
+				# print(CENTER_T)
+				# print(t-CENTER_T+SONG_DURATION)
+				# print(len(audio)/FS)
+				if t - CENTER_T + SONG_DURATION < len(audio)/FS:
+					return t
+				return None
+			prev_r2 = current_r2
 	return None
 
 
@@ -466,8 +605,8 @@ def onclick(event):
 
 
 if __name__ == '__main__':
-	load_dirs = ['human/']
-	# load_dirs = ['data/raw/bird_data/79']
+	# load_dirs = ['human/']
+	load_dirs = ['data/raw/bird_data/79']
 	segment(load_dirs)
 
 

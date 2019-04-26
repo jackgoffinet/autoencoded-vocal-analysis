@@ -149,17 +149,6 @@ mouse_params2 = {
 }
 
 
-# 'spec_thresh': 0.0,
-# 'th_1':3.0,
-# 'th_2':3.5,
-# 'th_3':3.8,
-# 'min_dur':0.05,
-# 'max_dur':2.0,
-# 'freq_smoothing': 3.0,
-# 'softmax': True,
-# 'temperature': 0.5,
-# 'smoothing_timescale': 0.01,
-
 # Zebra Finches
 zebra_finch_params = {
 	# Spectrogram parameters
@@ -266,16 +255,20 @@ quit()
 # 3) Segment audio into syllables.
 import os
 
-"""
-from preprocessing.preprocessing import process_sylls
+template_dir = 'data/templates/red291/'
+load_dirs = ['data/raw/bird_data/'+str(i)+'/' for i in range(80,85)]
+save_dirs = ['hdf5_files/'+str(i)+'/' for i in range(80,85)]
+
+from preprocessing.template_segmentation import process_sylls
+# from preprocessing.preprocessing import process_sylls
 noise_detector = None
 from multiprocessing import Pool
 from itertools import repeat
 with Pool(min(3, os.cpu_count()-1)) as pool:
 	pool.starmap(process_sylls, zip(load_dirs, save_dirs, repeat(preprocess_params), repeat(noise_detector)))
-# quit()
+quit()
 
-
+"""
 # 4) Train a generative model on these syllables.
 from models.dlgm import DLGM
 from models.dataset import get_partition, get_data_loaders

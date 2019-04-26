@@ -1,4 +1,3 @@
-from __future__ import print_function, division
 """Dataset for animal vocalization syllables"""
 
 __author__ = "Jack Goffinet"
