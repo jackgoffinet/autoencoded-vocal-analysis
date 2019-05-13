@@ -1,6 +1,6 @@
 """
-A Deep Latent Gaussian Model (DLGM) for image data implemented using Pyro &
-PyTorch.
+A Deep Latent Gaussian Model (DLGM) for spectrogram data implemented using Pyro
+& PyTorch.
 
 Introduced in:
 
@@ -15,7 +15,7 @@ TO DO: clean up <train>
 TO DO: take a look at the 0.02
 """
 __author__ = "Jack Goffinet"
-__date__ = "November 2018"
+__date__ = "April 2019"
 
 
 import numpy as np
@@ -35,7 +35,7 @@ import matplotlib.pyplot as plt
 plt.switch_backend('agg')
 
 from .rankonenormal import RankOneNormal
-from .dataset import get_data_loaders
+from .fixed_window_dataset import get_data_loaders
 
 
 
@@ -99,7 +99,6 @@ class Decoder(nn.Module):
 		self.g_1 = nn.Linear(self.latent_dim, self.latent_dim, bias=False)
 		self.t_2 = nn.Linear(self.latent_dim, self.latent_dim)
 		self.t_1 = nn.Linear(self.latent_dim, self.latent_dim)
-
 		# Make a bunch of fully connected & transposed convolutional layers.
 		self.fc_layers, self.convt_layers, self.batch_norms = [], [], []
 		for in_dim, out_dim in params['decoder_fc_layers']:
@@ -143,7 +142,7 @@ class Decoder(nn.Module):
 class DLGM(nn.Module):
 	"""Deep Latent Gaussian Model"""
 
-	def __init__(self, network_dims, partition=None, test_freq=5, save_dir=None, load_dir=None, sylls_per_file=1000):
+	def __init__(self, network_dims, p, partition=None, test_freq=5, save_dir=None, load_dir=None, songs_per_file=1000):
 		"""
 		Construct a DLGM.
 
@@ -154,13 +153,14 @@ class DLGM(nn.Module):
 		super(DLGM, self).__init__()
 		assert(save_dir is not None or load_dir is not None)
 		self.params = network_dims
+		self.p = p
 		self.partition = partition
 		self.input_shape = self.params['input_shape']
 		self.input_dim = self.params['input_dim']
 		self.latent_dim = self.params['latent_dim']
 		self.test_freq = test_freq
 		self.save_dir = save_dir
-		self.sylls_per_file = sylls_per_file
+		self.songs_per_file = songs_per_file
 		if self.save_dir is not None:
 			if len(self.save_dir) > 0:
 				if self.save_dir[-1] != '/':
@@ -178,8 +178,8 @@ class DLGM(nn.Module):
 			self.partition = checkpoint['partition']
 		self.encoder = Encoder(self.params)
 		self.decoder = Decoder(self.params)
-		self.train_loader, self.test_loader = get_data_loaders(self.partition, \
-				sylls_per_file=self.sylls_per_file)
+		self.train_loader, self.test_loader = get_data_loaders(self.partition, self.p, \
+				songs_per_file=self.songs_per_file)
 		self.cuda()
 
 
@@ -190,15 +190,16 @@ class DLGM(nn.Module):
 		with pyro.iarange("data", x.size(0)):
 			# setup hyperparameters for prior p(z)
 			mu = x.new_zeros((x.shape[0], self.latent_dim))
+			# d[:,0] = 1.0
 			log_d = x.new_zeros((x.shape[0], self.latent_dim))
 			u = x.new_zeros((x.shape[0], self.latent_dim))
-			db = RankOneNormal(mu, log_d, u)
-			# db = dist.Normal(mu, torch.exp(log_d)).independent(1)
+			# db = RankOneNormal(mu, log_d, u)
+			db = dist.Normal(mu, d).independent(1)
 			xi_1 = pyro.sample("latent_1", db)
 			xi_2 = pyro.sample("latent_2", db)
 			xi_3 = pyro.sample("latent_3", db)
 			loc_img = self.decoder.forward((xi_1, xi_2, xi_3))
-			# score against actual images
+			# score against actual specs
 			pyro.sample("obs", dist.Normal(loc_img, scale=0.02).independent(1), obs=x.view(-1, self.input_dim))
 			return loc_img
 
@@ -233,8 +234,8 @@ class DLGM(nn.Module):
 			test_elbo = checkpoint['test_elbo']
 			start_epoch = checkpoint['epoch'] + 1
 			self.partition = checkpoint['partition']
-			self.train_loader, self.test_loader = get_data_loaders(self.partition, \
-					sylls_per_file=self.sylls_per_file)
+			self.train_loader, self.test_loader = get_data_loaders(self.partition, self.p,\
+					songs_per_file=self.songs_per_file)
 
 		# Set up the inference algorithm.
 		elbo = Trace_ELBO()
@@ -245,7 +246,7 @@ class DLGM(nn.Module):
 			train_loss = 0.0
 			# Iterate over the training data.
 			for i, temp in enumerate(self.train_loader):
-				x = temp['image'].cuda().view(-1, self.input_dim)
+				x = temp['spec'].cuda().view(-1, self.input_dim)
 				train_loss += svi.step(x)
 			# Report training diagnostics.
 			normalizer_train = len(self.train_loader.dataset)
@@ -258,7 +259,7 @@ class DLGM(nn.Module):
 				test_loss = 0.0
 				# Iterate over the test set.
 				for i, temp in enumerate(self.test_loader):
-					x = temp['image'].cuda().view(-1, self.input_dim)
+					x = temp['spec'].cuda().view(-1, self.input_dim)
 					test_loss += svi.evaluate_loss(x)
 				# Report test diagnostics.
 				normalizer_test = len(self.test_loader.dataset)
@@ -288,7 +289,7 @@ class DLGM(nn.Module):
 			checkpoint = torch.load(filename)
 			self.encoder.load_state_dict(checkpoint['encoder_state_dict'])
 			self.decoder.load_state_dict(checkpoint['decoder_state_dict'])
-		# Encode image <v>.
+		# Encode spec <v>.
 		if from_numpy:
 			v = torch.from_numpy(v).type(torch.FloatTensor).cuda()
 		mu, log_d, u = self.encoder.forward(v)
@@ -323,6 +324,27 @@ class DLGM(nn.Module):
 			return latent.detach().cpu().numpy()
 
 
+	def get_song_latent(self, loader, index, n=100):
+		"""
+		Return latent trajectory.
+
+		"""
+		assert index < len(loader.dataset)
+		assert self.load_dir is not None
+		filename = self.load_dir + 'checkpoint.tar'
+		checkpoint = torch.load(filename)
+		self.encoder.load_state_dict(checkpoint['encoder_state_dict'])
+		ts = np.linspace(0,0.63,n)
+		start_frames = [int(round(44100 * t)) for t in ts]
+		sample = loader.dataset.__getitem__([index]*n, start_frame=start_frames)
+		specs = tuple(s['spec'] for s in sample)
+		specs = torch.cat(specs).cuda().view(-1, self.input_dim)
+		print("specs", specs.shape)
+		with torch.no_grad():
+			latent, _, _ = self.encoder.forward(specs)
+		return latent.detach().cpu().numpy(), ts
+
+
 	def get_latent(self, loader, n=30000, random_subset=True, return_fields=None):
 		"""
 		Return mean latent codes generated by the encoder.
@@ -336,28 +358,28 @@ class DLGM(nn.Module):
 			indices = np.random.permutation(len(loader.dataset))[:n]
 		else:
 			indices = np.arange(n)
-		# Collect images from loader.
-		np_images = np.array([i['image'].detach().cpu().numpy() for i in loader.dataset[indices]])
-		images = torch.from_numpy(np_images).type(torch.FloatTensor)
+		# Collect specs from loader.
+		np_specs = np.array([i['spec'].detach().cpu().numpy() for i in loader.dataset[indices]])
+		specs = torch.from_numpy(np_specs).type(torch.FloatTensor)
 		# Set up the encoder.
 		checkpoint = torch.load(self.load_dir + 'checkpoint.tar')
 		self.encoder.load_state_dict(checkpoint['encoder_state_dict'])
-		# Collect latent means given images.
-		for i in range(len(images) // 1000):
-			x = images[i*1000:(i+1)*1000].cuda()
+		# Collect latent means given specs.
+		for i in range(len(specs) // 1000):
+			x = specs[i*1000:(i+1)*1000].cuda()
 			mu, _, _ = self.encoder.forward(x)
 			latent[i*1000:(i+1)*1000] = mu.detach().cpu().numpy()
-		if len(images) % 1000 != 0:
-			x = images[-1 * (len(images)%1000):].cuda()
+		if len(specs) % 1000 != 0:
+			x = specs[-1 * (len(specs)%1000):].cuda()
 			mu, _, _ = self.encoder.forward(x)
-			latent[-1 * (len(images)%1000):] = mu.detach().cpu().numpy()
+			latent[-1 * (len(specs)%1000):] = mu.detach().cpu().numpy()
 		if return_fields is None:
 			return latent
 		# Then add other fields.
 		to_return = [latent]
 		for field in return_fields:
-			if field == 'image':
-				to_return.append(np_images)
+			if field == 'spec':
+				to_return.append(np_specs)
 			else:
 				to_return.append(np.array([i[field] for i in loader.dataset[indices]]))
 		return to_return
@@ -370,7 +392,7 @@ class DLGM(nn.Module):
 		gap = 10
 		big_img = np.zeros((2*self.input_shape[0]+gap, 5*self.input_shape[1]+4*gap))
 		for temp in loader:
-			x = temp['image'].cuda().view(-1, self.input_dim)
+			x = temp['spec'].cuda().view(-1, self.input_dim)
 			reconstructed = self.reconstruct_img(x)
 			x = x.view((-1,) + self.input_shape)
 			for im_num in range(5):

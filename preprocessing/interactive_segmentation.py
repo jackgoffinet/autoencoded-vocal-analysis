@@ -34,7 +34,7 @@ from bokeh.models import HoverTool
 from bokeh.models.glyphs import ImageURL
 
 
-from preprocessing import time_from_filename
+from .preprocessing import time_from_filename
 
 
 FS = 44100

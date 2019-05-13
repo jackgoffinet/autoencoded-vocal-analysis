@@ -16,7 +16,6 @@ BEFORE RUNNING:
 
 TO DO:
 - Random seed
-- Noise detection and preprocessing.process_sylls have redundant segmentation
 """
 __author__ = "Jack Goffinet"
 __date__ = "December 2018 - April 2019"
@@ -184,7 +183,7 @@ zebra_finch_params = {
 
 
 # Set the dimension of the latent space.
-latent_dim = 64
+latent_dim = 8 # NOTE: TEMP!
 nf = 8
 encoder_conv_layers =	[
 		[1,1*nf,3,1,1],
@@ -220,6 +219,67 @@ network_dims = {
 # Set which set of parameters to use.
 preprocess_params = zebra_finch_params
 
+from preprocessing.template_segmentation import process_sylls, clean_collected_data
+load_dir = 'data/raw/bird_data/84/'
+save_dir = 'data/processed/bird_data/temp_84/'
+save_dir2 = 'data/processed/bird_data/temp2_84/'
+feature_dir = 'data/features/red291/'
+
+p = {
+	'songs_per_file': 50,
+	'num_freq_bins': 128,
+	'num_time_bins': 128,
+	'min_freq': 350,
+	'max_freq': 12e3,
+	'mel': True,
+	'spec_thresh': -4.0,
+	'fs': 44100,
+	'spec_dur': 0.1,
+}
+# process_sylls(load_dir, save_dir, feature_dir, p)
+# clean_collected_data([save_dir], [save_dir2], p)
+from models.fixed_window_dlgm import DLGM
+from models.fixed_window_dataset import get_partition, get_data_loaders
+
+# partition = get_partition([save_dir2], split=0.95)
+# Check load_dir vs. save_dir!
+# model = DLGM(network_dims, p, partition=partition, load_dir='data/models/red291_inst/', songs_per_file=p['songs_per_file'])
+# model.train(epochs=250, lr=1e-5)
+
+partition = get_partition([save_dir2], split=1.0)
+loader, _ = get_data_loaders(partition, p, shuffle=(False,False), batch_size=32, songs_per_file=p['songs_per_file'])
+model = DLGM(network_dims, p, partition=partition, load_dir='data/models/red291_inst/', songs_per_file=p['songs_per_file'])
+
+n = 100
+latent_paths = np.zeros((n,200,8))
+for i in range(1):
+	latent, ts = model.get_song_latent(loader, i, n=200)
+	latent_paths[i] = latent
+
+# np.save('latent_paths.npy', latent_paths)
+latent_paths = np.load('latent_paths.npy')
+
+from plotting.instantaneous_plots import plot_paths
+plot_paths(latent_paths, ts)
+quit()
+# np.save('latent.npy', latent)
+from sklearn.decomposition import PCA
+pca = PCA(n_components=8)
+latent_1 = pca.fit_transform(latent_1)
+print(pca.explained_variance_ratio_)
+latent_2 = pca.transform(latent_2)
+latent_3 = pca.transform(latent_3)
+# latent_2 = pca.
+
+# embed = latent[:]
+import matplotlib.pyplot as plt
+plt.switch_backend('agg')
+plt.plot(ts, latent_1[:,1], lw=0.5)
+plt.plot(ts, latent_2[:,1], lw=0.5)
+plt.plot(ts, latent_3[:,1], lw=0.5)
+# plt.scatter(latent_2[:,0], latent_2[:,1])
+plt.savefig('temp1.pdf')
+quit()
 
 load_dirs = ['data/raw/bird_data/'+str(i)+'/' for i in range(42,85)]
 save_dirs = ['data/processed/bird_data/'+str(i)+'/' for i in range(42,85)]

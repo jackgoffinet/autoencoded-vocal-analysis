@@ -12,12 +12,11 @@ import h5py
 
 from scipy.io import wavfile, loadmat
 from scipy.signal import stft
+from scipy.interpolate import interp1d
 
-from time import strptime, mktime, localtime
+from time import strptime, mktime
 
 from skimage.transform import resize
-
-from scipy.interpolate import interp1d
 
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
@@ -25,7 +24,7 @@ plt.switch_backend('agg')
 
 
 # Constants
-EPS = 1e-12
+EPS = 1e-9
 
 
 
@@ -187,7 +186,7 @@ def get_spec(filename, p, start_index=None, end_index=None):
 	i1 = np.searchsorted(f, p['min_freq'])
 	i2 = np.searchsorted(f, p['max_freq'])
 	f = f[i1:i2]
-	spec = np.log(np.abs(Zxx[i1:i2,:]) + EPS)
+	spec = np.log(np.abs(Zxx[i1:i2,:]) + EPSILON)
 	# Denoise.
 	spec -= p['seg_params']['spec_thresh']
 	spec[spec<0.0] = 0.0
