@@ -12,11 +12,12 @@ import h5py
 
 from scipy.io import wavfile, loadmat
 from scipy.signal import stft
-from scipy.interpolate import interp1d
 
-from time import strptime, mktime
+from time import strptime, mktime, localtime
 
 from skimage.transform import resize
+
+from scipy.interpolate import interp1d
 
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
@@ -24,7 +25,7 @@ plt.switch_backend('agg')
 
 
 # Constants
-EPS = 1e-9
+EPS = 1e-12
 
 
 
@@ -49,12 +50,14 @@ def process_sylls(load_dir, save_dir, p, noise_detector=None):
 	Notes
 	-----
 	"""
+	if save_dir[-1] != '/':
+		save_dir += '/'
 	sylls_per_file = p['sylls_per_file']
 	num_freq_bins = p['num_freq_bins']
 	num_time_bins = p['num_time_bins']
 	if not os.path.exists(save_dir):
 		os.makedirs(save_dir)
-	filenames = [os.path.join(load_dir, i) for i in os.listdir(load_dir) if i[-4:] in ['.wav', '.mat']]
+	filenames = [load_dir + i for i in os.listdir(load_dir) if i[-4:] in ['.wav', '.mat']]
 	np.random.shuffle(filenames)
 	if p['seg_params']['algorithm'] == get_onsets_offsets_from_file:
 		filenames = [i for i in filenames if os.path.exists('.'.join(i.split('.')[:-1]) + '.txt')]
@@ -105,7 +108,7 @@ def process_sylls(load_dir, save_dir, p, noise_detector=None):
 		syll_data['filenames'] += len(t_durations)*[load_filename.split('/')[-1]]
 		# Write a file when we have enough syllables.
 		while len(syll_data['durations']) >= sylls_per_file:
-			save_filename = os.path.join(save_dir, "syllables_")
+			save_filename = save_dir + "syllables_"
 			save_filename += str(write_file_num).zfill(3) + '.hdf5'
 			with h5py.File(save_filename, "w") as f:
 				# Zero-pad the spectrograms and add them to the file.
@@ -126,7 +129,7 @@ def process_sylls(load_dir, save_dir, p, noise_detector=None):
 				# Then add the rest.
 				for k in ['durations', 'times', 'file_times']:
 					f.create_dataset(k, data=np.array(syll_data[k][:sylls_per_file]))
-				temp = [os.path.join(save_dir, i) for i in syll_data['filenames'][:sylls_per_file]]
+				temp = [save_dir + i for i in syll_data['filenames'][:sylls_per_file]]
 				f.create_dataset('filenames', data=np.array(temp).astype('S'))
 			# Remove the written data from temporary storage.
 			for k in syll_data:
@@ -166,7 +169,7 @@ def get_audio(filename, p, start_index=None, end_index=None):
 		temp_fs, audio = wavfile.read(filename)
 	elif filename[-4:] == '.mat':
 		d = loadmat(filename)
-		audio = d['spike2Chunk'].flatten()
+		audio = d['spike2Chunk'].reshape(-1)
 		temp_fs = d['fs'][0,0]
 	assert temp_fs == p['fs'], "found fs: "+str(temp_fs)+", expected: "+str(p['fs'])
 	if len(audio.shape) > 1:
@@ -186,7 +189,7 @@ def get_spec(filename, p, start_index=None, end_index=None):
 	i1 = np.searchsorted(f, p['min_freq'])
 	i2 = np.searchsorted(f, p['max_freq'])
 	f = f[i1:i2]
-	spec = np.log(np.abs(Zxx[i1:i2,:]) + EPSILON)
+	spec = np.log(np.abs(Zxx[i1:i2,:]) + EPS)
 	# Denoise.
 	spec -= p['seg_params']['spec_thresh']
 	spec[spec<0.0] = 0.0
@@ -213,7 +216,7 @@ def tune_segmenting_params(load_dirs, p):
 	seg_params = p['seg_params']
 	filenames = []
 	for load_dir in load_dirs:
-		filenames += [os.path.join(load_dir, i) for i in os.listdir(load_dir) if i[-4:] in ['.wav', '.mat']]
+		filenames += [load_dir + i for i in os.listdir(load_dir) if i[-4:] in ['.wav', '.mat']]
 	if len(filenames) == 0:
 		print("Found no audio files!")
 		return
@@ -305,7 +308,12 @@ def get_onsets_offsets_from_file(audio_filename, dt):
 	except:
 		return onsets, offsets
 	for i in range(len(d)):
-		onsets.append(int(np.floor(d[i,1]/dt)))
+		try:
+			onsets.append(int(np.floor(d[i,1]/dt)))
+		except:
+			print("aught")
+			print(d)
+			return onsets, offsets
 		offsets.append(int(np.ceil(d[i,2]/dt))+1)
 		if offsets[-1] - onsets[-1] >= 128:
 			onsets = onsets[:-1]

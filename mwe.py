@@ -151,7 +151,7 @@ mouse_params2 = {
 # Zebra Finches
 zebra_finch_params = {
 	# Spectrogram parameters
-	'fs': 44100, # 44100/32000
+	'fs': 32000, # 44100/32000
 	'min_freq': 300,
 	'max_freq': 12e3,
 	'nperseg': 512, # FFT
@@ -162,11 +162,11 @@ zebra_finch_params = {
 	'time_stretch': True,
 	# Segmenting parameters
 	'seg_params': {
-		'algorithm': read_from_file_alg, # amp_alg
-		'spec_thresh': 2.5,
+		'algorithm': amp_alg,
+		'spec_thresh': 1.5,
 		'th_1':0.9,
 		'th_2':1.0,
-		'th_3':1.4,
+		'th_3':1.35,
 		'min_dur':0.05,
 		'max_dur':2.0,
 		'freq_smoothing': 3.0,
@@ -178,12 +178,12 @@ zebra_finch_params = {
 	},
 	# I/O parameters
 	'sylls_per_file': 50,
-	'max_num_syllables': 1200, # per directory
+	'max_num_syllables': 1400, # per directory
 }
 
 
 # Set the dimension of the latent space.
-latent_dim = 8 # NOTE: TEMP!
+latent_dim = 32
 nf = 8
 encoder_conv_layers =	[
 		[1,1*nf,3,1,1],
@@ -216,73 +216,85 @@ network_dims = {
 }
 
 
-# Set which set of parameters to use.
-preprocess_params = zebra_finch_params
 
+# -------------------------------------- #
+"""Instantaneous Song Stuff"""
 from preprocessing.template_segmentation import process_sylls, clean_collected_data
-load_dir = 'data/raw/bird_data/84/'
-save_dir = 'data/processed/bird_data/temp_84/'
-save_dir2 = 'data/processed/bird_data/temp2_84/'
-feature_dir = 'data/features/red291/'
+temp = ['09262019/', '09292019/', 'IMAGING_09182018/', 'IMAGING_09242018/', \
+		'IMAGING_10112018/', 'IMAGING_10162018/']
+load_dirs = ['data/raw/bird_data/' + i for i in temp]
+temp_save_dirs = ['data/processed/bird_data/temp_' + i for i in temp]
+save_dirs = ['data/processed/bird_data/' + i for i in temp]
+feature_dir = 'data/features/blk215/'
 
 p = {
-	'songs_per_file': 50,
+	'songs_per_file': 20,
 	'num_freq_bins': 128,
 	'num_time_bins': 128,
 	'min_freq': 350,
 	'max_freq': 12e3,
 	'mel': True,
-	'spec_thresh': -4.0,
-	'fs': 44100,
+	'spec_thresh': 1.5,
+	# 'fs': 44100,
 	'spec_dur': 0.1,
 }
-# process_sylls(load_dir, save_dir, feature_dir, p)
-# clean_collected_data([save_dir], [save_dir2], p)
+
+# # Preprocessing
+# for load_dir, temp_save_dir in zip(load_dirs, temp_save_dirs):
+# 	print(load_dir)
+# 	process_sylls(load_dir, temp_save_dir, feature_dir, p)
+# clean_collected_data(temp_save_dirs, save_dirs, p)
+
+# Training
 from models.fixed_window_dlgm import DLGM
 from models.fixed_window_dataset import get_partition, get_data_loaders
-
-# partition = get_partition([save_dir2], split=0.95)
+partition = get_partition(save_dirs, split=0.95)
 # Check load_dir vs. save_dir!
-# model = DLGM(network_dims, p, partition=partition, load_dir='data/models/red291_inst/', songs_per_file=p['songs_per_file'])
-# model.train(epochs=250, lr=1e-5)
+model = DLGM(network_dims, p, partition=partition, load_dir='data/models/blk215_inst/')
+# model.train(epochs=250, lr=1.5e-5)
 
-partition = get_partition([save_dir2], split=1.0)
-loader, _ = get_data_loaders(partition, p, shuffle=(False,False), batch_size=32, songs_per_file=p['songs_per_file'])
-model = DLGM(network_dims, p, partition=partition, load_dir='data/models/red291_inst/', songs_per_file=p['songs_per_file'])
+partition = get_partition(['data/processed/bird_data/IMAGING_09182018/'], split=1.0)
+# temp = ['IMAGING_09242018/', 'IMAGING_10112018/', \
+		# 'IMAGING_10162018/'] # '09262019/', '09292019/',
+# temp_dirs = ['data/processed/bird_data/'+i for i in temp]
+# partition = get_partition(temp_dirs, split=1.0)
+loader, _ = get_data_loaders(partition, p, shuffle=(False, False))
 
-n = 100
-latent_paths = np.zeros((n,200,8))
-for i in range(1):
-	latent, ts = model.get_song_latent(loader, i, n=200)
-	latent_paths[i] = latent
 
-# np.save('latent_paths.npy', latent_paths)
-latent_paths = np.load('latent_paths.npy')
+# n = min(len(loader.dataset), 400)
+# latent_paths = np.zeros((n,200,latent_dim))
+# print("loader:", len(loader.dataset))
+# from tqdm import tqdm
+# for i in tqdm(range(n)):
+# 	latent, ts = model.get_song_latent(loader, i, n=200)
+# 	latent_paths[i] = latent
+# np.save('latent_paths_other.npy', latent_paths)
+# quit()
 
-from plotting.instantaneous_plots import plot_paths
-plot_paths(latent_paths, ts)
+ts = np.linspace(0,0.85,200)
+# latent_paths_1 = np.load('latent_paths_imaging.npy')
+# latent_paths_2 = np.load('latent_paths_other.npy')
+# latent_paths = np.concatenate((latent_paths_1, latent_paths_2), axis=0)
+
+latent_paths = np.load('latent_paths_imaging.npy')
+
+from plotting.instantaneous_plots import plot_paths_imaging
+for unit in range(53):
+	plot_paths_imaging(np.copy(latent_paths), ts, loader, unit_num=unit, filename=str(unit).zfill(2)+'.pdf')
+
+
+
 quit()
-# np.save('latent.npy', latent)
-from sklearn.decomposition import PCA
-pca = PCA(n_components=8)
-latent_1 = pca.fit_transform(latent_1)
-print(pca.explained_variance_ratio_)
-latent_2 = pca.transform(latent_2)
-latent_3 = pca.transform(latent_3)
-# latent_2 = pca.
+# -------------------------------------- #
 
-# embed = latent[:]
-import matplotlib.pyplot as plt
-plt.switch_backend('agg')
-plt.plot(ts, latent_1[:,1], lw=0.5)
-plt.plot(ts, latent_2[:,1], lw=0.5)
-plt.plot(ts, latent_3[:,1], lw=0.5)
-# plt.scatter(latent_2[:,0], latent_2[:,1])
-plt.savefig('temp1.pdf')
-quit()
 
-load_dirs = ['data/raw/bird_data/'+str(i)+'/' for i in range(42,85)]
-save_dirs = ['data/processed/bird_data/'+str(i)+'/' for i in range(42,85)]
+# Set which set of parameters to use.
+preprocess_params = zebra_finch_params
+
+
+load_dirs = ['data/raw/bird_data/'+str(i)+'/' for i in range(62,99)]
+save_dirs = ['data/processed/bird_data/'+str(i)+'/' for i in range(62,99)]
+
 """
 # 1) Tune segmenting parameters.
 from os import listdir
@@ -311,30 +323,30 @@ detector.train()
 quit()
 """
 
-
+"""
 # 3) Segment audio into syllables.
 import os
 
-template_dir = 'data/templates/red291/'
-load_dirs = ['data/raw/bird_data/'+str(i)+'/' for i in range(80,85)]
-save_dirs = ['hdf5_files/'+str(i)+'/' for i in range(80,85)]
+# template_dir = 'data/templates/red291/'
+# load_dirs = ['data/raw/bird_data/'+str(i)+'/' for i in range(80,85)]
+# save_dirs = ['hdf5_files/'+str(i)+'/' for i in range(80,85)]
 
-from preprocessing.template_segmentation import process_sylls
-# from preprocessing.preprocessing import process_sylls
+# from preprocessing.template_segmentation import process_sylls
+from preprocessing.preprocessing import process_sylls
 noise_detector = None
 from multiprocessing import Pool
 from itertools import repeat
 with Pool(min(3, os.cpu_count()-1)) as pool:
 	pool.starmap(process_sylls, zip(load_dirs, save_dirs, repeat(preprocess_params), repeat(noise_detector)))
 quit()
-
+"""
 """
 # 4) Train a generative model on these syllables.
 from models.dlgm import DLGM
 from models.dataset import get_partition, get_data_loaders
 partition = get_partition(save_dirs, split=0.95)
 # Check load_dir vs. save_dir!
-model = DLGM(network_dims, partition=partition, save_dir='data/models/red291/', sylls_per_file=preprocess_params['sylls_per_file'])
+model = DLGM(network_dims, partition=partition, save_dir='data/models/blu291/', sylls_per_file=preprocess_params['sylls_per_file'])
 model.train(epochs=250, lr=2e-5)
 quit()
 """
@@ -342,7 +354,7 @@ quit()
 # 5) Use the model to get a latent representation of these syllables.
 from models.dlgm import DLGM
 from models.dataset import get_partition, get_data_loaders
-model = DLGM(network_dims, load_dir='data/models/red291', sylls_per_file=preprocess_params['sylls_per_file'])
+model = DLGM(network_dims, load_dir='data/models/blu291', sylls_per_file=preprocess_params['sylls_per_file'])
 partition = get_partition(save_dirs, split=1.0)
 loader, _ = get_data_loaders(partition, shuffle=(False,False), batch_size=32, sylls_per_file=preprocess_params['sylls_per_file'])
 
@@ -350,37 +362,38 @@ d = {'model':model, 'loader':loader}
 
 from plotting.longitudinal_gif import make_projection, plot_generated_cluster_means, make_dot_gif, make_html_plot
 
-load_dirs = ['data/raw/bird_data/'+str(i)+'/' for i in range(42,85)]
-save_dirs = ['hdf5_files/'+str(i)+'/' for i in range(42,85)]
+load_dirs = ['data/raw/bird_data/'+str(i)+'/' for i in range(62,99)]
+save_dirs = ['hdf5_files/'+str(i)+'/' for i in range(62,99)]
 
 
-title = "red291"
-n = 3*10**4
+# title = "blu291"
+# n = 3*10**4
+
+
+# print("making projection")
+# d = make_projection(d, title=title, n=n, axis=False)
+
+# """
+# print("making gif")
+# d = make_dot_gif(d, title=title, n=n)
+# """
+# # quit()
+# print("making html")
+# make_html_plot(d, output_dir='temp/', n=n, num_imgs=2000, title=title)
+# # quit()
+
+
+# print("Saving everything...")
+# # Save a bunch of data.
+# from scipy.io import savemat
+
+# from plotting.longitudinal_gif import update_data
+# keys = ['latent', 'file_time', 'time', 'filename', 'duration', 'embedding']
+# d = update_data(d, keys, n=n) # + ['image']
 
 """
-print("making projection")
-d = make_projection(d, title=title, n=n, axis=False)
-
-
-print("making gif")
-d = make_dot_gif(d, title=title, n=n)
-
-# quit()
-print("making html")
-make_html_plot(d, output_dir='temp/', n=n, num_imgs=2000, title=title)
-# quit()
-
-
-print("Saving everything...")
-# Save a bunch of data.
-from scipy.io import savemat
-
-from plotting.longitudinal_gif import update_data
-keys = ['latent', 'file_time', 'time', 'filename', 'duration', 'embedding']
-d = update_data(d, keys, n=n) # + ['image']
-
-# savemat('images.mat', {'images':d['image']})
-# del d['image']
+savemat('images.mat', {'images':d['image']})
+del d['image']
 
 del d['model']
 del d['loader']

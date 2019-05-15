@@ -142,7 +142,7 @@ class Decoder(nn.Module):
 class DLGM(nn.Module):
 	"""Deep Latent Gaussian Model"""
 
-	def __init__(self, network_dims, p, partition=None, test_freq=5, save_dir=None, load_dir=None, songs_per_file=1000):
+	def __init__(self, network_dims, p, partition=None, test_freq=5, save_dir=None, load_dir=None):
 		"""
 		Construct a DLGM.
 
@@ -160,7 +160,6 @@ class DLGM(nn.Module):
 		self.latent_dim = self.params['latent_dim']
 		self.test_freq = test_freq
 		self.save_dir = save_dir
-		self.songs_per_file = songs_per_file
 		if self.save_dir is not None:
 			if len(self.save_dir) > 0:
 				if self.save_dir[-1] != '/':
@@ -178,8 +177,7 @@ class DLGM(nn.Module):
 			self.partition = checkpoint['partition']
 		self.encoder = Encoder(self.params)
 		self.decoder = Decoder(self.params)
-		self.train_loader, self.test_loader = get_data_loaders(self.partition, self.p, \
-				songs_per_file=self.songs_per_file)
+		self.train_loader, self.test_loader = get_data_loaders(self.partition, self.p)
 		self.cuda()
 
 
@@ -190,11 +188,10 @@ class DLGM(nn.Module):
 		with pyro.iarange("data", x.size(0)):
 			# setup hyperparameters for prior p(z)
 			mu = x.new_zeros((x.shape[0], self.latent_dim))
-			# d[:,0] = 1.0
 			log_d = x.new_zeros((x.shape[0], self.latent_dim))
 			u = x.new_zeros((x.shape[0], self.latent_dim))
-			# db = RankOneNormal(mu, log_d, u)
-			db = dist.Normal(mu, d).independent(1)
+			db = RankOneNormal(mu, log_d, u)
+			# db = dist.Normal(mu, d).independent(1)
 			xi_1 = pyro.sample("latent_1", db)
 			xi_2 = pyro.sample("latent_2", db)
 			xi_3 = pyro.sample("latent_3", db)
@@ -234,8 +231,7 @@ class DLGM(nn.Module):
 			test_elbo = checkpoint['test_elbo']
 			start_epoch = checkpoint['epoch'] + 1
 			self.partition = checkpoint['partition']
-			self.train_loader, self.test_loader = get_data_loaders(self.partition, self.p,\
-					songs_per_file=self.songs_per_file)
+			self.train_loader, self.test_loader = get_data_loaders(self.partition, self.p)
 
 		# Set up the inference algorithm.
 		elbo = Trace_ELBO()
@@ -334,12 +330,10 @@ class DLGM(nn.Module):
 		filename = self.load_dir + 'checkpoint.tar'
 		checkpoint = torch.load(filename)
 		self.encoder.load_state_dict(checkpoint['encoder_state_dict'])
-		ts = np.linspace(0,0.63,n)
-		start_frames = [int(round(44100 * t)) for t in ts]
-		sample = loader.dataset.__getitem__([index]*n, start_frame=start_frames)
+		ts = np.linspace(0,0.85,n) # NOTE: MAGIC NUMBER HERE 
+		sample = loader.dataset.__getitem__([index]*n, start_time=ts)
 		specs = tuple(s['spec'] for s in sample)
 		specs = torch.cat(specs).cuda().view(-1, self.input_dim)
-		print("specs", specs.shape)
 		with torch.no_grad():
 			latent, _, _ = self.encoder.forward(specs)
 		return latent.detach().cpu().numpy(), ts

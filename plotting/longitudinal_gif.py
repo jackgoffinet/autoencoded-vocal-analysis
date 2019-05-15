@@ -169,27 +169,27 @@ def day_from_time(query_times):
 
 
 
-# def get_embeddings_times(loader, model, return_latent=False, return_images=False, n=30000):
-# 	# First get latent representations.
-# 	if return_images:
-# 		return_fields = ['time', 'image']
-# 		latent, times, images = model.get_latent(loader, n=n, random_subset=True, return_fields=return_fields)
-# 	else:
-# 		return_fields = ['time']
-# 		latent, times = model.get_latent(loader, n=n, random_subset=True, return_fields=return_fields)
-# 	# Fit UMAP on a random subset, get embedding.
-# 	transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
-# 	print("fitting transform")
-# 	transform.fit(latent)
-# 	print("done")
-# 	embeddings = transform.transform(latent)
-# 	if return_latent:
-# 		if return_images:
-# 			return embeddings, times, latent, images
-# 		return embeddings, times, latent
-# 	if return_images:
-# 		return embeddings, times, images
-# 	return embeddings, times
+def get_embeddings_times(loader, model, return_latent=False, return_images=False, n=30000):
+	# First get latent representations.
+	if return_images:
+		return_fields = ['time', 'image']
+		latent, times, images = model.get_latent(loader, n=n, random_subset=True, return_fields=return_fields)
+	else:
+		return_fields = ['time']
+		latent, times = model.get_latent(loader, n=n, random_subset=True, return_fields=return_fields)
+	# Fit UMAP on a random subset, get embedding.
+	transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
+	print("fitting transform")
+	transform.fit(latent)
+	print("done")
+	embeddings = transform.transform(latent)
+	if return_latent:
+		if return_images:
+			return embeddings, times, latent, images
+		return embeddings, times, latent
+	if return_images:
+		return embeddings, times, images
+	return embeddings, times
 
 
 # def make_time_heatmap(loader, model):
@@ -220,7 +220,7 @@ def day_from_time(query_times):
 
 
 # Make a gif w/ query times.
-def make_dot_gif(d, title="", n=30000):
+def make_dot_gif(d, title="", n=30000, axis=False):
 	# Update the data.
 	required_fields = ['embedding', 'time']
 	d = update_data(d, required_fields, n=n)
@@ -254,7 +254,8 @@ def make_dot_gif(d, title="", n=30000):
 		plt.scatter(m1, m2, color=rgba_colors, s=0.8)
 		plt.xlim([xmin, xmax])
 		plt.ylim([ymin, ymax])
-		plt.axis('off')
+		if not axis:
+			plt.axis('off')
 		plt.text(xmin+2, ymax-2, time.strftime('%b %d', time.gmtime(query_time)))
 		plt.title(title)
 		plt.savefig(str(i).zfill(2)+'.jpg')
@@ -267,6 +268,7 @@ def make_dot_gif(d, title="", n=30000):
 		images.append(image)
 	print('saving gif')
 	imageio.mimsave('temp.gif', images, duration=0.15)
+	return d
 
 
 
