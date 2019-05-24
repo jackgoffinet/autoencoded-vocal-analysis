@@ -25,7 +25,7 @@ plt.switch_backend('agg')
 
 
 # Constants
-EPS = 1e-12
+EPSILON = 1e-12
 
 
 
@@ -73,17 +73,10 @@ def process_sylls(load_dir, save_dir, p, noise_detector=None):
 	for load_filename in filenames:
 		start_time = time_from_filename(load_filename)
 		# Get a spectrogram.
-		spec, f, dt, i1, i2 = get_spec(load_filename, p)
+		spec, f, dt = get_spec(load_filename, p)
 		# Collect syllable onsets and offsets.
 		if 'f' not in p['seg_params']:
 			p['seg_params']['f'] = f
-		# Add file-level segmentation parameters if they exist.
-		try:
-			temp = '/'.join(load_filename.split('/')[:-1])+'/seg_params.npy'
-			temp = np.load(temp).item()
-			p['seg_params'] = {**p['seg_params'], **temp}
-		except FileNotFoundError:
-			pass
 		# Get onsets and offsets.
 		if p['seg_params']['algorithm'] == get_onsets_offsets_from_file:
 			t_onsets, t_offsets = get_onsets_offsets_from_file(load_filename, dt)
@@ -162,7 +155,7 @@ def get_syll_specs(onsets, offsets, spec, start_time, dt, p):
 	return syll_specs, syll_times
 
 
-def get_audio(filename, p, start_index=None, end_index=None):
+def get_audio(filename, p, start_index=None, stop_index=None):
 	"""Get a waveform given a filename."""
 	# Make sure the samplerate is correct and the audio is mono.
 	if filename[-4:] == '.wav':
@@ -174,40 +167,65 @@ def get_audio(filename, p, start_index=None, end_index=None):
 	assert temp_fs == p['fs'], "found fs: "+str(temp_fs)+", expected: "+str(p['fs'])
 	if len(audio.shape) > 1:
 		audio = audio[0,:]
-	if start_index is not None and end_index is not None:
+	if start_index is not None and stop_index is not None:
 		start_index = max(start_index, 0)
-		audio = audio[start_index:end_index]
+		audio = audio[start_index:stop_index]
 	return audio
 
 
-def get_spec(filename, p, start_index=None, end_index=None):
-	"""Get a spectrogram given a filename."""
-	audio = get_audio(filename, p, start_index=start_index, end_index=end_index)
-	# Convert to a magnitude-only spectrogram.
-	f, t, Zxx = stft(audio, fs=p['fs'], nperseg=p['nperseg'],
-			noverlap=p['noverlap'])
-	i1 = np.searchsorted(f, p['min_freq'])
-	i2 = np.searchsorted(f, p['max_freq'])
-	f = f[i1:i2]
-	spec = np.log(np.abs(Zxx[i1:i2,:]) + EPS)
-	# Denoise.
+def get_spec(filename, p, start_index=None, stop_index=None):
+	"""Get a spectrogram."""
+	audio = get_audio(filename, p, start_index=start_index, stop_index=stop_index)
+	f, t, spec = stft(audio, fs=p['fs'], nperseg=p['nperseg'], noverlap=p['noverlap'])
+	spec = np.log(np.abs(spec) + EPSILON)
 	spec -= p['seg_params']['spec_thresh']
-	spec[spec<0.0] = 0.0
+	spec[spec < 0.0] = 0.0
 	# Switch to mel frequency spacing.
 	if p['mel']:
-		new_f = np.linspace(mel(f[0]), mel(f[-1]), p['num_freq_bins'], endpoint=True)
+		new_f = np.linspace(mel(p['min_freq']), mel(p['max_freq']), p['num_freq_bins'], endpoint=True)
 		new_f = inv_mel(new_f)
 		new_f[0] = f[0] # Correct for numerical errors.
 		new_f[-1] = f[-1]
 	else:
-		new_f = np.linspace(f[0], f[-1], p['num_freq_bins'], endpoint=True)
+		new_f = np.linspace(p['min_freq'], p['max_freq'], p['num_freq_bins'], endpoint=True)
 	new_spec = np.zeros((p['num_freq_bins'], spec.shape[1]), dtype='float')
 	for j in range(spec.shape[1]):
-		interp = interp1d(f, spec[:,j], kind='cubic')
+		interp = interp1d(f, spec[:,j], kind='linear', assume_sorted=True)
 		new_spec[:,j] = interp(new_f)
 	spec = new_spec
 	f = new_f
-	return spec, f, t[1]-t[0], i1, i2
+	return spec, f, t[1] - t[0]
+
+
+# # Old function.
+# def get_spec(filename, p, start_index=None, stop_index=None):
+# 	"""Get a spectrogram given a filename."""
+# 	audio = get_audio(filename, p, start_index=start_index, stop_index=stop_index)
+# 	# Convert to a magnitude-only spectrogram.
+# 	f, t, Zxx = stft(audio, fs=p['fs'], nperseg=p['nperseg'],
+# 			noverlap=p['noverlap'])
+# 	i1 = np.searchsorted(f, p['min_freq'])
+# 	i2 = np.searchsorted(f, p['max_freq'])
+# 	f = f[i1:i2]
+# 	spec = np.log(np.abs(Zxx[i1:i2,:]) + EPSILON)
+# 	# Denoise.
+# 	spec -= p['seg_params']['spec_thresh']
+# 	spec[spec<0.0] = 0.0
+# 	# Switch to mel frequency spacing.
+# 	if p['mel']:
+# 		new_f = np.linspace(mel(f[0]), mel(f[-1]), p['num_freq_bins'], endpoint=True)
+# 		new_f = inv_mel(new_f)
+# 		new_f[0] = f[0] # Correct for numerical errors.
+# 		new_f[-1] = f[-1]
+# 	else:
+# 		new_f = np.linspace(f[0], f[-1], p['num_freq_bins'], endpoint=True)
+# 	new_spec = np.zeros((p['num_freq_bins'], spec.shape[1]), dtype='float')
+# 	for j in range(spec.shape[1]):
+# 		interp = interp1d(f, spec[:,j], kind='cubic')
+# 		new_spec[:,j] = interp(new_f)
+# 	spec = new_spec
+# 	f = new_f
+# 	return spec, f, t[1]-t[0], i1, i2
 
 
 def tune_segmenting_params(load_dirs, p):
@@ -249,8 +267,8 @@ def tune_segmenting_params(load_dirs, p):
 			filename = filenames[file_index]
 			# Get spec & onsets/offsets.
 			start_index = np.random.randint(file_lens[file_index] - 3*dur_samples)
-			end_index = start_index + 3*dur_samples
-			spec, f, dt, _, _ = get_spec(filename, p, start_index=start_index, end_index=end_index)
+			stop_index = start_index + 3*dur_samples
+			spec, f, dt = get_spec(filename, p, start_index=start_index, stop_index=stop_index)
 
 			if 'f' not in seg_params:
 				seg_params['f'] = f
@@ -311,7 +329,7 @@ def get_onsets_offsets_from_file(audio_filename, dt):
 		try:
 			onsets.append(int(np.floor(d[i,1]/dt)))
 		except:
-			print("aught")
+			print("caught")
 			print(d)
 			return onsets, offsets
 		offsets.append(int(np.ceil(d[i,2]/dt))+1)

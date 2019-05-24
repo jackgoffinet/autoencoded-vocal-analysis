@@ -38,6 +38,9 @@ from .rankonenormal import RankOneNormal
 from .dataset import get_data_loaders
 
 
+device = torch.device("cuda") # "cpu" or "cuda"
+
+
 
 class Encoder(nn.Module):
 	"""
@@ -143,7 +146,8 @@ class Decoder(nn.Module):
 class DLGM(nn.Module):
 	"""Deep Latent Gaussian Model"""
 
-	def __init__(self, network_dims, partition=None, test_freq=5, save_dir=None, load_dir=None, sylls_per_file=1000):
+	def __init__(self, network_dims, partition=None, test_freq=5, \
+			save_dir=None, load_dir=None, sylls_per_file=1000, device=device):
 		"""
 		Construct a DLGM.
 
@@ -161,6 +165,7 @@ class DLGM(nn.Module):
 		self.test_freq = test_freq
 		self.save_dir = save_dir
 		self.sylls_per_file = sylls_per_file
+		self.device = device
 		if self.save_dir is not None:
 			if len(self.save_dir) > 0:
 				if self.save_dir[-1] != '/':
@@ -180,7 +185,7 @@ class DLGM(nn.Module):
 		self.decoder = Decoder(self.params)
 		self.train_loader, self.test_loader = get_data_loaders(self.partition, \
 				sylls_per_file=self.sylls_per_file)
-		self.cuda()
+		self.to(self.device)
 
 
 	# define the model p(x|z)p(z)
@@ -245,7 +250,7 @@ class DLGM(nn.Module):
 			train_loss = 0.0
 			# Iterate over the training data.
 			for i, temp in enumerate(self.train_loader):
-				x = temp['image'].cuda().view(-1, self.input_dim)
+				x = temp['image'].to(self.device).view(-1, self.input_dim)
 				train_loss += svi.step(x)
 			# Report training diagnostics.
 			normalizer_train = len(self.train_loader.dataset)
@@ -258,7 +263,7 @@ class DLGM(nn.Module):
 				test_loss = 0.0
 				# Iterate over the test set.
 				for i, temp in enumerate(self.test_loader):
-					x = temp['image'].cuda().view(-1, self.input_dim)
+					x = temp['image'].to(self.device).view(-1, self.input_dim)
 					test_loss += svi.evaluate_loss(x)
 				# Report test diagnostics.
 				normalizer_test = len(self.test_loader.dataset)
@@ -290,7 +295,7 @@ class DLGM(nn.Module):
 			self.decoder.load_state_dict(checkpoint['decoder_state_dict'])
 		# Encode image <v>.
 		if from_numpy:
-			v = torch.from_numpy(v).type(torch.FloatTensor).cuda()
+			v = torch.from_numpy(v).type(torch.FloatTensor).to(self.device)
 		mu, log_d, u = self.encoder.forward(v)
 		db = RankOneNormal(mu, log_d, u)
 		# db = dist.Normal(mu, torch.exp(log_d)).independent(1)
@@ -308,7 +313,7 @@ class DLGM(nn.Module):
 			filename = self.load_dir + 'checkpoint.tar'
 			checkpoint = torch.load(filename)
 			self.decoder.load_state_dict(checkpoint['decoder_state_dict'])
-		latent = torch.from_numpy(latent).type(torch.FloatTensor).cuda()
+		latent = torch.from_numpy(latent).type(torch.FloatTensor).to(self.device)
 		loc_img = self.decoder.forward((latent, latent, latent))
 		return loc_img.detach().cpu().numpy()
 
@@ -318,7 +323,7 @@ class DLGM(nn.Module):
 			filename = self.load_dir + 'checkpoint.tar'
 			checkpoint = torch.load(filename)
 			self.encoder.load_state_dict(checkpoint['encoder_state_dict'])
-			specs = torch.from_numpy(specs).type(torch.FloatTensor).cuda()
+			specs = torch.from_numpy(specs).type(torch.FloatTensor).to(self.device)
 			latent, _, _ = self.encoder.forward(specs)
 			return latent.detach().cpu().numpy()
 
@@ -344,11 +349,11 @@ class DLGM(nn.Module):
 		self.encoder.load_state_dict(checkpoint['encoder_state_dict'])
 		# Collect latent means given images.
 		for i in range(len(images) // 1000):
-			x = images[i*1000:(i+1)*1000].cuda()
+			x = images[i*1000:(i+1)*1000].to(self.device)
 			mu, _, _ = self.encoder.forward(x)
 			latent[i*1000:(i+1)*1000] = mu.detach().cpu().numpy()
 		if len(images) % 1000 != 0:
-			x = images[-1 * (len(images)%1000):].cuda()
+			x = images[-1 * (len(images)%1000):].to(self.device)
 			mu, _, _ = self.encoder.forward(x)
 			latent[-1 * (len(images)%1000):] = mu.detach().cpu().numpy()
 		if return_fields is None:
@@ -370,7 +375,7 @@ class DLGM(nn.Module):
 		gap = 10
 		big_img = np.zeros((2*self.input_shape[0]+gap, 5*self.input_shape[1]+4*gap))
 		for temp in loader:
-			x = temp['image'].cuda().view(-1, self.input_dim)
+			x = temp['image'].to(self.device).view(-1, self.input_dim)
 			reconstructed = self.reconstruct_img(x)
 			x = x.view((-1,) + self.input_shape)
 			for im_num in range(5):

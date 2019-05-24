@@ -38,10 +38,8 @@ def get_partition(dirs, split):
 	return {'train': filenames[:index], 'test': filenames[index:]}
 
 
-def get_spec(audio, f_ind, start_frame, stop_frame, p, fs):
-	"""
-	Get a spectrogram.
-	"""
+def get_spec(audio, start_frame, stop_frame, p, fs):
+	"""Get a spectrogram."""
 	f, t, spec = stft(audio[start_frame:stop_frame], fs=fs)
 	spec = np.log(np.abs(spec) + EPSILON)
 	spec -= p['spec_thresh']
@@ -53,18 +51,17 @@ def get_spec(audio, f_ind, start_frame, stop_frame, p, fs):
 		new_f[0] = f[0] # Correct for numerical errors.
 		new_f[-1] = f[-1]
 	else:
-		new_f = np.linspace(f[0], f[-1], p['num_freq_bins'], endpoint=True)
+		new_f = np.linspace(p['min_freq'], p['max_freq'], p['num_freq_bins'], endpoint=True)
 	new_spec = np.zeros((p['num_freq_bins'], spec.shape[1]), dtype='float')
 	for j in range(spec.shape[1]):
 		interp = interp1d(f, spec[:,j], kind='cubic')
 		new_spec[:,j] = interp(new_f)
 	new_spec = resize(new_spec, (p['num_freq_bins'], p['num_time_bins']), anti_aliasing=True, mode='reflect')
 	spec = new_spec
-	f = new_f
 	# Normalize.
 	spec *= 0.9 / (np.max(spec) + EPSILON)
 	spec += 0.05
-	return spec, f_ind, t[1] - t[0]
+	return spec, t[1] - t[0]
 
 
 def get_data_loaders(partition, params, batch_size=64, num_time_bins=128, \
@@ -134,7 +131,7 @@ class SongDataset(Dataset):
 					start_frame[j] = random.randint(0, len(sample['audio']) - audio_frames)
 				elif start_time[j] is not None:
 					start_frame[j] = int(round(sample['fs'] * start_time[j]))
-				spec, _, _ = get_spec(sample['audio'], None, start_frame[j], start_frame[j]+audio_frames, self.p, sample['fs'])
+				spec, _ = get_spec(sample['audio'], start_frame[j], start_frame[j]+audio_frames, self.p, sample['fs'])
 				sample['spec'] = spec
 				del sample['audio']
 			if self.transform:

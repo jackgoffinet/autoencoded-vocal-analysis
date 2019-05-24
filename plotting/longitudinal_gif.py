@@ -18,6 +18,7 @@ import hdbscan
 from sklearn.decomposition import PCA
 from scipy.stats import gaussian_kde
 
+from matplotlib.cm import get_cmap
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 plt.switch_backend('agg')
@@ -27,32 +28,62 @@ from bokeh.models import HoverTool
 from bokeh.models.glyphs import ImageURL
 
 
+def mean_freq(image):
+	f = np.linspace(30,135,128)
+	temp = np.sum(image, axis=1).flatten()
+	thresh = np.quantile(temp, 0.7)
+	temp -= thresh
+	temp[temp < 0.0] = 0.0
+	temp /= np.sum(temp)
+	return np.dot(temp, f)
+
 
 def make_projection(d, title="", save_filename='temp.pdf', n=30000, axis=False):
-	required_fields = ['latent', 'embedding']
-	d = update_data(d, required_fields, n=n)
-	latents = d['latent']
-	embedding = d['embedding']
+	# required_fields = ['embedding', 'filename', 'image'] # filename, image is temporary
+	# d = update_data(d, required_fields, n=n)
+	# embedding = d['embedding']
+	#
+	# np.save('d.npy', d)
+	d = np.load('d.npy').item()
 
-	X, Y = embedding[:,0], embedding[:,1]
+	X, Y = d['embedding'][:,0], d['embedding'][:,1]
 
-	# rgba_colors = np.zeros((len(embedding),4))
-	# rgba_colors[:,3] = 0.6
-	# patches = [ \
-	# 		mpatches.Patch(color='tab:blue', label='S1'), \
-	# 		mpatches.Patch(color='tab:orange', label='S2'), \
-	# 		mpatches.Patch(color='tab:green', label='S3'), \
-	# 		mpatches.Patch(color='tab:red', label='S4'), \
-	# 		mpatches.Patch(color='tab:purple', label='S5'), \
-	# 		]
+	rgba_colors = np.zeros((len(d['embedding']),4))
+	rgba_colors[:,3] = 0.6
+	cmap = get_cmap('viridis')
+	# color='tab:blue'
+	patches = [ \
+			mpatches.Patch(color=cmap(0/8), label='0%'), \
+			mpatches.Patch(color=cmap(2/8), label='20%'), \
+			mpatches.Patch(color=cmap(3/8), label='30%'), \
+			mpatches.Patch(color=cmap(4/8), label='40%'), \
+			mpatches.Patch(color=cmap(5/8), label='50%'), \
+			mpatches.Patch(color=cmap(6/8), label='60%'), \
+			mpatches.Patch(color=cmap(8/8), label='80%'), \
+			]
 
-	plt.scatter(X, Y, c='b', alpha=0.1, s=0.25)
+	values = []
+	for image in d['image']:
+		values.append(mean_freq(image))
+	values = np.array(values)
+	min_val, max_val = np.min(values), np.max(values)
+	values = (values - min_val) / (max_val - min_val)
 
+	print("values", np.min(values), np.max(values))
+
+	fig, ax = plt.subplots()
+	cax = ax.scatter(X, Y, c=values, cmap='viridis', alpha=0.5, s=0.45)
+	ax.set_aspect('equal')
 	if len(title) > 0:
-		plt.title(title)
+		ax.set_title(title)
 	if not axis:
-		plt.axis('off')
-	# plt.legend(handles=patches, loc='best')
+		ax.axis('off')
+	# plt.legend(handles=patches, loc='lower center', ncol=7)
+	ticks = [(i - min_val)/(max_val-min_val) for i in [50,80,110]]
+	cbar = fig.colorbar(cax, fraction=0.046, orientation="horizontal", ticks=ticks)
+	cbar.solids.set_edgecolor("face")
+	cbar.solids.set_rasterized(True)
+	cbar.ax.set_xticklabels(['50 kHz', '80 kHz', '110 kHz'])
 	plt.savefig(save_filename)
 	plt.close('all')
 	return d
@@ -78,6 +109,19 @@ def update_data(data, required_fields, n=30000):
 	if 'embedding' in required_fields and 'embedding' not in data:
 		transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
 		embedding = transform.fit_transform(data['latent'])
+
+		# NOTE: TEMP
+		indices = np.argwhere(embedding[:,0] > -3).flatten()
+		transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
+		embedding = transform.fit_transform(data['latent'][indices])
+		for field in list(data.keys()):
+			if field not in ['embedding', 'model', 'loader']:
+				try:
+					data[field] = data[field][indices]
+				except:
+					print("caught on", field)
+					quit()
+
 		joblib.dump(transform, 'temp_reducer.sav')
 		data['embedding'] = embedding
 	if 'label' in required_fields and 'label' not in data:
@@ -90,6 +134,7 @@ def update_data(data, required_fields, n=30000):
 	if 'day' in required_fields and 'day' not in data:
 		days = day_from_time(d['time'])
 		data['day'] = days
+
 	return data
 
 
@@ -168,7 +213,6 @@ def day_from_time(query_times):
 	return np.array(result)
 
 
-
 def get_embeddings_times(loader, model, return_latent=False, return_images=False, n=30000):
 	# First get latent representations.
 	if return_images:
@@ -190,33 +234,6 @@ def get_embeddings_times(loader, model, return_latent=False, return_images=False
 	if return_images:
 		return embeddings, times, images
 	return embeddings, times
-
-
-# def make_time_heatmap(loader, model):
-# 	xmin, xmax, ymin, ymax = -10, 15, -14, 12
-# 	tmin, tmax = 13, 55
-# 	embeddings, times = get_embeddings_times(loader, model)
-# 	points = np.zeros((len(embeddings), 3))
-# 	points[:,:2] = embeddings
-# 	times -= 8*13
-# 	points[:,2] = times
-# 	scott = 0.5 * (len(points)) ** (-1.0/7.0) # half scott's rule
-# 	kernel = gaussian_kde(points.T, bw_method=scott)
-# 	hmap = np.zeros((100,100))
-# 	xs, ys = np.linspace(xmin,xmax,100), np.linspace(ymin,ymax,100)
-# 	ts = np.linspace(tmin,tmax,20)
-# 	for i, x in tqdm(enumerate(xs)):
-# 		for j, y in enumerate(ys):
-# 			temp = np.array([[x,y,t] for t in ts])
-# 			temp = kernel(temp.T)
-# 			hmap[i,j] = np.dot(ts-tmin, temp) / (np.sum(temp) + 1e-10)
-# 	fig = plt.figure()
-# 	ax = fig.add_subplot(111)
-# 	ax.imshow(np.rot90(hmap), cmap=plt.cm.gist_earth_r, extent=[xmin, xmax, ymin, ymax])
-# 	ax.plot(embeddings[:,0], embeddings[:,1], 'k.', alpha=0.07, markersize=0.5)
-# 	plt.savefig('temp.pdf')
-# 	plt.close('all')
-
 
 
 # Make a gif w/ query times.
@@ -338,3 +355,13 @@ def save_image(data, filename):
 	ax.imshow(data, cmap='viridis', origin='lower')
 	plt.savefig(filename, dpi=height)
 	plt.close('all')
+
+
+
+if __name__ == '__main__':
+	pass
+
+
+
+
+###

@@ -1,29 +1,28 @@
-TEMPLATE_DURATION"""
+"""
 Segment song bouts using linear acoustic feature templates.
 
 
 TO DO:
-	- get rid of NUM_SPLITS
 	- generalize to single syllable use.
+	- shift the examplar spectrograms?
 """
 __author__ = "Jack Goffinet"
 __date__ = "April-May 2019"
 
 
 import h5py
-import os
-from time import strptime, mktime
-from tqdm import tqdm
-
+import matplotlib.pyplot as plt
+plt.switch_backend('agg')
 import numpy as np
+from scipy.interpolate import interp1d
 from scipy.io import wavfile
 from scipy.signal import stft, resample
 from scipy.ndimage.filters import gaussian_filter, convolve
 from skimage.transform import resize
+import os
+from time import strptime, mktime
+from tqdm import tqdm
 import umap
-
-import matplotlib.pyplot as plt
-plt.switch_backend('agg')
 
 from .interactive_segmentation import make_html_plot
 
@@ -33,36 +32,38 @@ FS = 44100
 EPSILON = 1e-9
 SPEC_THRESH = -4.0
 
-NUM_SPLITS = 1
-NUM_SIGMA = 5.0
-
-TEMPLATE_PREFIX = 0.05
-TEMPLATE_DURATION = 0.9
+NUM_SIGMA = 3.0 # segmentation threshold, was 5.0
 
 
 
-def get_spec(audio, f_ind, fs=FS):
-	f, t, Zxx = stft(audio, fs=fs)
-	if f_ind is None:
-		f_ind = np.searchsorted(f, [MIN_FREQ, MAX_FREQ])
-	Zxx = Zxx[f_ind[0]:f_ind[1]]
-	Zxx = np.log(np.abs(Zxx) + EPSILON)
-	Zxx -= SPEC_THRESH
-	Zxx[Zxx < 0.0] = 0.0
-	Zxx /= np.max(Zxx) + EPSILON
-	return Zxx, f_ind, t[1] - t[0]
 
-def get_spec_norm(audio, f_ind, fs=FS):
-	f, t, Zxx = stft(audio, fs=fs)
-	if f_ind is None:
-		f_ind = np.searchsorted(f, [MIN_FREQ, MAX_FREQ])
-	Zxx = Zxx[f_ind[0]:f_ind[1]]
-	Zxx = np.log(np.abs(Zxx) + EPSILON)
-	Zxx -= SPEC_THRESH
-	Zxx[Zxx < 0.0] = 0.0
-	for j in range(Zxx.shape[1]):
-		Zxx[:,j] /= np.sum(Zxx[:,j]) + EPSILON
-	return Zxx, f_ind, t[1] - t[0]
+def get_spec(audio, p, fs=FS, norm=False):
+	"""Get a spectrogram."""
+	f, t, spec = stft(audio, fs=fs)
+	spec = np.log(np.abs(spec) + EPSILON)
+	spec -= p['spec_thresh']
+	# spec -= np.quantile(spec, 0.8)
+	spec[spec < 0.0] = 0.0
+	# Switch to mel frequency spacing.
+	if p['mel']:
+		new_f = np.linspace(mel(p['min_freq']), mel(p['max_freq']), p['num_freq_bins'], endpoint=True)
+		new_f = inv_mel(new_f)
+		new_f[0] = f[0] # Correct for numerical errors.
+		new_f[-1] = f[-1]
+	else:
+		new_f = np.linspace(f[0], f[-1], p['num_freq_bins'], endpoint=True)
+	new_spec = np.zeros((p['num_freq_bins'], spec.shape[1]), dtype='float')
+	for j in range(spec.shape[1]):
+		interp = interp1d(f, spec[:,j], kind='linear')
+		new_spec[:,j] = interp(new_f)
+	# norm_factor = np.max(new_spec) + EPSILON
+	# new_spec = resize(new_spec/norm_factor, (p['num_freq_bins'], p['num_time_bins']), anti_aliasing=True, mode='reflect')
+	spec = new_spec
+	if norm:
+		for j in range(spec.shape[1]):
+			spec[:,j] /= np.sum(spec[:,j]) + EPSILON
+	return spec, t[1] - t[0]
+
 
 
 def process_sylls(load_dir, save_dir, feature_dir, p):
@@ -92,9 +93,9 @@ def process_sylls(load_dir, save_dir, feature_dir, p):
 	}
 	songs_per_file = p['songs_per_file']
 	print("Processing audio files in", load_dir)
-	features = get_features(feature_dir)
+	template = get_template(feature_dir, p)
 	for i, filename in enumerate(filenames):
-		result, features = segment_file(filename, features, feature_dir)
+		result, template = segment_file(filename, template, feature_dir, p)
 		for key in result:
 			song_data[key] += result[key]
 		while len(song_data['time']) >= songs_per_file:
@@ -105,6 +106,7 @@ def process_sylls(load_dir, save_dir, feature_dir, p):
 
 
 def save_data(save_filename, song_data, songs_per_file):
+	# Save things.
 	with h5py.File(save_filename, "w") as f:
 		for key in song_data.keys():
 			if key in ['filename', 'audio']:
@@ -116,14 +118,20 @@ def save_data(save_filename, song_data, songs_per_file):
 		for i in range(songs_per_file):
 			audio[i,:len(song_data['audio'][i])] = song_data['audio'][i]
 		f.create_dataset('audio', data=audio)
+	# Then delete things that are saved.
 	for k in song_data:
 		song_data[k] = song_data[k][songs_per_file:]
 	return song_data
 
 
-def get_features(feature_dir):
+# def get_templates(feature_dirs):
+# 	"""Get multiple templates given multiple template directories."""
+# 	return [get_template(i) for i in feature_dirs]
+
+
+def get_template(feature_dir, p):
 	"""
-	Create linear features given exemplar spectrograms.
+	Create a linear features/templates given exemplar spectrograms.
 
 	Parameters
 	----------
@@ -138,38 +146,28 @@ def get_features(feature_dir):
 		fs, _ = wavfile.read(filename)
 		if fs not in samplerates:
 			samplerates.append(fs)
-	d = {}
+	templates = {}
 	for fs in samplerates:
 		specs = []
-		min_time_bins = 10**10
 		for i, filename in enumerate(filenames):
 			temp_fs, audio = wavfile.read(filename)
 			if temp_fs != fs:
 				continue
-			spec, _, dt = get_spec_norm(audio, None, fs=fs)
+			spec, dt = get_spec(audio, p, fs=fs, norm=True)
 			spec = gaussian_filter(spec, (1,1))
 			specs.append(spec)
-			if spec.shape[1] < min_time_bins:
-				min_time_bins = spec.shape[1]
+		min_time_bins = min(spec.shape[1] for spec in specs)
 		specs = np.array([i[:,:min_time_bins] for i in specs])
-		spec = np.mean(specs, axis=0)
-		remainder = spec.shape[1] % NUM_SPLITS
-		if remainder != 0:
-			spec = spec[:,:-NUM_SPLITS+remainder]
-		spec_len = spec.shape[1] // NUM_SPLITS
-		features = []
-		for i in range(NUM_SPLITS):
-			feature = spec[:,i*spec_len:(i+1)*spec_len]
-			feature -= np.mean(feature)
-			feature /= np.std(feature) + EPSILON
-			features.append(feature)
-		d[fs] = features
-	return d
+		spec = np.mean(specs, axis=0) # Average over all the templates.
+		spec -= np.mean(spec)
+		spec /= np.std(spec) + EPSILON
+		templates[fs] = spec
+	return templates
 
 
-def segment_file(filename, features, feature_dir):
+def segment_file(filename, features, feature_dir, p):
 	"""
-	Match audio features, extract times where features align.
+	Match linear audio features, extract times where features align.
 
 	Parameters
 	----------
@@ -182,29 +180,26 @@ def segment_file(filename, features, feature_dir):
 
 	"""
 	fs, audio = wavfile.read(filename)
-	if fs not in features:
-		print("found fs", fs, filename)
-		print(list(features.keys()))
-		quit()
-	big_spec, _, dt = get_spec_norm(audio, None, fs=fs)
-	for i in range(big_spec.shape[1]):
-		big_spec[:,i] /= np.sum(big_spec[:,i]) + EPSILON
-	spec_len = features[fs][0].shape[1]
+	assert fs in features, "could not find fs="+str(fs)+" in <features>!"
+	big_spec, dt = get_spec(audio, p, fs=fs, norm=True)
+	spec_len = features[fs].shape[1]
 	# Compute normalized cross-correlation
-	result = np.zeros(big_spec.shape[1]-NUM_SPLITS*spec_len)
+	result = np.zeros(big_spec.shape[1] - spec_len)
 	for i in range(len(result)):
-		for j in range(NUM_SPLITS):
-			temp = big_spec[:,i+j*spec_len:i+(j+1)*spec_len]
-			if j == 0:
-				result[i] = np.sum(np.power(features[fs][j] - temp,2))
-			else:
-				result[i] *= np.sum(np.power(features[fs][j] - temp,2))
+		temp = big_spec[:, i:i+spec_len]
+		result[i] = np.sum(np.power(features[fs] - temp,2))
+		# result[i] = np.sum(features[fs] * temp)
 	median = np.median(result)
-	abs_devs = np.abs(result - median)
+	devs = result - median
+	abs_devs = np.abs(devs)
 	mad_sigma = 1.4826 * np.median(abs_devs) + EPSILON # magic number is for gaussians
+	plt.plot(dt * np.arange(len(devs)), devs)
+	plt.title(filename)
+	plt.savefig('temp.pdf')
+	quit()
 	# Get maxima.
 	times = dt * np.arange(len(abs_devs))
-	indices = np.argwhere(abs_devs/mad_sigma>NUM_SIGMA).flatten()[1:-1]
+	indices = np.argwhere(-devs/mad_sigma>NUM_SIGMA).flatten()[1:-1]
 	max_indices = []
 	for i in range(2,len(indices)-1):
 		if max(abs_devs[indices[i]-1], abs_devs[indices[i]+1]) < abs_devs[indices[i]]:
@@ -212,9 +207,9 @@ def segment_file(filename, features, feature_dir):
 	max_indices = np.array(max_indices, dtype='int')
 	max_indices = clean_max_indices(max_indices, times, abs_devs)
 	# Collect data for each maximum.
-	file_times = [times[index]-TEMPLATE_PREFIX for index in max_indices]
-	song_frames = int(fs * SONG_DURATION)
-	start_frames = [int(fs * (time - TEMPLATE_PREFIX)) for time in file_times]
+	file_times = [times[index] for index in max_indices]
+	song_frames = int(fs * dt * (spec_len + 1))
+	start_frames = [int(fs * (time - dt)) for time in file_times]
 	audio_segs = [audio[start:start+song_frames] for start in start_frames]
 	file_start_time = time_from_filename(filename)
 	times = [file_time + file_start_time for file_time in file_times]
@@ -246,9 +241,13 @@ def clean_collected_data(load_dirs, save_dirs, p, n=10**4):
 		filenames += [os.path.join(load_dir, i) for i in os.listdir(load_dir) if is_hdf5_file(i)]
 	songs_per_file = p['songs_per_file']
 	total_n = len(filenames)*songs_per_file
+	if total_n == 0:
+		print("No files found in "+str(load_dirs))
+		return
 	n = min(n, total_n)
 	if n < total_n:
-		indices = np.random.permutation(total_n)[:n].sort()
+		indices = np.random.permutation(total_n)[:n]
+		indices.sort()
 	else:
 		indices = np.arange(total_n)
 	specs = []
@@ -261,7 +260,7 @@ def clean_collected_data(load_dirs, save_dirs, p, n=10**4):
 			audio_segs = temp['audio']
 			samplerates = temp['fs']
 			f_ind = None
-		spec, f_ind, _ = get_spec(audio_segs[file_index], f_ind, fs=samplerates[file_index])
+		spec, _ = get_spec(audio_segs[file_index], p, fs=samplerates[file_index])
 		spec = resize(spec, (p['num_freq_bins'], p['num_time_bins']), anti_aliasing=True, mode='reflect')
 		specs.append(spec)
 	assert len(specs) > 0, "No spectrograms in: "+str(load_dirs)
@@ -285,13 +284,16 @@ def clean_collected_data(load_dirs, save_dirs, p, n=10**4):
 		colors = ['b' if in_region(embed, bounds) else 'r' for embed in embedding]
 		print("Selected ", len([c for c in colors if c=='b']), "out of", len(colors))
 		plt.scatter(X, Y, c=colors, s=0.9, alpha=0.5)
-		for x_tick in np.arange(np.ceil(np.min(X)), np.floor(np.max(X))):
-			plt.axvline(x=x_tick, c='k', alpha=0.1)
-		for y_tick in np.arange(np.ceil(np.min(Y)), np.floor(np.max(Y))):
-			plt.axhline(y=y_tick, c='k', alpha=0.1)
+		for x_tick in np.arange(np.floor(np.min(X)), np.ceil(np.max(X))):
+			plt.axvline(x=x_tick, c='k', alpha=0.1, lw=0.5)
+		for y_tick in np.arange(np.floor(np.min(Y)), np.ceil(np.max(Y))):
+			plt.axhline(y=y_tick, c='k', alpha=0.1, lw=0.5)
+		title = "Select relevant song:"
+		plt.title(title)
 		plt.savefig('temp.pdf')
+		plt.close('all')
 		if i == 0:
-			make_html_plot(embedding, specs, num_imgs=10**3)
+			make_html_plot(embedding, specs, num_imgs=10**3, title=title)
 		bounds['x1s'].append(float(input('x1: ')))
 		bounds['x2s'].append(float(input('x2: ')))
 		bounds['y1s'].append(float(input('y1: ')))
@@ -320,7 +322,7 @@ def clean_collected_data(load_dirs, save_dirs, p, n=10**4):
 			audio_segs = f['audio']
 			samplerates = f['fs']
 			for i in range(songs_per_file):
-				spec, f_ind, _ = get_spec(audio_segs[i], f_ind, fs=samplerates[i])
+				spec, _ = get_spec(audio_segs[i], p, fs=samplerates[i])
 				spec = resize(spec, (p['num_freq_bins'], p['num_time_bins']), anti_aliasing=True, mode='reflect')
 				specs.append(spec)
 			specs = np.array(specs).reshape(len(specs), -1)
@@ -385,23 +387,42 @@ def in_region(point, bounds):
 	return False
 
 
+def mel(a):
+	return 1127 * np.log(1 + a / 700)
+
+
+def inv_mel(a):
+	return 700 * (np.exp(a / 1127) - 1)
+
+
 def is_hdf5_file(filename):
+	"""Does this filename have an hdf5 extension?"""
 	return len(filename) > 5 and filename[-5:] == '.hdf5'
 
 
 def is_audio_file(filename):
+	"""Does this filename have a recognized audio extension?"""
 	return len(filename) > 4 and filename[-4:] in ['.wav', '.mat']
 
 
 
 if __name__ == '__main__':
+	p = {
+		'songs_per_file': 20,
+		'num_freq_bins': 128,
+		'num_time_bins': 128,
+		'min_freq': 350,
+		'max_freq': 12e3,
+		'mel': True,
+		'spec_thresh': 1.5,
+	}
 	feature_dir = 'data/features/blk215'
-	features = get_features(feature_dir)
-	result, features = segment_file('temp2.wav', features, feature_dir)
+	features = get_template(feature_dir, p)
+	result, features = segment_file('temp2.wav', features, feature_dir, p)
 	print(result['time'])
 	quit()
 	for j in range(1,2):
-		result, features = segment_file('temp'+str(j)+'.wav', features, feature_dir)
+		result, features = segment_file('temp'+str(j)+'.wav', features, feature_dir, p)
 		print("time", result['time'])
 
 

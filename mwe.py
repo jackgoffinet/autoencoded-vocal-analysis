@@ -18,14 +18,14 @@ TO DO:
 - Random seed
 """
 __author__ = "Jack Goffinet"
-__date__ = "December 2018 - April 2019"
+__date__ = "December 2018 - May 2019"
 
 import numpy as np
 
 from preprocessing.amplitude_segmentation import get_onsets_offsets as amp_alg
 from preprocessing.holy_guo_segmentation import get_onsets_offsets as holy_guo_alg
 from preprocessing.preprocessing import get_onsets_offsets_from_file as read_from_file_alg
-
+# from preprocessing.template_segmentation import get_onsets_offsets as template_alg
 
 spec_shape = (128,128)
 
@@ -58,7 +58,7 @@ marmoset_params = {
 # Heliox Mice
 heliox_mice_params = {
 	# Spectrogram parameters
-	'fs': 300000, # Tom is at 300k, Katie & Val at 250k
+	'fs': 303030, # Tom is at 300k, Katie & Val at 250k
 	'min_freq': 25e3,
 	'max_freq': 100e3,
 	'nperseg': 1024, # FFT
@@ -71,7 +71,7 @@ heliox_mice_params = {
 	'seg_params': {
 		'algorithm': amp_alg,
 		'spec_thresh': -6.0,
-		'th_1':6.0,
+		'th_1':5.5,
 		'th_2':6.5,
 		'th_3':8.0,
 		'min_dur':0.05,
@@ -88,7 +88,6 @@ heliox_mice_params = {
 
 
 # Other Mice
-# TO DO: pass params for holy/guo
 mouse_params = {
 	# Spectrogram parameters
 	'fs': 250000,
@@ -119,9 +118,9 @@ mouse_params = {
 # Normal mice, with amplitude segmentation
 mouse_params2 = {
 	# Spectrogram parameters
-	'fs': 250000, # Tom is at 300k, Katie & Val at 250k
-	'min_freq': 35e3,
-	'max_freq': 110e3,
+	'fs': 303030, # Tom is at 300k, Katie & Val at 250k, Tom also 303030
+	'min_freq': 30e3,
+	'max_freq': 135e3,
 	'nperseg': 1024, # FFT
 	'noverlap': 0, # FFT
 	'num_freq_bins': spec_shape[0],
@@ -131,19 +130,19 @@ mouse_params2 = {
 	# Segmenting parameters
 	'seg_params': {
 		'algorithm': amp_alg,
-		'spec_thresh': -4.0,
-		'th_1':6.0,
-		'th_2':6.5,
-		'th_3':8.0,
+		'spec_thresh': -5.7, # -5.5
+		'th_1':2.0,
+		'th_2':2.5,
+		'th_3':3.5, # 4.0
 		'min_dur':0.02,
 		'max_dur':0.5,
-		'freq_smoothing': 3.0,
-		'smoothing_timescale': 0.008,
+		'freq_smoothing': 2.0,
+		'smoothing_timescale': 0.006,
 		'num_freq_bins': spec_shape[0],
 		'num_time_bins': spec_shape[1],
 	},
 	# I/O parameters
-	'max_num_syllables': 1200, # per directory
+	'max_num_syllables': 2000, # per directory
 	'sylls_per_file': 25,
 }
 
@@ -216,36 +215,50 @@ network_dims = {
 }
 
 
-
+"""
 # -------------------------------------- #
-"""Instantaneous Song Stuff"""
+#        Instantaneous Song Stuff        #
+# -------------------------------------- #
 from preprocessing.template_segmentation import process_sylls, clean_collected_data
-temp = ['09262019/', '09292019/', 'IMAGING_09182018/', 'IMAGING_09242018/', \
-		'IMAGING_10112018/', 'IMAGING_10162018/']
+syll_types = ["E", "A", "B", "C", "D", "call"]
+# temp = ['09262019/', '09292019/', 'IMAGING_09182018/', 'IMAGING_09242018/', \
+# 		'IMAGING_10112018/', 'IMAGING_10162018/']
+temp = ['09262019/']
 load_dirs = ['data/raw/bird_data/' + i for i in temp]
 temp_save_dirs = ['data/processed/bird_data/temp_' + i for i in temp]
 save_dirs = ['data/processed/bird_data/' + i for i in temp]
-feature_dir = 'data/features/blk215/'
+feature_dirs = ['data/features/blk215/' + i for i in syll_types]
 
 p = {
 	'songs_per_file': 20,
 	'num_freq_bins': 128,
 	'num_time_bins': 128,
 	'min_freq': 350,
-	'max_freq': 12e3,
+	'max_freq': 10e3,
 	'mel': True,
-	'spec_thresh': 1.5,
-	# 'fs': 44100,
-	'spec_dur': 0.1,
+	'spec_thresh': 1.0,
 }
 
-# # Preprocessing
-# for load_dir, temp_save_dir in zip(load_dirs, temp_save_dirs):
-# 	print(load_dir)
-# 	process_sylls(load_dir, temp_save_dir, feature_dir, p)
-# clean_collected_data(temp_save_dirs, save_dirs, p)
+# Preprocessing
+for syll_type, feature_dir in zip(syll_types, feature_dirs):
+	print("Syllable:", syll_type)
+	temp_save_dirs = ['data/processed/bird_data/temp_' + syll_type + '_'+ i for i in temp]
+	save_dirs = ['data/processed/bird_data/' + syll_type + '_' + i for i in temp]
+	for load_dir, temp_save_dir in zip(load_dirs, temp_save_dirs):
+		process_sylls(load_dir, temp_save_dir, feature_dir, p)
+	clean_collected_data(temp_save_dirs, save_dirs, p)
 
-# Training
+quit()
+# Training: syllables
+from models.dlgm import DLGM
+from models.dataset import get_partition, get_data_loaders
+partition = get_partition(save_dirs, split=0.95)
+# Check load_dir vs. save_dir!
+model = DLGM(network_dims, partition=partition, save_dir='data/models/red215_syll/', sylls_per_file=p['songs_per_file'])
+model.train(epochs=250, lr=2e-5)
+quit()
+
+# Training: fixed window
 from models.fixed_window_dlgm import DLGM
 from models.fixed_window_dataset import get_partition, get_data_loaders
 partition = get_partition(save_dirs, split=0.95)
@@ -281,19 +294,18 @@ latent_paths = np.load('latent_paths_imaging.npy')
 from plotting.instantaneous_plots import plot_paths_imaging
 for unit in range(53):
 	plot_paths_imaging(np.copy(latent_paths), ts, loader, unit_num=unit, filename=str(unit).zfill(2)+'.pdf')
-
-
-
 quit()
 # -------------------------------------- #
-
+"""
 
 # Set which set of parameters to use.
-preprocess_params = zebra_finch_params
+preprocess_params = mouse_params2
 
 
-load_dirs = ['data/raw/bird_data/'+str(i)+'/' for i in range(62,99)]
-save_dirs = ['data/processed/bird_data/'+str(i)+'/' for i in range(62,99)]
+load_dirs = ['data/raw/helium_mice/'+str(i)+'_He/' for i in [0,20,30,40,50,60,80]]
+save_dirs = ['data/processed/helium_mice/'+str(i)+'_He/' for i in [0,20,30,40,50,60,80]]
+load_dirs += ['data/raw/helium_mice/extras/']
+save_dirs += ['data/processed/helium_mice/extras']
 
 """
 # 1) Tune segmenting parameters.
@@ -333,6 +345,10 @@ import os
 
 # from preprocessing.template_segmentation import process_sylls
 from preprocessing.preprocessing import process_sylls
+
+# process_sylls(load_dirs[0], save_dirs[0], preprocess_params, None)
+# quit()
+
 noise_detector = None
 from multiprocessing import Pool
 from itertools import repeat
@@ -340,21 +356,22 @@ with Pool(min(3, os.cpu_count()-1)) as pool:
 	pool.starmap(process_sylls, zip(load_dirs, save_dirs, repeat(preprocess_params), repeat(noise_detector)))
 quit()
 """
-"""
+
+
 # 4) Train a generative model on these syllables.
 from models.dlgm import DLGM
 from models.dataset import get_partition, get_data_loaders
 partition = get_partition(save_dirs, split=0.95)
 # Check load_dir vs. save_dir!
-model = DLGM(network_dims, partition=partition, save_dir='data/models/blu291/', sylls_per_file=preprocess_params['sylls_per_file'])
-model.train(epochs=250, lr=2e-5)
+model = DLGM(network_dims, partition=partition, save_dir='data/models/helium_mice_cpu/', sylls_per_file=preprocess_params['sylls_per_file'])
+model.train(epochs=300, lr=1e-5)
 quit()
-"""
+
 
 # 5) Use the model to get a latent representation of these syllables.
 from models.dlgm import DLGM
 from models.dataset import get_partition, get_data_loaders
-model = DLGM(network_dims, load_dir='data/models/blu291', sylls_per_file=preprocess_params['sylls_per_file'])
+model = DLGM(network_dims, load_dir='data/models/helium_mice', sylls_per_file=preprocess_params['sylls_per_file'])
 partition = get_partition(save_dirs, split=1.0)
 loader, _ = get_data_loaders(partition, shuffle=(False,False), batch_size=32, sylls_per_file=preprocess_params['sylls_per_file'])
 
@@ -362,26 +379,25 @@ d = {'model':model, 'loader':loader}
 
 from plotting.longitudinal_gif import make_projection, plot_generated_cluster_means, make_dot_gif, make_html_plot
 
-load_dirs = ['data/raw/bird_data/'+str(i)+'/' for i in range(62,99)]
-save_dirs = ['hdf5_files/'+str(i)+'/' for i in range(62,99)]
+
+title = ""
+n = 3*10**4
 
 
-# title = "blu291"
-# n = 3*10**4
+print("making projection")
+d = make_projection(d, title=title, n=n, axis=False)
+quit()
 
+"""
+print("making gif")
+d = make_dot_gif(d, title=title, n=n)
+"""
 
-# print("making projection")
-# d = make_projection(d, title=title, n=n, axis=False)
+print("making html")
+make_html_plot(d, output_dir='temp/', n=n, num_imgs=2000, title=title)
 
-# """
-# print("making gif")
-# d = make_dot_gif(d, title=title, n=n)
-# """
-# # quit()
-# print("making html")
-# make_html_plot(d, output_dir='temp/', n=n, num_imgs=2000, title=title)
-# # quit()
-
+np.save('d.npy', d)
+quit()
 
 # print("Saving everything...")
 # # Save a bunch of data.
