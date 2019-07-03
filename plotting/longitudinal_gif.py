@@ -4,7 +4,7 @@ Make a gif of birdsong trajectories.
 
 """
 __author__ = "Jack Goffinet"
-__date__ = "November 2018 - March 2019"
+__date__ = "November 2018 - June 2019"
 
 
 import os
@@ -16,7 +16,6 @@ import numpy as np
 import umap
 import hdbscan
 from sklearn.decomposition import PCA
-from scipy.stats import gaussian_kde
 
 from matplotlib.cm import get_cmap
 import matplotlib.pyplot as plt
@@ -27,66 +26,6 @@ from bokeh.plotting import figure, output_file, show, ColumnDataSource
 from bokeh.models import HoverTool
 from bokeh.models.glyphs import ImageURL
 
-
-def mean_freq(image):
-	f = np.linspace(30,135,128)
-	temp = np.sum(image, axis=1).flatten()
-	thresh = np.quantile(temp, 0.7)
-	temp -= thresh
-	temp[temp < 0.0] = 0.0
-	temp /= np.sum(temp)
-	return np.dot(temp, f)
-
-
-def make_projection(d, title="", save_filename='temp.pdf', n=30000, axis=False):
-	# required_fields = ['embedding', 'filename', 'image'] # filename, image is temporary
-	# d = update_data(d, required_fields, n=n)
-	# embedding = d['embedding']
-	#
-	# np.save('d.npy', d)
-	d = np.load('d.npy').item()
-
-	X, Y = d['embedding'][:,0], d['embedding'][:,1]
-
-	rgba_colors = np.zeros((len(d['embedding']),4))
-	rgba_colors[:,3] = 0.6
-	cmap = get_cmap('viridis')
-	# color='tab:blue'
-	patches = [ \
-			mpatches.Patch(color=cmap(0/8), label='0%'), \
-			mpatches.Patch(color=cmap(2/8), label='20%'), \
-			mpatches.Patch(color=cmap(3/8), label='30%'), \
-			mpatches.Patch(color=cmap(4/8), label='40%'), \
-			mpatches.Patch(color=cmap(5/8), label='50%'), \
-			mpatches.Patch(color=cmap(6/8), label='60%'), \
-			mpatches.Patch(color=cmap(8/8), label='80%'), \
-			]
-
-	values = []
-	for image in d['image']:
-		values.append(mean_freq(image))
-	values = np.array(values)
-	min_val, max_val = np.min(values), np.max(values)
-	values = (values - min_val) / (max_val - min_val)
-
-	print("values", np.min(values), np.max(values))
-
-	fig, ax = plt.subplots()
-	cax = ax.scatter(X, Y, c=values, cmap='viridis', alpha=0.5, s=0.45)
-	ax.set_aspect('equal')
-	if len(title) > 0:
-		ax.set_title(title)
-	if not axis:
-		ax.axis('off')
-	# plt.legend(handles=patches, loc='lower center', ncol=7)
-	ticks = [(i - min_val)/(max_val-min_val) for i in [50,80,110]]
-	cbar = fig.colorbar(cax, fraction=0.046, orientation="horizontal", ticks=ticks)
-	cbar.solids.set_edgecolor("face")
-	cbar.solids.set_rasterized(True)
-	cbar.ax.set_xticklabels(['50 kHz', '80 kHz', '110 kHz'])
-	plt.savefig(save_filename)
-	plt.close('all')
-	return d
 
 
 def update_data(data, required_fields, n=30000):
@@ -110,18 +49,17 @@ def update_data(data, required_fields, n=30000):
 		transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
 		embedding = transform.fit_transform(data['latent'])
 
-		# NOTE: TEMP
-		indices = np.argwhere(embedding[:,0] > -3).flatten()
-		transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
-		embedding = transform.fit_transform(data['latent'][indices])
-		for field in list(data.keys()):
-			if field not in ['embedding', 'model', 'loader']:
-				try:
-					data[field] = data[field][indices]
-				except:
-					print("caught on", field)
-					quit()
-
+		# # NOTE: TEMP
+		# indices = []
+		# for i in range(len(embedding)):
+		# 	if embedding[i,0] < 6:
+		# 		indices.append(i)
+		# indices = np.array(indices, dtype='int')
+		# transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
+		# embedding = transform.fit_transform(data['latent'][indices])
+		# for field in list(data.keys()):
+		# 	if field not in ['embedding', 'model', 'loader']:
+		# 		data[field] = data[field][indices]
 		joblib.dump(transform, 'temp_reducer.sav')
 		data['embedding'] = embedding
 	if 'label' in required_fields and 'label' not in data:
@@ -136,6 +74,85 @@ def update_data(data, required_fields, n=30000):
 		data['day'] = days
 
 	return data
+
+
+def make_projection(d, title="", save_filename='temp.pdf', n=30000, axis=False):
+	# Update data.
+	required_fields = ['embedding', 'filename', 'image']
+	d = update_data(d, required_fields, n=n)
+	X, Y = d['embedding'][:,0], d['embedding'][:,1]
+
+	cmap = get_cmap('viridis')
+	# patches = [ \
+	# 		mpatches.Patch(color=cmap(0/8), label='0%'), \
+	# 		]
+
+	fig, ax = plt.subplots()
+	cax = ax.scatter(X, Y, c='b', alpha=0.5, s=0.9)
+
+	ax.set_aspect('equal')
+	if len(title) > 0:
+		ax.set_title(title)
+	if not axis:
+		ax.axis('off')
+	# plt.legend(handles=patches, loc='lower center', ncol=7)
+	# ticks = [(i - min_val)/(max_val-min_val) for i in [40,65,90]]
+	# ticks = [0/8,4/8,8/8]
+	# cbar = fig.colorbar(cax, fraction=0.046, orientation="horizontal", ticks=ticks)
+	# cbar.solids.set_edgecolor("face")
+	# cbar.solids.set_rasterized(True)
+	# cbar.ax.set_xticklabels(['0% He', '40% He', '80% He'])
+	# cbar.ax.set_xticklabels(['40 kHz', '65 kHz', '90 kHz'])
+	plt.savefig(save_filename)
+	plt.close('all')
+	return d
+
+
+def plot_random_interp(d, i1=None, i2=None, interp_n=5, n=30000):
+	# Update the data.
+	required_fields = ['latent', 'image']
+	d = update_data(d, required_fields, n=n)
+	latent = d['latent']
+	transform = PCA(n_components=2, random_state=42)
+	pcs = transform.fit_transform(latent)
+	plt.scatter(pcs[:,0], pcs[:,1], c='b', alpha=0.7, s=0.75)
+	# plt.scatter([pcs[i1,0], pcs[i2,0], pcs[18,0]], [pcs[i1,1], pcs[i2,1], pcs[18,1]], c='r', s=5)
+	plt.scatter([pcs[i2,0], pcs[18,0]], [pcs[i2,1], pcs[18,1]], c='r', s=5)
+
+	plt.axis('off')
+	plt.savefig('pca.pdf')
+	plt.close('all')
+	# Fix indices.
+	if i1 is None:
+		i1 = np.random.randint(len(latent))
+	if i2 is None:
+		i2 = np.random.randint(len(latent))
+	print("(i1, i2)", (i1, i2))
+	# Interpolate.
+	latent_interp = np.zeros((interp_n, latent.shape[1]))
+	for i, p in enumerate(np.linspace(1.0, 0.0, interp_n, endpoint=True)):
+		latent_interp[i] = p * latent[i1] + (1-p) * latent[i2]
+	print("latent_interp", latent_interp.shape)
+	# Generate.
+	generated = d['model'].generate_from_latent(latent_interp)
+	side_len = int(np.sqrt(generated.shape[1]))
+	generated = generated.reshape(interp_n, side_len, side_len)
+	print("generated", generated.shape)
+	# Plot.
+	for i in range(interp_n):
+		plt.imshow(generated[i], origin='lower', vmin=0, vmax=0.6)
+		plt.axis('off')
+		plt.savefig('temp_'+str(i)+'.pdf')
+		plt.close('all')
+	plt.imshow(d['image'][i1].reshape(side_len, side_len), origin='lower', vmin=0, vmax=1)
+	plt.axis('off')
+	plt.savefig('true_i1.pdf')
+	plt.close('all')
+	plt.imshow(d['image'][i2].reshape(side_len, side_len), origin='lower', vmin=0, vmax=1)
+	plt.axis('off')
+	plt.savefig('true_i2.pdf')
+	plt.close('all')
+	return d
 
 
 def plot_generated_cluster_means(d, title="", n=30000):
@@ -357,6 +374,27 @@ def save_image(data, filename):
 	plt.close('all')
 
 
+def mean_freq(image):
+	f = np.linspace(30,100,128)
+	temp = np.sum(image, axis=1).flatten()
+	thresh = np.quantile(temp, 0.7)
+	temp -= thresh
+	temp[temp < 0.0] = 0.0
+	temp /= np.sum(temp)
+	return np.dot(temp, f)
+
+
+def slope_of_trend(image, duration):
+	from sklearn.linear_model import LinearRegression
+	weights = np.sum(image, axis=0) # Sum over frequencies.
+	bin_1 = np.searchsorted(weights,1e-6) # Note really sorted
+	portion = (image.shape[1] - 2*bin_1) / image.shape[1] # Portion covered by real syllable.
+	portion = max(0.1, portion)
+	max_freqs = (np.argmax(image, axis=0) / image.shape[0]) * (135-30) + 30
+	X = np.linspace(0,duration/portion,image.shape[1]).reshape(-1,1)
+	Y = max_freqs.reshape(-1,1)
+	reg = LinearRegression().fit(X,Y,sample_weight=weights)
+	return reg.coef_[0,0]
 
 if __name__ == '__main__':
 	pass

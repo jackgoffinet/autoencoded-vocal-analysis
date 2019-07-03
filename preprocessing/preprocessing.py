@@ -1,26 +1,24 @@
 """
 Process syllables and save data.
 
+
+TO DO:
+	- save segmentation parameters as attributes in each hdf5 file
 """
 __author__ = "Jack Goffinet"
-__date__ = "December 2018 - April 2019"
+__date__ = "December 2018 - June 2019"
 
 
-import os
-import numpy as np
 import h5py
-
-from scipy.io import wavfile, loadmat
-from scipy.signal import stft
-
-from time import strptime, mktime, localtime
-
-from skimage.transform import resize
-
-from scipy.interpolate import interp1d
-
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
+import numpy as np
+import os
+from scipy.interpolate import interp1d
+from scipy.io import wavfile, loadmat
+from scipy.signal import stft
+from skimage.transform import resize
+from time import strptime, mktime, localtime
 
 
 
@@ -50,8 +48,6 @@ def process_sylls(load_dir, save_dir, p, noise_detector=None):
 	Notes
 	-----
 	"""
-	if save_dir[-1] != '/':
-		save_dir += '/'
 	sylls_per_file = p['sylls_per_file']
 	num_freq_bins = p['num_freq_bins']
 	num_time_bins = p['num_time_bins']
@@ -73,10 +69,9 @@ def process_sylls(load_dir, save_dir, p, noise_detector=None):
 	for load_filename in filenames:
 		start_time = time_from_filename(load_filename)
 		# Get a spectrogram.
-		spec, f, dt = get_spec(load_filename, p)
-		# Collect syllable onsets and offsets.
-		if 'f' not in p['seg_params']:
-			p['seg_params']['f'] = f
+		spec, _, dt = get_spec(load_filename, p)
+		# if 'f' not in p['seg_params']:
+		# 	p['seg_params']['f'] = f
 		# Get onsets and offsets.
 		if p['seg_params']['algorithm'] == get_onsets_offsets_from_file:
 			t_onsets, t_offsets = get_onsets_offsets_from_file(load_filename, dt)
@@ -101,8 +96,8 @@ def process_sylls(load_dir, save_dir, p, noise_detector=None):
 		syll_data['filenames'] += len(t_durations)*[load_filename.split('/')[-1]]
 		# Write a file when we have enough syllables.
 		while len(syll_data['durations']) >= sylls_per_file:
-			save_filename = save_dir + "syllables_"
-			save_filename += str(write_file_num).zfill(3) + '.hdf5'
+			save_filename = "syllables_" + str(write_file_num).zfill(3) + '.hdf5'
+			save_filename = os.path.join(save_dir, save_filename)
 			with h5py.File(save_filename, "w") as f:
 				# Zero-pad the spectrograms and add them to the file.
 				temp = np.zeros((sylls_per_file, num_freq_bins, num_time_bins),
@@ -110,19 +105,12 @@ def process_sylls(load_dir, save_dir, p, noise_detector=None):
 				syll_specs = syll_data['specs']
 				for i in range(sylls_per_file):
 					gap = max(0, (num_time_bins - syll_specs[i].shape[1]) // 2)
-					try:
-						temp[i,:,gap:gap+syll_specs[i].shape[1]] = syll_specs[i][:,:num_time_bins]
-					except:
-						print("caught in process_sylls")
-						print(temp.shape)
-						print(gap)
-						print(syll_specs[i].shape)
-						quit()
+					temp[i,:,gap:gap+syll_specs[i].shape[1]] = syll_specs[i][:,:num_time_bins]
 				f.create_dataset('specs', data=temp)
 				# Then add the rest.
 				for k in ['durations', 'times', 'file_times']:
 					f.create_dataset(k, data=np.array(syll_data[k][:sylls_per_file]))
-				temp = [save_dir + i for i in syll_data['filenames'][:sylls_per_file]]
+				temp = [os.path.join(save_dir, i) for i in syll_data['filenames'][:sylls_per_file]]
 				f.create_dataset('filenames', data=np.array(temp).astype('S'))
 			# Remove the written data from temporary storage.
 			for k in syll_data:
@@ -187,49 +175,20 @@ def get_spec(filename, p, start_index=None, stop_index=None):
 		new_f[0] = f[0] # Correct for numerical errors.
 		new_f[-1] = f[-1]
 	else:
-		new_f = np.linspace(p['min_freq'], p['max_freq'], p['num_freq_bins'], endpoint=True)
-	new_spec = np.zeros((p['num_freq_bins'], spec.shape[1]), dtype='float')
+		f_1 = p['min_freq'] - p['freq_shift']
+		f_2 = p['max_freq'] - p['freq_shift']
+		new_f = np.linspace(f_1, f_2, p['num_freq_bins'], endpoint=True)
+	new_spec = np.zeros((p['num_freq_bins'], spec.shape[1]))
 	for j in range(spec.shape[1]):
-		interp = interp1d(f, spec[:,j], kind='linear', assume_sorted=True)
+		interp = interp1d(f, spec[:,j], kind='linear', assume_sorted=True, fill_value=0.0, bounds_error=False)
 		new_spec[:,j] = interp(new_f)
 	spec = new_spec
-	f = new_f
+	f = np.linspace(p['min_freq'], p['max_freq'], p['num_freq_bins'], endpoint=True)
 	return spec, f, t[1] - t[0]
 
 
-# # Old function.
-# def get_spec(filename, p, start_index=None, stop_index=None):
-# 	"""Get a spectrogram given a filename."""
-# 	audio = get_audio(filename, p, start_index=start_index, stop_index=stop_index)
-# 	# Convert to a magnitude-only spectrogram.
-# 	f, t, Zxx = stft(audio, fs=p['fs'], nperseg=p['nperseg'],
-# 			noverlap=p['noverlap'])
-# 	i1 = np.searchsorted(f, p['min_freq'])
-# 	i2 = np.searchsorted(f, p['max_freq'])
-# 	f = f[i1:i2]
-# 	spec = np.log(np.abs(Zxx[i1:i2,:]) + EPSILON)
-# 	# Denoise.
-# 	spec -= p['seg_params']['spec_thresh']
-# 	spec[spec<0.0] = 0.0
-# 	# Switch to mel frequency spacing.
-# 	if p['mel']:
-# 		new_f = np.linspace(mel(f[0]), mel(f[-1]), p['num_freq_bins'], endpoint=True)
-# 		new_f = inv_mel(new_f)
-# 		new_f[0] = f[0] # Correct for numerical errors.
-# 		new_f[-1] = f[-1]
-# 	else:
-# 		new_f = np.linspace(f[0], f[-1], p['num_freq_bins'], endpoint=True)
-# 	new_spec = np.zeros((p['num_freq_bins'], spec.shape[1]), dtype='float')
-# 	for j in range(spec.shape[1]):
-# 		interp = interp1d(f, spec[:,j], kind='cubic')
-# 		new_spec[:,j] = interp(new_f)
-# 	spec = new_spec
-# 	f = new_f
-# 	return spec, f, t[1]-t[0], i1, i2
-
-
 def tune_segmenting_params(load_dirs, p):
-	"""Tune params by visualizing segmenting decisions."""
+	"""Tune segementing parameters by visualizing segmenting decisions."""
 	fs = p['fs']
 	seg_params = p['seg_params']
 	filenames = []
@@ -255,7 +214,7 @@ def tune_segmenting_params(load_dirs, p):
 			# Skip non-tunable parameters.
 			if key in ['num_time_bins', 'num_freq_bins'] or not is_number(seg_params[key]):
 				continue
-			temp = 'not a valid option'
+			temp = 'not number and not empty'
 			while not is_number_or_empty(temp):
 				temp = input('Set value for '+key+': ['+str(seg_params[key])+ '] ')
 			if temp != '':
@@ -269,9 +228,8 @@ def tune_segmenting_params(load_dirs, p):
 			start_index = np.random.randint(file_lens[file_index] - 3*dur_samples)
 			stop_index = start_index + 3*dur_samples
 			spec, f, dt = get_spec(filename, p, start_index=start_index, stop_index=stop_index)
-
-			if 'f' not in seg_params:
-				seg_params['f'] = f
+			# if 'f' not in seg_params:
+			# 	seg_params['f'] = f
 			if seg_params['algorithm'] == get_onsets_offsets_from_file:
 				onsets, offsets = get_onsets_offsets_from_file(filename, dt)
 				traces = []
@@ -281,7 +239,6 @@ def tune_segmenting_params(load_dirs, p):
 			else:
 				onsets, offsets, traces = seg_params['algorithm'](spec, dt, seg_params=seg_params, return_traces=True)
 			dur_t_bins = int(dur_seconds / dt)
-
 			# Plot.
 			i1 = dur_t_bins
 			i2 = 2 * dur_t_bins
@@ -318,6 +275,7 @@ def tune_segmenting_params(load_dirs, p):
 
 
 def get_onsets_offsets_from_file(audio_filename, dt):
+	"""Read a text file to collect onsets and offsets."""
 	onsets = []
 	offsets = []
 	filename = '.'.join(audio_filename.split('.')[:-1]) + '.txt'

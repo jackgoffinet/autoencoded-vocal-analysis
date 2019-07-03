@@ -46,7 +46,7 @@ def save_everything(model, load_dir, save_dir, p, reducer, prefix=''):
 	sylls_per_file = 1000
 	num_time_bins, num_freq_bins = p['num_time_bins'], p['num_freq_bins']
 	write_file_num = 0
-	print("num files:", len(filenames))
+	print("num files in",load_dir+":", len(filenames))
 	for i, load_filename in tqdm(enumerate(filenames)):
 		start_time = time_from_filename(load_filename)
 		# Get a spectrogram.
@@ -82,7 +82,7 @@ def save_everything(model, load_dir, save_dir, p, reducer, prefix=''):
 				temp_spec *= 0.9 / np.max(temp_spec)
 				temp_spec += 0.05
 				temp[i,:,gap:gap+syll_specs[i].shape[1]] = temp_spec[:,:num_time_bins]
-
+			# Call the model.
 			latent = model.specs_to_latent(temp)
 			# Save things.
 			save_filename = os.path.join(save_dir, prefix+str(write_file_num).zfill(2)+'.hdf5')

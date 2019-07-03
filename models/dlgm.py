@@ -10,9 +10,6 @@ preprint arXiv:1401.4082 (2014).
 
 https://arxiv.org/abs/1401.4082
 
-TO DO: make GPU optional
-TO DO: clean up <train>
-TO DO: take a look at the 0.02
 """
 __author__ = "Jack Goffinet"
 __date__ = "November 2018"
