@@ -1,12 +1,10 @@
 """
-Process syllables and save data.
+Extract syllable spectrograms from audio files.
 
 
-TO DO:
-	- save segmentation parameters as attributes in each hdf5 file
 """
 __author__ = "Jack Goffinet"
-__date__ = "December 2018 - June 2019"
+__date__ = "December 2018 - July 2019"
 
 
 import h5py
@@ -21,81 +19,56 @@ from skimage.transform import resize
 from time import strptime, mktime, localtime
 
 
-
 # Constants
 EPSILON = 1e-12
 
 
 
-def process_sylls(load_dir, save_dir, p, noise_detector=None):
+def process_sylls(audio_dir, segment_dir, save_dir, p):
 	"""
-	Main method: process files in <load_dir> and save to <save_dir>.
+	Extract syllables from <audio_dir> and save to <save_dir>.
 
 	Parameters
 	----------
-	load_dir : string
-		Directory to load files from
-	save_fir : string
-		Directory to save files to
-	p : dictionary
-		Parameters
-	noise_detector : noise_detection.NoiseDetector or None
-		Throws away bad syllables
 
 	Returns
 	-------
 
 	Notes
 	-----
+
 	"""
 	sylls_per_file = p['sylls_per_file']
 	num_freq_bins = p['num_freq_bins']
 	num_time_bins = p['num_time_bins']
 	if not os.path.exists(save_dir):
 		os.makedirs(save_dir)
-	filenames = [load_dir + i for i in os.listdir(load_dir) if i[-4:] in ['.wav', '.mat']]
-	np.random.shuffle(filenames)
-	if p['seg_params']['algorithm'] == get_onsets_offsets_from_file:
-		filenames = [i for i in filenames if os.path.exists('.'.join(i.split('.')[:-1]) + '.txt')]
+	audio_filenames = [audio_dir + i for i in os.listdir(audio_dir) if is_audio_file(i)]
 	write_file_num = 0
 	syll_data = {
 		'specs':[],
 		'times':[],
-		'file_times':[],
-		'durations':[],
-		'filenames':[],
+		'onsets':[],
+		'offsets':[],
+		'audio_filenames':[],
 	}
 	print("Processing audio files in", load_dir)
-	for load_filename in filenames:
-		start_time = time_from_filename(load_filename)
-		# Get a spectrogram.
-		spec, _, dt = get_spec(load_filename, p)
-		# if 'f' not in p['seg_params']:
-		# 	p['seg_params']['f'] = f
+	for audio_filename in audio_filenames:
+		# Get a start time. (for continual recording)
+		start_time = time_from_filename(audio_filename)
 		# Get onsets and offsets.
-		if p['seg_params']['algorithm'] == get_onsets_offsets_from_file:
-			t_onsets, t_offsets = get_onsets_offsets_from_file(load_filename, dt)
-		else:
-			t_onsets, t_offsets = p['seg_params']['algorithm'](spec, dt, p['seg_params'])
-		t_durations = [(b-a+1)*dt for a,b in zip(t_onsets, t_offsets)]
-		# Retrieve spectrograms and start times for each detected syllable.
-		t_specs, t_times = get_syll_specs(t_onsets, t_offsets, spec, start_time, dt, p)
-		# Find noise and expunge it.
-		if noise_detector is not None:
-			mask = noise_detector.batch_classify(t_specs, threshold=0.5)
-			for i in range(len(mask))[::-1]:
-				if not mask[i]:
-					del t_durations[i]
-					del t_specs[i]
-					del t_times[i]
+		onsets, offsets = read_onsets_offsets_from_file(load_filename, dt)
+		durations = offset_ts - onset_ts
+		# Retrieve a spectrogram for each detected syllable.
+		specs = get_syll_specs(onsets, offsets, audio_filename, p)
 		# Add the remaining syllables to <syll_data>.
-		syll_data['durations'] += t_durations
-		syll_data['specs'] += t_specs
-		syll_data['times'] += t_times
-		syll_data['file_times'] += [i - start_time for i in t_times]
-		syll_data['filenames'] += len(t_durations)*[load_filename.split('/')[-1]]
-		# Write a file when we have enough syllables.
-		while len(syll_data['durations']) >= sylls_per_file:
+		syll_data['specs'] += specs
+		syll_data['times'] += (start_time + onset_ts).tolist()
+		syll_data['onsets'] += onsets.tolist()
+		syll_data['offsets'] += offsets.tolist()
+		syll_data['audio_filenames'] += len(onsets)*[audio_filename.split('/')[-1]]
+		# Write files until we don't have enough syllables.
+		while len(syll_data['times']) >= sylls_per_file:
 			save_filename = "syllables_" + str(write_file_num).zfill(3) + '.hdf5'
 			save_filename = os.path.join(save_dir, save_filename)
 			with h5py.File(save_filename, "w") as f:
@@ -108,106 +81,92 @@ def process_sylls(load_dir, save_dir, p, noise_detector=None):
 					temp[i,:,gap:gap+syll_specs[i].shape[1]] = syll_specs[i][:,:num_time_bins]
 				f.create_dataset('specs', data=temp)
 				# Then add the rest.
-				for k in ['durations', 'times', 'file_times']:
+				for k in ['times', 'onsets', 'offsets']:
 					f.create_dataset(k, data=np.array(syll_data[k][:sylls_per_file]))
-				temp = [os.path.join(save_dir, i) for i in syll_data['filenames'][:sylls_per_file]]
-				f.create_dataset('filenames', data=np.array(temp).astype('S'))
+				temp = [os.path.join(save_dir, i) for i in syll_data['audio_filenames'][:sylls_per_file]]
+				f.create_dataset('audio_filenames', data=np.array(temp).astype('S'))
 			# Remove the written data from temporary storage.
 			for k in syll_data:
 				syll_data[k] = syll_data[k][sylls_per_file:]
 			write_file_num += 1
-			if 'max_num_syllables' in p and write_file_num*sylls_per_file >= p['max_num_syllables']:
+			# Stop if we've written <max_num_syllables>.
+			if p['max_num_syllables'] is not None and write_file_num*sylls_per_file >= p['max_num_syllables']:
 				return
 
 
-def get_syll_specs(onsets, offsets, spec, start_time, dt, p):
+def get_syll_specs(onsets, offsets, filename, p):
 	"""
-	Return a list of spectrograms, one for each syllable.
+	Return the spectrograms corresponding to <onsets> and <offsets>.
 	"""
-	syll_specs, syll_times = [], []
+	audio, fs = get_audio(filename, p)
+	assert p['nperseg'] % 2 == 0
+	rfft_freqs = np.linspace(0, fs/2, p['nperseg']//2, endpoint=True)
+	if p['mel']:
+		target_freqs = np.linspace(mel(p['min_freq']), mel(p['max_freq']), p['num_freq_bins'], endpoint=True)
+		target_freqs = inv_mel(target_freqs)
+		target_freqs[0] = p['min_freq'] # Correct for numerical errors.
+		target_freqs[1] = p['max_freq']
+	else:
+		target_freqs = np.linspace(p['min_freq'], p['max_freq'], p['num_freq_bins'], endpoint=True)
+	specs = []
 	# For each syllable...
 	for t1, t2 in zip(onsets, offsets):
-		# Take a slice of the spectrogram.
-		temp_spec = spec[:,t1:t2+1]
-		# Within-syllable normalization.
-		temp_spec -= np.percentile(temp_spec, 10.0)
-		temp_spec[temp_spec<0.0] = 0.0
-		temp_spec /= np.max(temp_spec)
-		# Switch to square root duration.
+		# Figure out how many time bins to place the syllable into.
+		assert t1 < t2
+		ratio = (t2-t1) / p['max_dur']
 		if p['time_stretch']:
-			new_dur = int(round(temp_spec.shape[1]**0.5 * p['num_time_bins']**0.5))
-			temp_spec = resize(temp_spec, (temp_spec.shape[0], new_dur), anti_aliasing=True, mode='reflect')
-		# Collect spectrogram, duration, & onset time.
-		syll_specs.append(temp_spec)
-		syll_times.append(start_time + t1*dt) # in seconds
-	return syll_specs, syll_times
+			ratio = np.sqrt(ratio)
+		num_bins = int(round(ratio * p['num_time_bins']))
+		if num_bins < 1 or num_bins > p['num_time_bins']:
+			continue
+		start_bin = (p['num_time_bins'] - num_bins) // 2
+		# Do an RFFT for each bin.
+		spec = np.zeros((p['num_freq_bins'], p['num_time_bins']))
+		ts = np.linspace(t1, t2, num_bins, endpoint=True)
+		for i, t in enumerate(ts):
+			# Define a slice of the audio.
+			s1 = (t * fs) - p['nperseg'] // 2
+			s2 = (t * fs) + p['nperseg'] // 2
+			fourier = np.fft.rfft(audio[s1:s2])
+			# Interpolate to the target frequencies.
+			interp = interp1d(rfft_freqs, fourier, kind='linear', \
+					assume_sorted=True, fill_value=0.0, bounds_error=False)
+			spec[:,start_bin+i] = interp(target_freqs)
+		# # Within-syllable normalization.
+		# temp_spec -= np.percentile(temp_spec, 10.0)
+		# temp_spec[temp_spec<0.0] = 0.0
+		# temp_spec /= np.max(temp_spec)
+		# Switch to square root duration.
+		specs.append(spec)
+	return specs
 
 
 def get_audio(filename, p, start_index=None, stop_index=None):
-	"""Get a waveform given a filename."""
+	"""Get a waveform and samplerate given a filename."""
 	# Make sure the samplerate is correct and the audio is mono.
 	if filename[-4:] == '.wav':
-		temp_fs, audio = wavfile.read(filename)
+		fs, audio = wavfile.read(filename)
 	elif filename[-4:] == '.mat':
 		d = loadmat(filename)
 		audio = d['spike2Chunk'].reshape(-1)
-		temp_fs = d['fs'][0,0]
-	assert temp_fs == p['fs'], "found fs: "+str(temp_fs)+", expected: "+str(p['fs'])
+		fs = d['fs'][0,0]
 	if len(audio.shape) > 1:
 		audio = audio[0,:]
 	if start_index is not None and stop_index is not None:
 		start_index = max(start_index, 0)
 		audio = audio[start_index:stop_index]
-	return audio
+	return fs, audio
 
 
-def get_spec(filename, p, start_index=None, stop_index=None):
-	"""Get a spectrogram."""
-	audio = get_audio(filename, p, start_index=start_index, stop_index=stop_index)
-	f, t, spec = stft(audio, fs=p['fs'], nperseg=p['nperseg'], noverlap=p['noverlap'])
-	spec = np.log(np.abs(spec) + EPSILON)
-	spec -= p['seg_params']['spec_thresh']
-	spec[spec < 0.0] = 0.0
-	# Switch to mel frequency spacing.
-	if p['mel']:
-		new_f = np.linspace(mel(p['min_freq']), mel(p['max_freq']), p['num_freq_bins'], endpoint=True)
-		new_f = inv_mel(new_f)
-		new_f[0] = f[0] # Correct for numerical errors.
-		new_f[-1] = f[-1]
-	else:
-		f_1 = p['min_freq'] - p['freq_shift']
-		f_2 = p['max_freq'] - p['freq_shift']
-		new_f = np.linspace(f_1, f_2, p['num_freq_bins'], endpoint=True)
-	new_spec = np.zeros((p['num_freq_bins'], spec.shape[1]))
-	for j in range(spec.shape[1]):
-		interp = interp1d(f, spec[:,j], kind='linear', assume_sorted=True, fill_value=0.0, bounds_error=False)
-		new_spec[:,j] = interp(new_f)
-	spec = new_spec
-	f = np.linspace(p['min_freq'], p['max_freq'], p['num_freq_bins'], endpoint=True)
-	return spec, f, t[1] - t[0]
-
-
-def tune_segmenting_params(load_dirs, p):
-	"""Tune segementing parameters by visualizing segmenting decisions."""
-	fs = p['fs']
-	seg_params = p['seg_params']
-	filenames = []
-	for load_dir in load_dirs:
-		filenames += [load_dir + i for i in os.listdir(load_dir) if i[-4:] in ['.wav', '.mat']]
-	if len(filenames) == 0:
-		print("Found no audio files!")
-		return
-	if p['seg_params']['algorithm'] == get_onsets_offsets_from_file:
-		filenames = [i for i in filenames if os.path.exists('.'.join(i.split('.')[:-1]) + '.txt')]
-	filenames = np.array(filenames)
-	filenames = np.random.choice(filenames, min(1000, len(filenames)), replace=False)
-	file_lens = [get_wav_len(filename) for filename in filenames]
-	dur_seconds = 2.0 * seg_params['max_dur']
-	dur_samples = int(dur_seconds * fs)
-	filenames, file_lens = np.array(filenames), np.array(file_lens, dtype='int')
-	filenames = filenames[file_lens > 3 * dur_samples]
-	file_lens = file_lens[file_lens > 3 * dur_samples]
-	assert len(filenames) >= 1
+def tune_preprocessing_params(audio_dirs, segment_dirs, p, window_dur=None):
+	"""Flip through spectrograms and tune preprocessing parameters."""
+	audio_filenames = []
+	for audio_dir in audio_dirs:
+		audio_filenames += [os.path.join(audio_dir, i) for i in os.listdir(audio_dir) if is_audio_file(i)]
+	if window_dur is None:
+		window_dur = 2 * p['max_dur']
+	audio_filenames = np.array(audio_filenames)
+	# NOTE: HERE!
 	# Keep tuning params...
 	while True:
 		for key in seg_params:
@@ -220,7 +179,7 @@ def tune_segmenting_params(load_dirs, p):
 			if temp != '':
 				seg_params[key] = float(temp)
 		# Visualize segmenting decisions.
-		temp = ''
+		temp = 'not q or r'
 		while temp != 'q' and temp != 'r':
 			file_index = np.random.randint(len(filenames))
 			filename = filenames[file_index]
@@ -230,8 +189,8 @@ def tune_segmenting_params(load_dirs, p):
 			spec, f, dt = get_spec(filename, p, start_index=start_index, stop_index=stop_index)
 			# if 'f' not in seg_params:
 			# 	seg_params['f'] = f
-			if seg_params['algorithm'] == get_onsets_offsets_from_file:
-				onsets, offsets = get_onsets_offsets_from_file(filename, dt)
+			if seg_params['algorithm'] == read_onsets_offsets_from_file:
+				onsets, offsets = read_onsets_offsets_from_file(filename, dt, seg_params)
 				traces = []
 				temp = int(round(start_index/fs/dt))
 				onsets = [i-temp for i in onsets]
@@ -269,31 +228,17 @@ def tune_segmenting_params(load_dirs, p):
 				temp = input('Continue? [y] or [q]uit or [r]etune params: ')
 			else:
 				print("searching")
-				temp = 'y'
+				temp = 'not q or r'
 			if temp == 'q':
 				return seg_params
 
 
-def get_onsets_offsets_from_file(audio_filename, dt):
+
+def read_onsets_offsets_from_file(txt_filename, p):
 	"""Read a text file to collect onsets and offsets."""
-	onsets = []
-	offsets = []
-	filename = '.'.join(audio_filename.split('.')[:-1]) + '.txt'
-	try:
-		d = np.loadtxt(filename).reshape(-1,3)
-	except:
-		return onsets, offsets
-	for i in range(len(d)):
-		try:
-			onsets.append(int(np.floor(d[i,1]/dt)))
-		except:
-			print("caught")
-			print(d)
-			return onsets, offsets
-		offsets.append(int(np.ceil(d[i,2]/dt))+1)
-		if offsets[-1] - onsets[-1] >= 128:
-			onsets = onsets[:-1]
-			offsets = offsets[:-1]
+	delimiter, skiprows, usecols = p['delimiter'], p['skiprows'], p['usecols']
+	onsets, offsets = np.loadtxt(txt_filename, delimiter=delimiter, \
+					skiprows=skiprows, usecols=usecols, unpack=True)
 	return onsets, offsets
 
 
@@ -319,6 +264,10 @@ def is_number(s):
 	return type(s) == type(4) or type(s) == type(4.0)
 
 
+def is_audio_file(fn):
+	return len(fn) >= 4 and fn[-4:] in ['.wav', '.mat']
+
+
 def get_wav_len(filename):
 	if filename[-4:] == '.wav':
 		_, audio = wavfile.read(filename)
@@ -330,7 +279,7 @@ def get_wav_len(filename):
 
 
 def time_from_filename(filename):
-	"""Return time in seconds."""
+	"""Return time in seconds, following SAP conventions."""
 	try:
 		anchor = mktime(strptime("1899 12 29 19", "%Y %m %d %H")) #SAP anchor time
 		temp = filename.split('/')[-1].split('_')[1].split('.')
@@ -340,6 +289,7 @@ def time_from_filename(filename):
 		return time
 	except:
 		return 0.0
+
 
 
 if __name__ == '__main__':
