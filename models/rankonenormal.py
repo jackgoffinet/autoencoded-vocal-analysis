@@ -1,4 +1,7 @@
-"""normal distribution with a rank-1 covariance structure."""
+"""normal distribution with a rank-1 covariance structure.
+
+Made for use with pytorch 0.4.1.post2
+"""
 import numpy as np
 import torch
 from torch.autograd import Variable
