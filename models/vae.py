@@ -61,6 +61,8 @@ class VAE(nn.Module):
 	the dimensions of the network limit the practical range of values roughly 8
 	to 64 dimensions. Fiddling with the image dimensions will require updating
 	the parameters of the layers defined in VAE.build_network.
+
+	TO DO: numerical issues and learning rates
 	"""
 
 	def __init__(self, save_dir='', lr=1e-3, z_dim=32, model_precision=10.0,
@@ -88,6 +90,11 @@ class VAE(nn.Module):
 			Device to train the model on. Valid options are ["cpu", "cuda",
 			"auto"]. "auto" will choose "cuda" if it is available. Defaults to
 			"auto".
+
+		Notes
+		-----
+		The model is built before it's parameters can be loaded from a file.
+		This means self.z_dim must match z_dim of the model being loaded.
 		"""
 		super(VAE, self).__init__()
 		self.save_dir = save_dir
@@ -404,7 +411,6 @@ class VAE(nn.Module):
 			# Save the model.
 			if epoch % save_freq == 0:
 				filename = "checkpoint_"+str(epoch).zfill(3)+'.tar'
-				filename = os.path.join(self.save_dir, filename)
 				self.save_state(filename)
 			# Visualize reconstructions.
 			if epoch % vis_freq == 0:
@@ -419,9 +425,11 @@ class VAE(nn.Module):
 			state[layer_name] = layers[layer_name].state_dict()
 		state['optimizer_state'] = self.optimizer.state_dict()
 		state['loss'] = self.loss
+		state['z_dim'] = self.z_dim
 		state['epoch'] = self.epoch
 		state['lr'] = self.lr
 		state['save_dir'] = self.save_dir
+		filename = os.path.join(self.save_dir, filename)
 		torch.save(state, filename)
 
 
@@ -429,9 +437,10 @@ class VAE(nn.Module):
 		"""
 		Load all the model parameters from the given file.
 
-		Note that self.lr and self.save_dir are not loaded.
+		Note that self.lr, self.save_dir, and self.z_dim are not loaded.
 		"""
 		checkpoint = torch.load(filename)
+		assert checkpoint['z_dim'] == self.z_dim
 		layers = self.get_layers()
 		for layer_name in layers:
 			layer = layers[layer_name]
@@ -488,6 +497,35 @@ class VAE(nn.Module):
 		plt.close('all')
 
 
+	def get_latent(self, loader):
+		"""
+		Get latent means for all syllable in the given loader.
+
+		Parameters
+		----------
+		loader : torch.utils.data.Dataloader
+			SyllableDataset Dataloader.
+
+		Returns
+		-------
+		latent : numpy.ndarray
+			Latent means. Shape: [len(loader.dataset), self.z_dim]
+
+		Note
+		----
+		- Make sure your loader is not set to shuffle if you're going to match
+		  these with labels or other fields later.
+		"""
+		latent = np.zeros((len(loader.dataset), self.z_dim))
+		i = 0
+		for data in loader:
+			data = data.to(self.device)
+			with torch.no_grad():
+				mu, _, _ = self.encode(data)
+			mu = mu.detach().cpu().numpy()
+			latent[i:i+len(mu)] = mu
+			i += len(mu)
+		return latent
 
 
 

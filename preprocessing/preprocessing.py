@@ -1,7 +1,6 @@
 """
 Extract syllable spectrograms from audio files.
 
-
 """
 __author__ = "Jack Goffinet"
 __date__ = "December 2018 - July 2019"
@@ -14,10 +13,9 @@ import numpy as np
 import os
 from scipy.interpolate import interp1d
 from scipy.io import wavfile, loadmat
-from time import strptime, mktime, localtime
+from time import strptime, mktime, localtime # NOTE: move this later in the pipeline.
 
 
-# Constants
 EPSILON = 1e-12
 
 
@@ -28,6 +26,13 @@ def process_sylls(audio_dir, segment_dir, save_dir, p):
 
 	Parameters
 	----------
+	audio_dir : str
+
+	segment_dir : str
+
+	save_dir : str
+
+	p : str
 
 	Returns
 	-------
@@ -42,7 +47,7 @@ def process_sylls(audio_dir, segment_dir, save_dir, p):
 	write_file_num = 0
 	syll_data = {
 		'specs':[],
-		'times':[],
+		'times':[], # NOTE: move this later in the pipeline.
 		'onsets':[],
 		'offsets':[],
 		'audio_filenames':[],
@@ -75,7 +80,7 @@ def process_sylls(audio_dir, segment_dir, save_dir, p):
 				temp = [os.path.join(save_dir, i) for i in \
 					syll_data['audio_filenames'][:sylls_per_file]]
 				f.create_dataset('audio_filenames', \
-					data=np.array(temp).astype('S'))
+					data=np.array(temp).astype('S')) # special string format
 			write_file_num += 1
 			# Remove the written data from temporary storage.
 			for k in syll_data:
@@ -92,9 +97,21 @@ def get_syll_specs(onsets, offsets, audio_filename, p):
 
 	Parameters
 	----------
+	onsets :
+
+	offsets :
+
+	audio_filename :
+
+	p : dictionary
+		A dictionary mapping preprocessing parameters to their values.
+		NOTE: ADD REFERENCE HERE
 
 	Returns
 	-------
+	specs :
+
+	valid_syllables : numpy.ndarray
 
 	"""
 	fs, audio = get_audio(audio_filename, p)

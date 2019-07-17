@@ -14,17 +14,20 @@ from torch.utils.data import Dataset, DataLoader
 
 
 
-def get_partition(dirs, split):
+def get_partition(hdf5_dirs, split, shuffle=True):
 	"""
 	Partition the set of syllables into a random test/train split.
 
 	Parameters
 	----------
-	dirs : list of strings
-		List of directories containing saved syllable .hdf5 files.
+	hdf5_dirs : list of strings
+		List of directories containing saved syllable hdf5 files.
 
 	split : float
-		Portion of the .hdf5 files to use for training, 0 < split <= 1.0
+		Portion of the hdf5 files to use for training, 0 < split <= 1.0
+
+	shuffle : bool, optional
+		Whether to shuffle the hdf5 files. Defaults to True.
 
 	Returns
 	-------
@@ -33,14 +36,17 @@ def get_partition(dirs, split):
 		Defines the random test/train split.
 	"""
 	assert(split > 0.0 and split <= 1.0)
+	# Collect filenames.
 	filenames = []
-	for dir in dirs:
-		filenames += [os.path.join(dir, i) for i in os.listdir(dir) if \
-			is_hdf5_file(i)]
+	for dir in hdf5_dirs:
+		filenames += get_hdf5s_from_dir(dir)
+	# Reproducibly shuffle.
 	filenames = sorted(filenames)
-	np.random.seed(42)
-	np.random.shuffle(filenames)
-	np.random.seed(None)
+	if shuffle:
+		np.random.seed(42)
+		np.random.shuffle(filenames)
+		np.random.seed(None)
+	# Split.
 	index = int(round(split * len(filenames)))
 	return {'train': filenames[:index], 'test': filenames[index:]}
 
@@ -64,7 +70,7 @@ def get_data_loaders(partition, batch_size=64, shuffle=(True, False), \
 		respectively. Defaults to (True, False).
 
 	num_workers : int, optional
-		How many subprocesses to use for data loading. Dafaults to 3.
+		How many subprocesses to use for data loading. Defaults to 3.
 
 	Returns
 	-------
@@ -78,7 +84,7 @@ def get_data_loaders(partition, batch_size=64, shuffle=(True, False), \
 	train_dataloader = DataLoader(train_dataset, batch_size=batch_size, \
 		shuffle=shuffle[0], num_workers=3)
 	if not partition['test']:
-		return train_dataloader, None
+		return {'train':train_dataloader, 'test':[]}
 	test_dataset = SyllableDataset(filenames=partition['test'], \
 		transform=numpy_to_tensor, sylls_per_file=sylls_per_file)
 	test_dataloader = DataLoader(test_dataset, batch_size=batch_size, \
@@ -97,7 +103,7 @@ class SyllableDataset(Dataset):
 		Parameters
 		----------
 		filenames : list of strings
-			List of .hdf5 files containing syllable spectrograms.
+			List of hdf5 files containing syllable spectrograms.
 
 		sylls_per_file : int
 			Number of syllables in each .hdf5 file.
@@ -147,7 +153,7 @@ def get_sylls_per_file(partition):
 	"""Open an .hdf5 file and see how many syllables it has."""
 	key = 'train' if len(partition['train']) > 0 else 'test'
 	assert len(partition[key]) > 0
-	filename = partition[key][0]
+	filename = partition[key][0] # Just grab the first file.
 	with h5py.File(filename, 'r') as f:
 		sylls_per_file = len(f['specs'])
 	return sylls_per_file
@@ -156,6 +162,18 @@ def get_sylls_per_file(partition):
 def numpy_to_tensor(x):
 	"""Transform a numpy array into a torch.FloatTensor"""
 	return torch.from_numpy(x).type(torch.FloatTensor)
+
+
+def get_hdf5s_from_dir(dir):
+	"""
+	Return a sorted list of all hdf5s in a directory.
+
+	Note
+	----
+	plotting.data_container relies on this.
+	"""
+	return [os.path.join(dir, f) for f in sorted(os.listdir(dir)) if \
+		is_hdf5_file(f)]
 
 
 def is_hdf5_file(filename):

@@ -251,11 +251,31 @@ strains = ['DBA', 'C57']
 audio_dirs = [root + i for i in strains]
 seg_dirs = [root + i +'_MUPET_detect' for i in strains]
 save_dirs = [root + i + '_hdf5s' for i in strains]
-partition = get_partition(save_dirs, split=0.95)
-loaders = get_data_loaders(partition)
+
 model = VAE(save_dir='temp_model')
-model.load_state('temp_model/checkpoint_020.tar')
-model.train_loop(loaders)
+model.load_state('temp_model/checkpoint_040.tar')
+model.save_state('checkpoint_040.tar')
+# model.visualize(loaders['train'], save_filename='train_vis.pdf')
+# model.train_loop(loaders)
+partition = get_partition(save_dirs[:1], split=1)
+loaders = get_data_loaders(partition)
+latent_1 = model.get_latent(loaders['train'])
+partition = get_partition(save_dirs[1:], split=1)
+loaders = get_data_loaders(partition)
+latent_2 = model.get_latent(loaders['train'])
+colors = np.array(['r']*len(latent_1) + ['b']*len(latent_2))
+latent = np.concatenate((latent_1, latent_2), axis=0)
+perm = np.random.permutation(len(latent))
+colors = colors[perm]
+latent = latent[perm]
+import umap
+transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
+embed = transform.fit_transform(latent)
+import matplotlib.pyplot as plt
+plt.switch_backend('agg')
+plt.scatter(embed[:,0], embed[:,1], c=colors, alpha=0.6, s=0.9)
+plt.axis('off')
+plt.savefig('temp.pdf')
 quit()
 
 
@@ -328,9 +348,8 @@ quit()
 # quit()
 
 
-# 7) Generate novel audio.
-# to be continued....
-
-
 if __name__ == '__main__':
 	pass
+
+
+###
