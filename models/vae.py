@@ -105,7 +105,7 @@ class VAE(nn.Module):
 		if device_name == "auto":
 			device_name = "cuda" if torch.cuda.is_available() else "cpu"
 		self.device = torch.device(device_name)
-		if not os.path.exists(self.save_dir):
+		if self.save_dir != '' and not os.path.exists(self.save_dir):
 			os.makedirs(self.save_dir)
 		self.build_network()
 		self.optimizer = Adam(self.parameters(), lr=self.lr)

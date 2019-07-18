@@ -19,7 +19,7 @@ import umap
 
 
 
-def tooltip_plot_container(d, output_dir, num_imgs, title, n=30000):
+def tooltip_plot_DC(d, num_imgs=10000, title="", n=30000):
 	"""
 	DataContainer version of tooltip_plot.
 
@@ -31,15 +31,17 @@ def tooltip_plot_container(d, output_dir, num_imgs, title, n=30000):
 	Other Parameters
 	----------------
 	See plotting.tooltip_plot.tooltip_plot
+
 	"""
 	embedding = d.request('latent_mean_umap')
 	images = d.request('specs')
+	output_dir = d.plots_dir
 	return tooltip_plot(embedding, images, output_dir=output_dir, \
 		num_imgs=num_imgs, title=title, n=n)
 
 
-
-def tooltip_plot(embedding, images, output_dir='temp', num_imgs=1000, title="", n=30000):
+def tooltip_plot(embedding, images, output_dir='temp', num_imgs=10000, title="",
+	n=30000):
 	"""
 	Create a scatterplot of the embedding with spectrogram tooltips.
 
@@ -56,7 +58,7 @@ def tooltip_plot(embedding, images, output_dir='temp', num_imgs=1000, title="", 
 		Directory where html and jpegs are written. Deafaults to "temp".
 
 	num_imgs : int, optional
-		Number of points with tooltip images. Defaults to 1000.
+		Number of points with tooltip images. Defaults to 10000.
 
 	title : str, optional
 		Title of plot. Defaults to ''.
@@ -64,7 +66,7 @@ def tooltip_plot(embedding, images, output_dir='temp', num_imgs=1000, title="", 
 	n : int, optional
 		Total number of scatterpoints to plot. Defaults to 30000.
 	"""
-	embedding = write_images(loader, model, output_dir=output_dir, num_imgs=num_imgs, n=n)
+	write_images(embedding, images, output_dir=output_dir, num_imgs=num_imgs, n=n)
 	output_file(os.path.join(output_dir, "main.html"))
 	source = ColumnDataSource(
 			data=dict(
@@ -120,23 +122,14 @@ def save_image(data, filename):
 	plt.close('all')
 
 
-def write_images(loader, model, output_dir='temp/', num_imgs=100, n=30000):
+def write_images(embedding, images, output_dir='temp/', num_imgs=100, n=30000):
 	if not os.path.exists(output_dir):
 		os.makedirs(output_dir)
-	# First get latent representations.
-	latent, images = model.get_latent(loader, n=n, random_subset=True, return_fields=['image'])
-	transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
-	embedding = transform.fit_transform(latent)
 	X = embedding[:,0]
 	Y = embedding[:,1]
-	Y[X < -10] += 5.0
-	X[X < -10] += 10.0
-	embedding[:,0] = X
-	embedding[:,1] = Y
-
 	np.save('embedding.npy', embedding)
 	for i in range(num_imgs):
-		save_image(images[i], output_dir + str(i) + '.jpg')
+		save_image(images[i], os.path.join(output_dir, str(i) + '.jpg'))
 	return embedding
 
 
