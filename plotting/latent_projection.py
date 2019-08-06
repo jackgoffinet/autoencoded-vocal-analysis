@@ -15,29 +15,38 @@ from .data_container import PRETTY_NAMES
 
 
 
-def embedding_plot_DC(dc, embedding_type='latent_mean_umap', \
-	color_by=None, title=None, filename='latent.pdf', colorbar=False):
+def latent_projection_plot_DC(dc, embedding_type='latent_mean_umap', \
+	color_by=None, title=None, filename='latent.pdf', colorbar=False, \
+	colormap='viridis'):
 	"""
 	Parameters
 	----------
 	"""
 	embedding = dc.request(embedding_type)
+	fns = dc.request('audio_filenames')
 	if color_by is None:
 		color = 'b'
 	else:
 		color = dc.request(color_by)
-	if title is None:
-		if color_by is not None:
-			title = PRETTY_NAMES[color_by]
+	c = []
+	for i in fns:
+		if 'C57' in str(i):
+			c.append('r')
+		elif 'DBA' in str(i):
+			c.append('b')
 		else:
-			title = PRETTY_NAMES[embedding_type]
+			print(i)
+			raise NotImplementedError
+	# c = ['r' if 'C57' in str(i) else 'b' for i in fns]
+	# if title is None and color_by is not None:
+	# 	title = PRETTY_NAMES[color_by]
 	filename = os.path.join(dc.plots_dir, filename)
-	projection_plot(embedding, color=color, title=title, \
-		save_filename=filename, colorbar=colorbar)
+	projection_plot(embedding, color=c, title=title, \
+		save_filename=filename, colorbar=colorbar, colormap=colormap)
 
 
 def projection_plot(embedding, color='b', title="",
-	save_filename='latent.pdf', colorbar=False):
+	save_filename='latent.pdf', colorbar=False, colormap='viridis'):
 	"""
 
 	Parameters
@@ -49,9 +58,9 @@ def projection_plot(embedding, color='b', title="",
 	"""
 	X, Y = embedding[:,0], embedding[:,1]
 	fig, ax = plt.subplots()
-	cax = ax.scatter(X, Y, c=color, alpha=0.5, s=0.9)
+	cax = ax.scatter(X, Y, c=color, alpha=0.5, s=0.9, cmap=colormap)
 	ax.set_aspect('equal')
-	if len(title) > 0:
+	if title is not None and len(title) > 0:
 		ax.set_title(title)
 	ax.axis('off')
 	if colorbar:

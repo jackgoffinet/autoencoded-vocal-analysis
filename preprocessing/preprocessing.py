@@ -1,5 +1,5 @@
 """
-Extract syllable spectrograms from audio files.
+Compute and process syllable spectrograms.
 
 """
 __author__ = "Jack Goffinet"
@@ -11,9 +11,14 @@ import matplotlib.pyplot as plt
 plt.switch_backend('agg')
 import numpy as np
 import os
-from scipy.interpolate import interp1d
+from scipy.interpolate import interp1d, interp2d
 from scipy.io import wavfile, loadmat
+from scipy.signal import stft
 from time import strptime, mktime, localtime # NOTE: move this later in the pipeline.
+import warnings
+
+# Silence numpy.loadtxt when reading empty files.
+warnings.filterwarnings("ignore", category=UserWarning)
 
 
 EPSILON = 1e-12
@@ -61,12 +66,14 @@ def process_sylls(audio_dir, segment_dir, save_dir, p):
 		onsets, offsets = read_onsets_offsets_from_file(seg_filename, p)
 		# Retrieve a spectrogram for each detected syllable.
 		specs, good_sylls = get_syll_specs(onsets, offsets, audio_filename, p)
-		onsets, offsets = onsets[good_sylls], offsets[good_sylls]
+		onsets = [onsets[i] for i in good_sylls]
+		offsets = [offsets[i] for i in good_sylls]
+		# onsets, offsets = onsets[good_sylls], offsets[good_sylls]
 		# Add the remaining syllables to <syll_data>.
 		syll_data['specs'] += specs
-		syll_data['times'] += (start_time + onsets).tolist()
-		syll_data['onsets'] += onsets.tolist()
-		syll_data['offsets'] += offsets.tolist()
+		syll_data['times'] += [start_time + t for t in onsets]
+		syll_data['onsets'] += onsets
+		syll_data['offsets'] += offsets
 		syll_data['audio_filenames'] += len(onsets)*[os.path.split(audio_filename)[-1]]
 		# Write files until we don't have enough syllables.
 		while len(syll_data['times']) >= sylls_per_file:
@@ -74,9 +81,11 @@ def process_sylls(audio_dir, segment_dir, save_dir, p):
 			save_filename = os.path.join(save_dir, save_filename)
 			with h5py.File(save_filename, "w") as f:
 				# Add all the fields.
-				for k in ['times', 'onsets', 'offsets', 'specs']:
+				for k in ['times', 'onsets', 'offsets']:
 					f.create_dataset(k, \
 						data=np.array(syll_data[k][:sylls_per_file]))
+				f.create_dataset('specs', \
+					data=np.stack(syll_data['specs'][:sylls_per_file]))
 				temp = [os.path.join(save_dir, i) for i in \
 					syll_data['audio_filenames'][:sylls_per_file]]
 				f.create_dataset('audio_filenames', \
@@ -89,6 +98,62 @@ def process_sylls(audio_dir, segment_dir, save_dir, p):
 			if p['max_num_syllables'] is not None and \
 					write_file_num*sylls_per_file >= p['max_num_syllables']:
 				return
+
+
+def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None):
+	"""
+	Norm, threshold, and resize a STFT.
+
+	Parameters
+	----------
+	"""
+	s1, s2 = int(round(t1*fs)), int(round(t2*fs))
+	assert s2 <= len(audio)
+	if t2 - t1 > p['max_dur'] + 1e-4:
+		return None, False
+	# Keep things divisible by reasonably large powers of 2 when possible.
+	remainder = (s2 - s1) % (p['nperseg'] - p['noverlap'])
+	if remainder != 0:
+		s2 += (p['nperseg'] - p['noverlap']) - remainder
+	assert s1 < s2, "s1: " + str(s1) + " s2: " + str(s2)
+	# assert s2 < len(audio), "s1: " + str(s1) + " s2: " + str(s2) + \
+		# " len(audio): " + str(len(audio))
+	# Get a spectrogram and define the interpolation object.
+	f, t, spec = stft(audio[s1:s2], fs=fs, nperseg=p['nperseg'], \
+		noverlap=p['noverlap'])
+	spec = np.log(np.abs(spec) + EPSILON)
+	interp = interp2d(t, f, spec, copy=False, bounds_error=False, \
+		fill_value=-1/EPSILON)
+	# Define target frequencies.
+	if target_freqs is None:
+		if p['mel']:
+			target_freqs = np.linspace(mel(p['min_freq']), mel(p['max_freq']), \
+				p['num_freq_bins'], endpoint=True)
+			target_freqs = inv_mel(target_freqs)
+		else:
+			target_freqs = np.linspace(p['min_freq'], p['max_freq'], \
+				p['num_freq_bins'], endpoint=True)
+	# Define target times.
+	duration = t2 - t1
+	if p['time_stretch']:
+		duration = np.sqrt(duration * p['max_dur']) # fake duration
+	shoulder = 0.5 * (p['max_dur'] - duration)
+	target_times = np.linspace(-shoulder, t2-t1+shoulder, p['num_time_bins'], \
+		endpoint=True)
+	# Then interpolate.
+	interp_spec = interp(target_times, target_freqs, assume_sorted=True)
+	spec = interp_spec
+	# Normalize.
+	spec -= p['spec_min_val']
+	spec[spec < 0.0] = 0.0
+	spec /= (p['spec_max_val'] - p['spec_min_val'])
+	spec[spec > 1.0] = 1.0
+	# Within-syllable normalize.
+	if p['within_syll_normalize']:
+		spec -= np.percentile(spec, 10.0)
+		spec[spec<0.0] = 0.0
+		spec /= np.max(spec) + EPSILON
+	return spec, True
 
 
 def get_syll_specs(onsets, offsets, audio_filename, p):
@@ -116,60 +181,19 @@ def get_syll_specs(onsets, offsets, audio_filename, p):
 	"""
 	fs, audio = get_audio(audio_filename, p)
 	assert p['nperseg'] % 2 == 0 and p['nperseg'] > 2
-	rfft_freqs = np.fft.rfftfreq(p['nperseg'], 1/fs)
 	if p['mel']:
 		target_freqs = np.linspace(mel(p['min_freq']), mel(p['max_freq']), p['num_freq_bins'], endpoint=True)
 		target_freqs = inv_mel(target_freqs)
-		target_freqs[0] = p['min_freq'] # Correct for numerical errors.
-		target_freqs[1] = p['max_freq']
 	else:
 		target_freqs = np.linspace(p['min_freq'], p['max_freq'], p['num_freq_bins'], endpoint=True)
 	specs, valid_syllables = [], []
 	# For each syllable...
 	for i, t1, t2 in zip(range(len(onsets)), onsets, offsets):
-		# Figure out how many time bins to place the syllable into.
-		assert t1 < t2
-		ratio = (t2-t1) / p['max_dur']
-		if p['time_stretch']:
-			ratio = np.sqrt(ratio)
-		num_bins = int(round(ratio * p['num_time_bins']))
-		if num_bins < 1 or num_bins > p['num_time_bins']:
-			continue
-		valid_syllables.append(i)
-		start_bin = (p['num_time_bins'] - num_bins) // 2
-		# Do an RFFT for each bin.
-		spec = np.zeros((p['num_freq_bins'], p['num_time_bins']))
-		ts = np.linspace(t1, t2, num_bins, endpoint=True)
-		for j, t in enumerate(ts):
-			# Define a slice of the audio.
-			s1 = int(round((t * fs) - p['nperseg'] // 2))
-			s2 = int(round((t * fs) + p['nperseg'] // 2))
-			fourier = np.fft.rfft(audio[s1:s2])
-			fourier = np.log(np.abs(fourier) + EPSILON)
-			# Interpolate to the target frequencies.
-			interp = interp1d(rfft_freqs, fourier, kind='linear', \
-					assume_sorted=True, fill_value=0.0, bounds_error=False)
-			spec[:,start_bin+j] = interp(target_freqs)
-		# Normalize.
-		# if p['MAD']:
-		# 	temp = np.median(spec)
-		# 	spec -= temp
-		# 	if temp > 0.1:
-		# 		temp = np.median(np.abs(spec))
-		# 		spec /= temp + 0.5 # + EPSILON
-		# 	print(np.min(spec), np.max(spec), temp)
-		spec -= p['spec_min_val']
-		spec[spec < 0.0] = 0.0
-		temp = 0.0
-		if p['within_syll_normalize']:
-			temp = np.percentile(spec, 50)
-			spec -= temp
-			spec[spec < 0.0] = 0.0
-		# spec /= p['spec_max_val'] - p['spec_min_val'] - temp + EPSILON
-		# spec[spec > 1.0] = 1.0
-		spec /= np.max(spec) + EPSILON
-		specs.append(spec)
-	return specs, np.array(valid_syllables)
+		spec, valid = get_spec(t1, t2, audio, p, fs, target_freqs=target_freqs)
+		if valid:
+			valid_syllables.append(i)
+			specs.append(spec)
+	return specs, valid_syllables
 
 
 def get_audio(filename, p, start_index=None, stop_index=None):
@@ -234,10 +258,17 @@ def tune_preprocessing_params(audio_dirs, seg_dirs, p, window_dur=None):
 			seg_filename = seg_filenames[file_index]
 			# Grab a random syllable from within the file.
 			onsets, offsets = read_onsets_offsets_from_file(seg_filename, p)
+			if len(onsets) == 0:
+				continue
 			syll_index = np.random.randint(len(onsets))
 			onsets, offsets = [onsets[syll_index]], [offsets[syll_index]]
+			# If this is a sliding window, get a random onset & offset.
+			if p['sliding_window']:
+				onsets = [onsets[0] + (offsets[0] - onsets[0]) * np.random.rand()]
+				offsets = [onsets[0] + p['window_length']]
 			# Get the preprocessed spectrogram.
-			specs, _ = get_syll_specs(onsets, offsets, audio_filename, p)
+			specs, good_sylls = get_syll_specs(onsets, offsets, audio_filename, p)
+			specs = [specs[i] for i in good_sylls]
 			if len(specs) == 0:
 				continue
 			spec = specs[0]
@@ -246,32 +277,6 @@ def tune_preprocessing_params(audio_dirs, seg_dirs, p, window_dur=None):
 			plt.axis('off')
 			plt.savefig('temp.pdf')
 			plt.close('all')
-			# # Plot.
-			# i1 = dur_t_bins
-			# i2 = 2 * dur_t_bins
-			# t1, t2 = i1 * dt, i2 * dt
-			# _, axarr = plt.subplots(2,1, sharex=True)
-			# axarr[0].set_title(filename)
-			# axarr[0].imshow(spec[:,i1:i2], origin='lower', \
-			# 		aspect='auto', \
-			# 		extent=[t1, t2, f[0], f[-1]])
-			# for j in range(len(onsets)):
-			# 	if onsets[j] >= i1 and onsets[j] < i2:
-			# 		time = onsets[j] * dt
-			# 		for k in [0,1]:
-			# 			axarr[k].axvline(x=time, c='b', lw=0.5)
-			# 	if offsets[j] >= i1 and offsets[j] < i2:
-			# 		time = offsets[j] * dt
-			# 		for k in [0,1]:
-			# 			axarr[k].axvline(x=time, c='r', lw=0.5)
-			# for key in ['th_1', 'th_2', 'th_3']:
-			# 	if key in seg_params:
-			# 		axarr[1].axhline(y=seg_params[key], lw=0.5, c='b')
-			# xvals = np.linspace(t1, t2, i2-i1)
-			# for trace in traces:
-			# 	axarr[1].plot(xvals, trace[i1:i2])
-			# plt.savefig('temp.pdf')
-			# plt.close('all')
 			temp = input('Continue? [y] or [q]uit or [r]etune params: ')
 			if temp == 'q':
 				return p
@@ -288,16 +293,18 @@ def get_audio_seg_filenames(audio_dir, segment_dir, p):
 def read_onsets_offsets_from_file(txt_filename, p):
 	"""Read a text file to collect onsets and offsets."""
 	delimiter, skiprows, usecols = p['delimiter'], p['skiprows'], p['usecols']
-	onsets, offsets = np.loadtxt(txt_filename, delimiter=delimiter, \
-					skiprows=skiprows, usecols=usecols, unpack=True)
-	return onsets, offsets
+	segs = np.loadtxt(txt_filename, delimiter=delimiter, skiprows=skiprows, \
+		usecols=usecols).reshape(-1,2)
+	return segs[:,0], segs[:,1]
 
 
 def mel(a):
+	"""https://en.wikipedia.org/wiki/Mel-frequency_cepstrum"""
 	return 1127 * np.log(1 + a / 700)
 
 
 def inv_mel(a):
+	"""https://en.wikipedia.org/wiki/Mel-frequency_cepstrum"""
 	return 700 * (np.exp(a / 1127) - 1)
 
 

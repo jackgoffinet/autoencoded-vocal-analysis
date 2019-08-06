@@ -1,163 +1,40 @@
 """
 Minimal working example for generative modeling of acoustic syllables.
 
-0) Insert directories of .wav files in data/raw/ . Optionally include metadata
-	saved as a python dictionary in <meta.npy>.
 1) Tune segmenting parameters.
 2) Segment audio into syllables.
 3) Train a generative model on these syllables.
 4) Use the model to get a latent representation of these syllables.
 5) Visualize these latent representations.
-6) Generate novel audio.
+
+Notes
+-----
 
 
 """
 __author__ = "Jack Goffinet"
-__date__ = "December 2018 - July 2019"
+__date__ = "December 2018 - August 2019"
 
 import numpy as np
 import os
 
-# from preprocessing.amplitude_segmentation_v2 import get_onsets_offsets as amp_alg
-# from preprocessing.holy_guo_segmentation import get_onsets_offsets as holy_guo_alg
-# from preprocessing.preprocessing import get_onsets_offsets_from_file as read_from_file_alg
+from models.vae import X_SHAPE
+from preprocessing.preprocessing import get_spec
 
-spec_shape = (128,128)
-
-# Set the dimension of the latent space.
-latent_dim = 32
-nf = 8
-encoder_conv_layers =	[
-		[1,1*nf,3,1,1],
-		[1*nf,1*nf,3,2,1],
-		[1*nf,2*nf,3,1,1],
-		[2*nf,2*nf,3,2,1],
-		[2*nf,3*nf,3,1,1],
-		[3*nf,3*nf,3,2,1],
-		[3*nf,4*nf,3,1,1],
-]
-
-# [in_features, out_features]
-encoder_dense_layers =	[
-		[2**13, 2**10],
-		[2**10, 2**8],
-		[2**8, 2**6],
-		[2**6, latent_dim],
-]
-
-network_dims = {
-		'input_shape':spec_shape,
-		'input_dim':np.prod(spec_shape),
-		'latent_dim':latent_dim,
-		'post_conv_shape':(4*nf,16,16),
-		'post_conv_dim':np.prod([4*nf,16,16]),
-		'encoder_conv_layers':encoder_conv_layers,
-		'encoder_fc_layers':encoder_dense_layers,
-		'decoder_convt_layers':[[i[1],i[0]]+i[2:] for i in encoder_conv_layers[::-1]],
-		'decoder_fc_layers':[i[::-1] for i in encoder_dense_layers[::-1]],
-}
-
-# # Marmoset
-# marmoset_params = {
-# 	# Spectrogram parameters
-# 	'fs': 96000,
-# 	'min_freq': 1e3,
-# 	'max_freq': 25e3,
-# 	'nperseg': 2048,
-# 	'noverlap': 512-64,
-# 	'num_freq_bins': spec_shape[0],
-# 	'num_time_bins': spec_shape[1],
-# 	'mel': True,
-# 	'time_stretch': True,
-# 	# Segmenting parameters
-# 	'seg_params': {
-# 		'algorithm': read_from_file_alg,
-# 		'max_dur': 3.0,
-# 		'min_dur': 1e-6,
-# 		'spec_thresh': 0.0,
-# 	},
-# 	# I/O parameters
-# 	'max_num_syllables': 1200, # per directory
-# 	'sylls_per_file': 25,
-# }
-
-
-# # Heliox Mice
-# heliox_mice_params = {
-# 	# Spectrogram parameters
-# 	'fs': 303030, # Tom is at 300k, Katie & Val at 250k
-# 	'min_freq': 30e3,
-# 	'max_freq': 95e3,
-# 	'nperseg': 1024, # FFT
-# 	'noverlap': 0, # FFT
-# 	'num_freq_bins': spec_shape[0],
-# 	'num_time_bins': spec_shape[1],
-# 	'mel': False, # Frequency spacing
-# 	'time_stretch': True,
-# 	'freq_shift': 0.0,
-# 	# Segmenting parameters
-# 	'seg_params': {
-# 		'algorithm': amp_alg,
-# 		'spec_thresh': -6.0,
-# 		'th_1':5.5,
-# 		'th_2':6.5,
-# 		'th_3':8.0,
-# 		'min_dur':0.02,
-# 		'max_dur':0.35,
-# 		# 'softmax':True,
-# 		# 'temperature':3,
-# 		'freq_smoothing': 3.0,
-# 		'smoothing_timescale': 0.01,
-# 		'num_freq_bins': spec_shape[0],
-# 		'num_time_bins': spec_shape[1],
-# 	},
-# 	# I/O parameters
-# 	'max_num_syllables': 120000, # per directory
-# 	'sylls_per_file': 25,
-# }
-
-
-# # Other Mice
-# mouse_params = {
-# 	# Spectrogram parameters
-# 	'fs': 250000,
-# 	'min_freq': 25e3,
-# 	'max_freq': 110e3,
-# 	'nperseg': 1024, # FFT
-# 	'noverlap': 0, # FFT
-# 	'num_freq_bins': spec_shape[0],
-# 	'num_time_bins': spec_shape[1],
-# 	'mel': False, # Frequency spacing
-# 	'time_stretch': True,
-# 	# Segmenting parameters
-# 	'seg_params': {
-# 		'algorithm': holy_guo_alg,
-# 		'spec_thresh': -4.0,
-# 		'th_1': 0.1,
-# 		'th_2': 1.4,
-# 		'min_dur':0.03,
-# 		'max_dur':0.35,
-# 		'num_freq_bins': spec_shape[0],
-# 		'num_time_bins': spec_shape[1],
-# 	},
-# 	# I/O parameters
-# 	'max_num_syllables': 1200, # per directory
-# 	'sylls_per_file': 25,
-# }
 
 mouse_params = {
-	# Spectrogram parameters
-	# 'fs': 250000,
+	'sliding_window': False,
+	'get_spec': get_spec,
+	'num_freq_bins': X_SHAPE[0],
+	'num_time_bins': X_SHAPE[1],
 	'min_freq': 30e3,
 	'max_freq': 110e3,
 	'nperseg': 1024, # FFT
 	'noverlap': 0, # FFT
-	'num_freq_bins': spec_shape[0],
-	'num_time_bins': spec_shape[1],
 	'mel': False, # Frequency spacing
 	'freq_shift': 0.0, # Frequency shift
-	'spec_min_val': 8.4,
-	'spec_max_val': 12.0,
+	'spec_min_val': -6,
+	'spec_max_val': -3,
 	'time_stretch': True,
 	'within_syll_normalize': False,
 	'MAD': True,
@@ -175,43 +52,52 @@ mouse_params = {
 }
 
 
-# # Zebra Finches
-# zebra_finch_params = {
-# 	# Spectrogram parameters
-# 	'fs': 44150, # 44100/32000
-# 	'min_freq': 400,
-# 	'max_freq': 8e3,
-# 	'nperseg': 512, # FFT
-# 	'noverlap': 512-128-64, # FFT
-# 	'num_freq_bins': spec_shape[0],
-# 	'num_time_bins': spec_shape[1],
-# 	'mel': False, # Frequency spacing
-# 	'freq_shift': 0,
-# 	'time_stretch': True,
-# 	# Segmenting parameters
-# 	'seg_params': {
-# 		'algorithm': amp_alg,
-# 		'spec_thresh': 3.1,
-# 		'th_1':0.65,
-# 		'th_2':0.66,
-# 		'th_3':1.3,
-# 		'min_dur':0.05,
-# 		'max_dur':1.0,
-# 		'freq_smoothing': 3.0,
-# 		'softmax': True,
-# 		'temperature': 0.35,
-# 		'smoothing_timescale': 0.009,
-# 		'num_freq_bins': spec_shape[0],
-# 		'num_time_bins': spec_shape[1],
-# 	},
-# 	# I/O parameters
-# 	'sylls_per_file': 50,
-# 	'max_num_syllables': 3000, # per directory
-# }
+
+zebra_finch_params = {
+	'sliding_window': True,
+	'window_length': 0.1,
+	'get_spec': get_spec,
+	'num_freq_bins': X_SHAPE[0],
+	'num_time_bins': X_SHAPE[1],
+	'min_freq': 400,
+	'max_freq': 10e3,
+	'nperseg': 512, # FFT
+	'noverlap': 256, # FFT
+	'mel': True, # Frequency spacing
+	'freq_shift': 0.0, # Frequency shift
+	'spec_min_val': 2.0,
+	'spec_max_val': 6.5,
+	'time_stretch': False,
+	'within_syll_normalize': False,
+	'seg_extension': '.txt',
+	'delimiter': '\t',
+	'skiprows': 0,
+	'usecols': (0,1),
+	'max_dur': 0.1,
+	'max_num_syllables': None, # per directory
+	# 'sylls_per_file': 20,
+	'real_preprocess_params': ('min_freq', 'max_freq', 'spec_min_val', \
+			'spec_max_val', 'max_dur'),
+	'int_preprocess_params': ('nperseg',),
+	'binary_preprocess_params': ('time_stretch', 'mel', 'within_syll_normalize')
+}
 
 
-# Set which set of parameters to use.
+
+
+# # Set which set of parameters to use.
+# preprocess_params = zebra_finch_params
+# root = '/media/jackg/Jacks_Animal_Sounds/birds/jonna/blu285/'
+# audio_dirs = [root + i +'/' for i in ['DIR', 'OPTO', 'UNDIR']]
+# seg_dirs = audio_dirs
+
 preprocess_params = mouse_params
+root = '/media/jackg/Jacks_Animal_Sounds/mice/Tom_control/'
+nums = [15]
+audio_dirs = [root+'BM'+str(i).zfill(3)+'/audio/' for i in nums]
+seg_dirs = [root+'BM'+str(i).zfill(3)+'/mupet/' for i in nums]
+save_dirs = [root+'BM'+str(i).zfill(3)+'/hdf5s/' for i in nums]
+
 
 """
 # 1) Tune segmenting parameters.
@@ -221,10 +107,11 @@ seg_params = tune_segmenting_params(load_dirs, preprocess_params)
 preprocess_params['seg_params'] = seg_params
 quit()
 """
+
 """
 # 2) Tune preprocessing parameters.
 from preprocessing.preprocessing import tune_preprocessing_params
-tune_preprocessing_params(audio_dirs, seg_dirs, preprocess_params)
+preprocess_params = tune_preprocessing_params(audio_dirs, seg_dirs, preprocess_params)
 quit()
 """
 
@@ -234,48 +121,44 @@ import os
 from preprocessing.preprocessing import process_sylls
 from multiprocessing import Pool
 from itertools import repeat
-audio_dirs = ['/media/jackg/Jacks_Animal_Sounds/mice/MUPET/C57']
-seg_dirs = ['/media/jackg/Jacks_Animal_Sounds/mice/MUPET/C57_MUPET_detect']
-save_dirs = ['/media/jackg/Jacks_Animal_Sounds/mice/MUPET/C57_hdf5s/']
-process_sylls(audio_dirs[0], seg_dirs[0], save_dirs[0], preprocess_params)
-# with Pool(1) as pool: # min(3, os.cpu_count()-1)
-# 	pool.starmap(process_sylls, zip(audio_dirs, seg_dirs, save_dirs, repeat(preprocess_params)))
+with Pool(1) as pool: # min(3, os.cpu_count()-1)
+	pool.starmap(process_sylls, zip(audio_dirs, seg_dirs, save_dirs, repeat(preprocess_params)))
 quit()
 """
 
+"""
 # 4) Train a generative model on these syllables.
-from models.vae import VAE
-from models.vae_dataset import get_partition, get_data_loaders
-root = '/media/jackg/Jacks_Animal_Sounds/mice/MUPET/'
-strains = ['DBA', 'C57']
-audio_dirs = [root + i for i in strains]
-seg_dirs = [root + i +'_MUPET_detect' for i in strains]
-save_dirs = [root + i + '_hdf5s' for i in strains]
+from models.window_vae import VAE
+from models.vae_dataset import get_syllable_partition, get_syllable_data_loaders
+VAE = VAE(save_dir=root)
+partition = get_syllable_partition(audio_dirs, seg_dirs, split=0.9)
+loaders = get_syllable_data_loaders(partition, preprocess_params)
+print(len(loader['test'].dataset))
+quit()
+VAE.train_loop(loaders, epochs=201)
+# quit()
+"""
 
-model = VAE(save_dir='temp_model')
-model.load_state('temp_model/checkpoint_040.tar')
-model.save_state('checkpoint_040.tar')
-# model.visualize(loaders['train'], save_filename='train_vis.pdf')
-# model.train_loop(loaders)
-partition = get_partition(save_dirs[:1], split=1)
-loaders = get_data_loaders(partition)
-latent_1 = model.get_latent(loaders['train'])
-partition = get_partition(save_dirs[1:], split=1)
-loaders = get_data_loaders(partition)
-latent_2 = model.get_latent(loaders['train'])
-colors = np.array(['r']*len(latent_1) + ['b']*len(latent_2))
-latent = np.concatenate((latent_1, latent_2), axis=0)
-perm = np.random.permutation(len(latent))
-colors = colors[perm]
-latent = latent[perm]
-import umap
-transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, metric='euclidean', random_state=42)
-embed = transform.fit_transform(latent)
-import matplotlib.pyplot as plt
-plt.switch_backend('agg')
-plt.scatter(embed[:,0], embed[:,1], c=colors, alpha=0.6, s=0.9)
-plt.axis('off')
-plt.savefig('temp.pdf')
+from plotting.data_container import DataContainer
+from plotting.trace_plot import trace_plot_DC, inst_variability_plot_DC
+from plotting.tooltip_plot import tooltip_plot_DC
+from plotting.mmd_plots import mmd_matrix_DC
+from plotting.latent_projection import latent_projection_plot_DC
+from plotting.feature_correlation_plots import  correlation_plot_DC, \
+	knn_variance_explained_plot_DC, pairwise_correlation_plot_DC, feature_pca_plot_DC
+from plotting.pairwise_distance_plots import pairwise_distance_scatter_DC, \
+	knn_display_DC, bridge_plot, random_walk_plot, indexed_grid_plot, \
+	plot_paths_on_projection
+
+root = '/media/jackg/Jacks_Animal_Sounds/mice/MUPET/'
+proj_dirs = [root+'C57_projections', root+'DBA_projections']
+feature_dirs = [root+'C57_MUPET_detect', root+'DBA_MUPET_detect']
+spec_dirs = [root+'C57_hdf5s', root+'DBA_hdf5s']
+
+dc = DataContainer(projection_dirs=proj_dirs, feature_dirs=feature_dirs, \
+	spec_dirs=spec_dirs, plots_dir=root+'plots')
+tooltip_plot_DC(dc)
+
 quit()
 
 

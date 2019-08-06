@@ -8,38 +8,46 @@ TO DO:
 - check for errors
 - throw better errors
 - Read feature files.
+- Flexibly read segmenting decisions.
 """
 __author__ = "Jack Goffinet"
-__date__ = "July 2019"
+__date__ = "July-August 2019"
 
 
 import h5py
 import numpy as np
 import os
+from scipy.io import wavfile
 from sklearn.decomposition import PCA
 import torch
 import umap
 
 from models.vae import VAE
-from models.vae_dataset import get_partition, get_data_loaders, \
-	get_hdf5s_from_dir
+from models.vae_dataset import get_syllable_partition, \
+	get_syllable_data_loaders, get_hdf5s_from_dir
 
 
+AUDIO_FIELDS = ['audio']
+SEGMENT_FIELDS = ['segments', 'segment_audio']
 PROJECTION_FIELDS = ['latent_means', 'latent_mean_pca', 'latent_mean_umap']
 SPEC_FIELDS = ['specs', 'onsets', 'offsets', 'audio_filenames']
 MUPET_FIELDS = ['syllable_number', 'syllable_start_time', 'syllable_end_time',
 	'inter-syllable_interval', 'syllable_duration', 'starting_frequency',
 	'final_frequency', 'minimum_frequency', 'maximum_frequency',
 	'mean_frequency', 'frequency_bandwidth', 'total_syllable_energy',
-	'peak_syllable_amplitude']
+	'peak_syllable_amplitude', 'cluster']
 DEEPSQUEAK_FIELDS = ['id', 'label', 'accepted', 'score', 'begin_time',
 	'end_time', 'call_length', 'principal_frequency', 'low_freq', 'high_freq',
 	'delta_freq', 'frequency_standard_deviation', 'slope', 'sinuosity',
 	'mean_power', 'tonality']
-ALL_FIELDS = PROJECTION_FIELDS + SPEC_FIELDS + MUPET_FIELDS + DEEPSQUEAK_FIELDS
+ALL_FIELDS = AUDIO_FIELDS + SEGMENT_FIELDS + PROJECTION_FIELDS + SPEC_FIELDS + \
+	MUPET_FIELDS + DEEPSQUEAK_FIELDS
 MUPET_ONSET_COL = MUPET_FIELDS.index('syllable_start_time')
 DEEPSQUEAK_ONSET_COL = DEEPSQUEAK_FIELDS.index('begin_time')
 PRETTY_NAMES = {
+	'audio': 'Audio',
+	'segments': 'Segments',
+	'segment_audio': 'Segment Audio',
 	'latent_means': 'Latent Means',
 	'latent_mean_pca': 'Latent Mean PCA Projection',
 	'latent_mean_umap': 'Latent Mean UMAP Projection',
@@ -58,6 +66,7 @@ PRETTY_NAMES = {
 	'frequency_bandwidth': 'Frequency Bandwidth (kHz)',
 	'total_syllable_energy': 'Total Energy (dB)',
 	'peak_syllable_amplitude': 'Peak Amplitude (dB)',
+	'cluster': 'Cluster',
 	'id': 'Syllabler Number',
 	'label': 'Label',
 	'accepted': 'Accepted',
@@ -75,6 +84,7 @@ PRETTY_NAMES = {
 	'mean_power': 'Mean Power (dB/Hz)',
 	'tonality': 'Tonality',
 }
+
 
 
 class DataContainer():
@@ -101,9 +111,9 @@ class DataContainer():
 	│	│	├── syllables_000.hdf5		preprocessing.process_sylls)
 	│	│	└──	syllables_001.hdf5
 	│	└──	projections 				(latent means, UMAP, PCA, tSNE
-	│		├── syllables_000.hdf5		projections, and also copy of features
-	│		└──	syllables_001.hdf5		in experiment_1/features)
-	│
+	│		├── syllables_000.hdf5		projections, copies of features in
+	│		└──	syllables_001.hdf5		experiment_1/features. These are written
+	│									by a DataContainer object.)
 	├──	animal_2
 	│	├──	audio
 	│	│	├── 1.wav
@@ -121,8 +131,8 @@ class DataContainer():
 	.
 	.
 
-	There should be a 1-to-1 correspondence between, say, the syllables in
-	animal_1/audio/baz.wav and the features described in
+	There should be a 1-to-1 correspondence between, for example, the syllables
+	in animal_1/audio/baz.wav and the features described in
 	animal_1/features/baz.csv. Analogously, the fifth entry in
 	animal_2/spectrograms/syllables_000.hdf5 should describe the same syllable
 	as the fifth entry in animal_2/projections/syllables_000.hdf5. There is no
@@ -131,23 +141,31 @@ class DataContainer():
 	directories should contain a subset of the syllables in the audio and
 	features directories.
 
-	It's fine to leave some of the initialization parameters unspecified. If the
-	DataContainer object is asked to do something, it will hopefully complain
-	politely.
+	Then a DataContainer object can be initialized as:
 
-	Possible Error Messages
-	-----------------------
-	- OSError: Unable to create file (unable to lock file, errno = 11, error
-	  message = 'Resource temporarily unavailable')
+	>>> audio_dirs = ['animal_1/audio', 'animal_2/audio']
+	>>> spec_dirs = ['animal_1/spectrograms', 'animal_2/spectrograms']
+	>>> model_filename = 'checkpoint.tar'
+	>>> dc = DataContainer(audio_dirs=audio_dirs, spec_dirs=spec_dirs, \
+	... 	model_filename=model_filename)
+	>>> latent_means = dc.request('latent_means')
+
+	It's fine to leave some of the initialization parameters unspecified. If the
+	DataContainer object is asked to do something it can't, it will hopefully
+	complain politely and informatively.
 	"""
 
-	def __init__(self, audio_dirs=None, spec_dirs=None, feature_dirs=None, \
-		projection_dirs=None, plots_dir='', model_filename=None):
+	def __init__(self, audio_dirs=None, segment_dirs=None, spec_dirs=None, \
+		feature_dirs=None, projection_dirs=None, plots_dir='', \
+		model_filename=None, verbose=True):
 		"""
 		Parameters
 		----------
 		audio_dirs : list of str, or None, optional
 			Directories containing audio. Defaults to None.
+
+		segment_dirs : list of str, or None, optional
+			Directories containing segmenting decisions.
 
 		spec_dirs : list of str, or None, optional
 			Directories containing hdf5 files of spectrograms. These should be
@@ -172,13 +190,17 @@ class DataContainer():
 			syllable tables. Defaults to None.
 		"""
 		self.audio_dirs = audio_dirs
+		self.segment_dirs = segment_dirs
 		self.spec_dirs = spec_dirs
 		self.feature_dirs = feature_dirs
 		self.projection_dirs = projection_dirs
 		self.plots_dir = plots_dir
 		self.model_filename = model_filename
+		self.verbose = verbose
 		self.sylls_per_file = None # syllables in each hdf5 file in spec_dirs
 		self.fields = self.check_for_fields()
+		if self.plots_dir not in [None, ''] and not os.path.exists(self.plots_dir):
+			os.makedirs(self.plots_dir)
 
 
 	def request(self, field):
@@ -190,10 +212,17 @@ class DataContainer():
 		assert field in ALL_FIELDS, str(field) + " is not a valid field!"
 		# If it's not here, make it and return it.
 		if field not in self.fields:
+			if self.verbose:
+				print("Making field:", field)
 			data = self.make_field(field)
-			return data
 		# Otherwise, read it and return it.
-		return self.read_field(field)
+		else:
+			if self.verbose:
+				print("Reading field:", field)
+			data = self.read_field(field)
+		if self.verbose:
+			print("Returning field:", field)
+		return data
 
 
 	def make_field(self, field):
@@ -214,6 +243,8 @@ class DataContainer():
 			raise NotImplementedError
 		# Add this field to the collection of fields that have been computed.
 		self.fields[field] = 1
+		if self.verbose:
+			print("Making field:", field)
 		return data
 
 
@@ -221,10 +252,18 @@ class DataContainer():
 		"""
 		Read a field from memory.
 
-		All the necessary directories should be confirmed to exist at this
-		point.
+		Paramters
+		---------
+		field : str
+			Field name to read from file.
 		"""
-		if field in PROJECTION_FIELDS:
+		if field in AUDIO_FIELDS:
+			raise NotImplementedError
+		elif field == 'segments':
+			return self.read_segments()
+		elif field == 'segment_audio':
+			return self.read_segment_audio()
+		elif field in PROJECTION_FIELDS:
 			load_dirs = self.projection_dirs
 		elif field in SPEC_FIELDS:
 			load_dirs = self.spec_dirs
@@ -248,6 +287,57 @@ class DataContainer():
 		return np.concatenate(to_return)
 
 
+	def read_segment_audio(self):
+		"""
+		Read all the segmented audio and return it.
+
+		result[audio_dir][audio_filename] = [audio_1, audio_2, ..., audio_n]
+		"""
+		self.check_for_dirs(['audio_dirs'], 'audio')
+		segments = self.request('segments')
+		result = {}
+		for audio_dir in self.audio_dirs:
+			dir_result = {}
+			audio_fns = [i for i in os.listdir(audio_dir) if is_wav_file(i) \
+				and i in segments[audio_dir]]
+			for audio_fn in audio_fns:
+				fs, audio = wavfile.read(os.path.join(audio_dir, audio_fn))
+				fn_result = []
+				for seg in segments[audio_dir][audio_fn]:
+					i1 = int(round(seg[0]*fs))
+					i2 = int(round(seg[1]*fs))
+					fn_result.append(audio[i1:i2])
+				dir_result[audio_fn] = fn_result
+			result[audio_dir] = dir_result
+		return result
+
+
+	def read_segments(self):
+		"""
+		Return all the segmenting decisions.
+
+		Return a dictionary mapping audio directories to audio filenames to
+		numpy arrays of shape [num_segments,2] containing onset and offset
+		times.
+
+		TO DO: add support for other delimiters, file extstensions, etc.
+		"""
+		self.check_for_dirs(['audio_dirs', 'segment_dirs'], 'segments')
+		result = {}
+		for audio_dir, seg_dir in zip(self.audio_dirs, self.segment_dirs):
+			dir_result = {}
+			seg_fns = [os.path.join(seg_dir, i) for i in os.listdir(seg_dir) \
+				if is_seg_file(i)]
+			audio_fns = [os.path.split(i)[1][:-4]+'.wav' for i in seg_fns]
+			for audio_fn, seg_fn in zip(audio_fns, seg_fns):
+				segs = read_columns(seg_fn, delimiter='\t', unpack=False, \
+					skiprows=0)
+				if len(segs) > 0:
+					dir_result[audio_fn] = segs
+			result[audio_dir] = dir_result
+		return result
+
+
 	def make_latent_means(self):
 		"""
 		Write latent means for the syllables in self.spec_dirs.
@@ -259,11 +349,10 @@ class DataContainer():
 
 		NOTE
 		----
-		- Test this.
 		- Duplicated code with <write_projection>?
 		"""
-		assert self.projection_dirs is not None, "self.projection_dirs must be\
-			specified before latent means can be made."
+		self.check_for_dirs(['projection_dirs', 'spec_dirs', 'model_filename'],\
+			'latent_means')
 		# First, see how many syllables are in each file.
 		hdf5_file = get_hdf5s_from_dir(self.spec_dirs[0])[0]
 		with h5py.File(hdf5_file, 'r') as f:
@@ -281,8 +370,9 @@ class DataContainer():
 			if proj_dir != '' and not os.path.exists(proj_dir):
 				os.makedirs(proj_dir)
 			# Make a DataLoader for the syllables.
-			partition = get_partition([spec_dir], 1, shuffle=False)
-			loader = get_data_loaders(partition, shuffle=(False,False))['train']
+			partition = get_syllable_partition([spec_dir], 1, shuffle=False)
+			loader = get_syllable_data_loaders(partition, \
+				shuffle=(False,False))['train']
 			# Get the latent means from the model.
 			latent_means = model.get_latent(loader)
 			all_latent.append(latent_means)
@@ -296,8 +386,6 @@ class DataContainer():
 				data = latent_means[j*spf:(j+1)*spf]
 				with h5py.File(filename, 'a') as f:
 					f.create_dataset('latent_means', data=data)
-			# Leave a paper trail.
-			self.document_parents(proj_dir, i)
 		return np.concatenate(all_latent)
 
 
@@ -308,7 +396,11 @@ class DataContainer():
 		# UMAP them.
 		transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, \
 			metric='euclidean', random_state=42)
+		if self.verbose:
+			print("Running UMAP...")
 		embedding = transform.fit_transform(latent_means)
+		if self.verbose:
+			print("Done.")
 		# Write to files.
 		self.write_projection("latent_mean_umap", embedding)
 		return embedding
@@ -320,32 +412,21 @@ class DataContainer():
 		latent_means = self.request('latent_means')
 		# UMAP them.
 		transform = PCA(n_components=2, copy=False, random_state=42)
+		if self.verbose:
+			print("Running PCA...")
 		embedding = transform.fit_transform(latent_means)
+		if self.verbose:
+			print("Done.")
 		# Write to files.
 		self.write_projection("latent_mean_pca", embedding)
 		return embedding
-
-
-	def write_projection(self, key, data):
-		"""Write the given projection to self.projection_dirs."""
-		sylls_per_file = self.sylls_per_file
-		# For each directory...
-		k = 0
-		for i in range(len(self.projection_dirs)):
-			spec_dir, proj_dir = self.spec_dirs[i], self.projection_dirs[i]
-			hdf5s = get_hdf5s_from_dir(spec_dir)
-			for j in range(len(hdf5s)):
-				filename = os.path.join(proj_dir, os.path.split(hdf5s[j])[-1])
-				to_write = data[k:k+sylls_per_file]
-				with h5py.File(filename, 'a') as f:
-					f.create_dataset(key, data=to_write)
-				k += sylls_per_file
 
 
 	def make_feature_field(self, field, kind):
 		"""
 		Read a feature from a text file and put it in an hdf5 file.
 
+		Read from self.feature_dirs and write to self.projection_dirs.
 		This gets a bit tricky because we need to match up the syllables in the
 		text file with the ones in the hdf5 file.
 
@@ -359,14 +440,18 @@ class DataContainer():
 
 		TO DO: cleaner error handling
 		"""
-		assert kind in ['mupet', 'deepsqueak'], "kind must be \'mupet\' or \
-			\'deepsqueak\'"
-		self.check_for_dirs(['spec', 'feature', 'projection'])
+		self.check_for_dirs( \
+			['spec_dirs', 'feature_dirs', 'projection_dirs'], field)
 		# FInd which column the field is stored in.
-		file_fields = MUPET_FIELDS if kind == 'mupet' else DEEPSQUEAK_FIELDS
+		if kind == 'mupet':
+			file_fields = MUPET_FIELDS
+			onset_col = MUPET_ONSET_COL
+		elif kind == 'deepsqueak':
+			file_fields = DEEPSQUEAK_FIELDS
+			onset_col = DEEPSQUEAK_ONSET_COL
+		else:
+			assert NotImplementedError
 		field_col = file_fields.index(field)
-		onset_col = MUPET_ONSET_COL if kind == 'mupet' else \
-			DEEPSQUEAK_ONSET_COL
 		to_return = []
 		# Run through each directory.
 		for i in range(len(self.spec_dirs)):
@@ -401,7 +486,8 @@ class DataContainer():
 					while spec_onset > feature_onsets[k]:
 						k += 1
 						assert k < len(feature_onsets)
-					assert spec_onset == feature_onsets[k]
+					assert spec_onset == feature_onsets[k], "Mismatch between"+\
+						" spec_dirs and feature_dirs!"
 					# And add it to the feature array.
 					feature_arr[j] = features[k]
 				# Write the fields to self.projection_dirs.
@@ -413,24 +499,20 @@ class DataContainer():
 		return np.concatenate(to_return)
 
 
-	def document_parents(self, dir, index):
-		"""
-		Write a small text file that documents how and when stuff was computed.
-
-		Parameters
-		----------
-		dir : str
-			...
-
-		index : int
-			...
-
-		Notes
-		-----
-
-		"""
-		# NOTE: IMPLEMENT THIS
-		pass
+	def write_projection(self, key, data):
+		"""Write the given projection to self.projection_dirs."""
+		sylls_per_file = self.sylls_per_file
+		# For each directory...
+		k = 0
+		for i in range(len(self.projection_dirs)):
+			spec_dir, proj_dir = self.spec_dirs[i], self.projection_dirs[i]
+			hdf5s = get_hdf5s_from_dir(spec_dir)
+			for j in range(len(hdf5s)):
+				filename = os.path.join(proj_dir, os.path.split(hdf5s[j])[-1])
+				to_write = data[k:k+sylls_per_file]
+				with h5py.File(filename, 'a') as f:
+					f.create_dataset(key, data=to_write)
+				k += sylls_per_file
 
 
 	def check_for_fields(self):
@@ -440,25 +522,47 @@ class DataContainer():
 		if self.spec_dirs is not None:
 			for field in SPEC_FIELDS:
 				fields[field] = 1
-		# If self.audio_dirs is registered, assume everything is there.
+		# Same for self.audio_dirs.
 		if self.audio_dirs is not None:
 			fields['audio'] = 1
+		# Same for self.segment_dirs.
+		if self.segment_dirs is not None:
+			fields['segments'] = 1
+			fields['segment_audio'] = 1
 		# If self.projection_dirs is registered, see what we have.
 		# If it's in one file, assume it's in all of them.
 		if self.projection_dirs is not None:
-			hdf5 = get_hdf5s_from_dir(self.projection_dirs[0])[0]
-			with h5py.File(hdf5, 'r') as f:
-				for key in f.keys():
-					if key in ALL_FIELDS:
-						fields[key] = 1
-						self.sylls_per_file = len(f[key])
+			if os.path.exists(self.projection_dirs[0]):
+				hdf5s = get_hdf5s_from_dir(self.projection_dirs[0])
+				if len(hdf5s) > 0:
+					hdf5 = hdf5s[0]
+					with h5py.File(hdf5, 'r') as f:
+						for key in f.keys():
+							if key in ALL_FIELDS:
+								fields[key] = 1
+								self.sylls_per_file = len(f[key])
 		return fields
 
 
-	def check_for_dirs(self, dir_list):
-		"""Make sure these directories have been assigned."""
-		# NOTE: IMPLEMENT THIS
-		pass
+	def check_for_dirs(self, dir_names, field):
+		"""Check that the given directories exist."""
+		for dir_name in dir_names:
+			if dir_name == 'audio_dirs':
+				temp = self.audio_dirs
+			elif dir_name == 'segment_dirs':
+				temp = self.segment_dirs
+			elif dir_name == 'spec_dirs':
+				temp = self.spec_dirs
+			elif dir_name == 'feature_dirs':
+				temp = self.feature_dirs
+			elif dir_name == 'projection_dirs':
+				temp = self.projection_dirs
+			elif dir_name == 'model_filename':
+				temp = self.model_filename
+			else:
+				raise NotImplementedError
+			assert temp is not None, dir_name + " must be specified before " + \
+				field + " is made!"
 
 
 	def clean_projection_dir(self):
@@ -472,15 +576,32 @@ class DataContainer():
 
 
 
-def read_columns(filename, columns):
+def read_columns(filename, columns=(0,1), delimiter=',', skiprows=1, \
+	unpack=True):
 	"""
-	A wrapper around numpy.loadtxt
+	A wrapper around numpy.loadtxt to handle empty files.
 
 	TO DO: Add categorical variables.
 	"""
-	return np.loadtxt(filename, delimiter=',', usecols=columns, skiprows=1,\
-		unpack=True)
+	data = np.loadtxt(filename, delimiter=delimiter, usecols=columns, \
+		skiprows=skiprows).reshape(-1,len(columns))
+	if unpack:
+		return tuple(data[:,i] for i in range(data.shape[1]))
+	return data
 
+
+def is_seg_file(filename):
+	"""
+	Is this a segmenting file?
+
+	TO DO: add csvs, delimiters
+	"""
+	return len(filename) > 4 and filename[-4:] == '.txt'
+
+
+def is_wav_file(filename):
+	"""Is this a wav file?"""
+	return len(filename) > 4 and filename[-4:] == '.wav'
 
 
 if __name__ == '__main__':

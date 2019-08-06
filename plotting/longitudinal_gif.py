@@ -1,4 +1,3 @@
-from __future__ import print_function, division
 """
 Make a gif of birdsong trajectories.
 

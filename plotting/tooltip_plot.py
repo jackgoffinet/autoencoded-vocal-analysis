@@ -19,7 +19,7 @@ import umap
 
 
 
-def tooltip_plot_DC(d, num_imgs=10000, title="", n=30000):
+def tooltip_plot_DC(d, num_imgs=5000, output_dir='html', title="", n=30000):
 	"""
 	DataContainer version of tooltip_plot.
 
@@ -35,9 +35,10 @@ def tooltip_plot_DC(d, num_imgs=10000, title="", n=30000):
 	"""
 	embedding = d.request('latent_mean_umap')
 	images = d.request('specs')
-	output_dir = d.plots_dir
-	return tooltip_plot(embedding, images, output_dir=output_dir, \
-		num_imgs=num_imgs, title=title, n=n)
+	output_dir = os.path.join(d.plots_dir, output_dir)
+	print("writing tooltip plot to", output_dir)
+	tooltip_plot(embedding, images, output_dir=output_dir, num_imgs=num_imgs, \
+		title=title, n=n)
 
 
 def tooltip_plot(embedding, images, output_dir='temp', num_imgs=10000, title="",

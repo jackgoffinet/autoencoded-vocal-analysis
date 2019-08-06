@@ -28,7 +28,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.optim import Adam
 
-from .vae_dataset import SyllableDataset
+from .vae_dataset import WindowDataset
 from plotting.grid_plot import grid_plot
 
 
@@ -366,7 +366,7 @@ class VAE(nn.Module):
 		return test_loss
 
 
-	def train_loop(self, loaders, epochs=100, test_freq=2, save_freq=10,
+	def train_loop(self, loaders, epochs=100, test_freq=2, save_freq=None,
 		vis_freq=1):
 		"""
 		Train the model for multiple epochs, testing and saving along the way.
@@ -384,8 +384,9 @@ class VAE(nn.Module):
 		test_freq : int, optional
 			Testing is performed every <test_freq> epochs. Defaults to 2.
 
-		save_freq : int, optional
-			The model is saved every <save_freq> epochs. Defaults to 10.
+		save_freq : int or None, optional
+			The model is saved every <save_freq> epochs. If None, the model is
+			saved only after the last training epoch. Defaults to None.
 
 		vis_freq : int, optional
 			Syllable reconstructions are plotted every <vist_freq> epochs.
@@ -393,8 +394,8 @@ class VAE(nn.Module):
 		"""
 		print("="*40)
 		print("Training: epochs", self.epoch, "to", self.epoch+epochs-1)
-		print("Test set:", len(loaders['test'].dataset))
-		print("Training set:", len(loaders['train'].dataset))
+		print("Test set size:", len(loaders['test'].dataset))
+		print("Training set size:", len(loaders['train'].dataset))
 		print("="*40)
 		# For some number of epochs...
 		for epoch in range(self.epoch, self.epoch+epochs):
@@ -406,12 +407,15 @@ class VAE(nn.Module):
 				loss = self.test_epoch(loaders['test'])
 				self.loss['test'][epoch] = loss
 			# Save the model.
-			if epoch % save_freq == 0:
+			if save_freq is not None and epoch % save_freq == 0:
 				filename = "checkpoint_"+str(epoch).zfill(3)+'.tar'
 				self.save_state(filename)
 			# Visualize reconstructions.
 			if epoch % vis_freq == 0:
 				self.visualize(loaders['test'])
+		# Save at the end.
+		filename = "checkpoint_"+str(self.epoch).zfill(3)+'.tar'
+		self.save_state(filename)
 
 
 	def save_state(self, filename):
@@ -485,7 +489,7 @@ class VAE(nn.Module):
 
 	def get_latent(self, loader):
 		"""
-		Get latent means for all syllable in the given loader.
+		Get latent means for all syllables in the given loader.
 
 		Parameters
 		----------

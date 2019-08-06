@@ -3,8 +3,8 @@ Segment song bouts using linear acoustic feature templates.
 
 
 TO DO:
-	- generalize to single syllable use.
-	- shift the examplar spectrograms?
+	- Improve single syllable use.
+	- Align the examplar spectrograms?
 """
 __author__ = "Jack Goffinet"
 __date__ = "April-May 2019"
@@ -32,7 +32,7 @@ FS = 44100
 EPSILON = 1e-9
 SPEC_THRESH = -4.0
 
-NUM_SIGMA = 3.0 # segmentation threshold, was 5.0
+NUM_SIGMA = 3.0
 
 
 
