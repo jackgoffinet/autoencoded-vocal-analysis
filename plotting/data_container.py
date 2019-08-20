@@ -9,6 +9,8 @@ TO DO:
 - throw better errors
 - Read feature files.
 - Flexibly read segmenting decisions.
+- make sure input directories are iterable
+- add features to existing files.
 """
 __author__ = "Jack Goffinet"
 __date__ = "July-August 2019"
@@ -40,10 +42,15 @@ DEEPSQUEAK_FIELDS = ['id', 'label', 'accepted', 'score', 'begin_time',
 	'end_time', 'call_length', 'principal_frequency', 'low_freq', 'high_freq',
 	'delta_freq', 'frequency_standard_deviation', 'slope', 'sinuosity',
 	'mean_power', 'tonality']
+SAP_FIELDS = ['syllable_duration_sap', 'syllable_start', 'mean_amplitude',
+	'mean_pitch', 'mean_FM', 'mean_AM2', 'mean_entropy', 'mean_pitch_goodness',
+	'mean_mean_freq', 'pitch_variance', 'FM_variance', 'entropy_variance',
+	'pitch_goodness_variance', 'mean_freq_variance', 'AM_variance']
 ALL_FIELDS = AUDIO_FIELDS + SEGMENT_FIELDS + PROJECTION_FIELDS + SPEC_FIELDS + \
-	MUPET_FIELDS + DEEPSQUEAK_FIELDS
+	MUPET_FIELDS + DEEPSQUEAK_FIELDS + SAP_FIELDS
 MUPET_ONSET_COL = MUPET_FIELDS.index('syllable_start_time')
 DEEPSQUEAK_ONSET_COL = DEEPSQUEAK_FIELDS.index('begin_time')
+SAP_ONSET_COL = SAP_FIELDS.index('syllable_start')
 PRETTY_NAMES = {
 	'audio': 'Audio',
 	'segments': 'Segments',
@@ -83,6 +90,35 @@ PRETTY_NAMES = {
 	'sinuosity': 'Sinuosity',
 	'mean_power': 'Mean Power (dB/Hz)',
 	'tonality': 'Tonality',
+	'syllable_start': 'Onset (s)',
+	'mean_amplitude': 'Mean Amplitude',
+	'mean_pitch': 'Mean Pitch',
+	'mean_FM': 'Mean Frequency Modulation',
+	'mean_AM2': 'Mean Amplitude Modulation Squared',
+	'mean_entropy': 'Mean Entropy',
+	'mean_pitch_goodness': 'Mean Goodness of Pitch',
+	'mean_mean_freq': 'Mean Frequency',
+	'pitch_variance': 'Pitch Variance',
+	'FM_variance': 'Frequency Modulation Variance',
+	'entropy_variance': 'Entropy Variance',
+	'pitch_goodness_variance': 'Goodness of Pitch Variance',
+	'mean_freq_variance': 'Frequency Variance',
+	'AM_variance': 'Amplitude Modulation Variance',
+}
+PRETTY_NAMES_NO_UNITS = {}
+for k in PRETTY_NAMES:
+	PRETTY_NAMES_NO_UNITS[k] = ' '.join(PRETTY_NAMES[k].split('(')[0].split(' '))
+MUPET_PARAMS = {
+	'kwargs': {},
+	'extension': '.csv',
+}
+DEEPSQUEAK_PARAMS = {
+	'kwargs': {},
+	'extension': '.csv',
+}
+SAP_PARAMS = {
+	'kwargs': {},
+	'extension': '.csv',
 }
 
 
@@ -91,7 +127,7 @@ class DataContainer():
 	"""
 	Link directories containing different data sources for easy plotting.
 
-	The idea is for plotting and analysis tools to accept a DataContainer,
+	The idea here is for plotting and analysis tools to accept a DataContainer,
 	from which they can request different types of data. Those requests can then
 	be handled here in a central location, which can cut down on redundant code
 	and processing steps.
@@ -152,7 +188,7 @@ class DataContainer():
 
 	It's fine to leave some of the initialization parameters unspecified. If the
 	DataContainer object is asked to do something it can't, it will hopefully
-	complain politely and informatively.
+	complain politely. Or at least informatively.
 	"""
 
 	def __init__(self, audio_dirs=None, segment_dirs=None, spec_dirs=None, \
@@ -221,7 +257,7 @@ class DataContainer():
 				print("Reading field:", field)
 			data = self.read_field(field)
 		if self.verbose:
-			print("Returning field:", field)
+			print("\tDone with:", field)
 		return data
 
 
@@ -237,6 +273,8 @@ class DataContainer():
 			data = self.make_feature_field(field, kind='mupet')
 		elif field in DEEPSQUEAK_FIELDS:
 			data = self.make_feature_field(field, kind='deepsqueak')
+		elif field in SAP_FIELDS:
+			data = self.make_feature_field(field, kind='sap')
 		elif field == 'specs':
 			raise NotImplementedError
 		else:
@@ -270,6 +308,8 @@ class DataContainer():
 		elif field in MUPET_FIELDS:
 			load_dirs = self.projection_dirs
 		elif field in DEEPSQUEAK_FIELDS:
+			load_dirs = self.projection_dirs
+		elif field in SAP_FIELDS:
 			load_dirs = self.projection_dirs
 		else:
 			raise Exception("Can\'t read field: "+field+"\n This should have \
@@ -449,6 +489,9 @@ class DataContainer():
 		elif kind == 'deepsqueak':
 			file_fields = DEEPSQUEAK_FIELDS
 			onset_col = DEEPSQUEAK_ONSET_COL
+		elif kind == 'sap':
+			file_fields = SAP_FIELDS
+			onset_col = SAP_ONSET_COL
 		else:
 			assert NotImplementedError
 		field_col = file_fields.index(field)
@@ -465,6 +508,8 @@ class DataContainer():
 				with h5py.File(hdf5, 'r') as f:
 					audio_filenames = np.array(f['audio_filenames'])
 					spec_onsets = np.array(f['onsets'])
+					# if kind == 'sap': # SAP writes onsets in milliseconds.
+					# 	spec_onsets /= 1e3
 				feature_arr = np.zeros(len(spec_onsets))
 				# Loop through each syllable.
 				for j in range(len(spec_onsets)):
@@ -481,13 +526,26 @@ class DataContainer():
 						# Read the onsets and features.
 						feature_onsets, features = \
 							read_columns(feature_fn, [onset_col, field_col])
+						if kind == 'sap': # SAP writes onsets in milliseconds.
+							feature_onsets /= 1e3
 						k = 0
 					# Look for the corresponding onset in the feature file.
-					while spec_onset > feature_onsets[k]:
+					while spec_onset > feature_onsets[k] + 1e-2:
 						k += 1
 						assert k < len(feature_onsets)
-					assert spec_onset == feature_onsets[k], "Mismatch between"+\
-						" spec_dirs and feature_dirs!"
+					# NOTE: make this assertion more descriptive.
+					if abs(spec_onset - feature_onsets[k]) > 1e-2:
+						print("Mismatch between spec_dirs and feature_dirs!")
+						print("hdf5 file:", hdf5)
+						print("\tindex:", j)
+						print("audio filename:", audio_fn)
+						print("feature filename:", feature_fn)
+						print("Didn't find spec_onset", spec_onset)
+						print("in feature onsets of min:", np.min(feature_onsets))
+						print("max:", np.max(feature_onsets))
+						print("field:", field)
+						print("kind:", kind)
+						quit()
 					# And add it to the feature array.
 					feature_arr[j] = features[k]
 				# Write the fields to self.projection_dirs.

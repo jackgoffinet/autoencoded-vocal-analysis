@@ -7,7 +7,11 @@ import numpy as np
 import os
 
 NUM_COLS = 13
-HEADER = "Syllable number,Syllable start time (sec),Syllable end time (sec),inter-syllable interval (sec),syllable duration (msec),starting frequency (kHz),final frequency (kHz),minimum frequency (kHz),maximum frequency (kHz),mean frequency (kHz),frequency bandwidth (kHz),total syllable energy (dB),peak syllable amplitude (dB)"
+HEADER = "Syllable number,Syllable start time (sec),Syllable end time (sec),"+\
+	"inter-syllable interval (sec),syllable duration (msec),starting frequency"+\
+	" (kHz),final frequency (kHz),minimum frequency (kHz),maximum frequency "+\
+	"(kHz),mean frequency (kHz),frequency bandwidth (kHz),total syllable "+\
+	"energy (dB),peak syllable amplitude (dB)"
 FMT = ['%.2f'] * NUM_COLS
 FMT[0] = '%.0f'
 FMT[1] = '%.4f'
@@ -36,4 +40,3 @@ if __name__ == '__main__':
 		arr[:,0] = 1 + np.arange(len(arr))
 		save_fn = filename[:-4] + '_mupet.csv'
 		np.savetxt(save_fn, arr, fmt=FMT, delimiter=',', header=HEADER, comments='')
-		

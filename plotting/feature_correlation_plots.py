@@ -5,7 +5,7 @@ TO DO:
 	from sklearn.preprocessing import PolynomialFeatures
 """
 __author__ = "Jack Goffinet"
-__date__ = "July 2019"
+__date__ = "July-August 2019"
 
 
 import matplotlib.pyplot as plt
@@ -17,11 +17,12 @@ from sklearn.model_selection import KFold
 from sklearn.neighbors import KNeighborsRegressor
 from sklearn.decomposition import PCA
 
-from .data_container import PRETTY_NAMES
+from .data_container import PRETTY_NAMES_NO_UNITS
 
 
 
-def correlation_plot_DC(dc, fields, filename='feature_correlation.pdf'):
+def correlation_plot_DC(dc, fields, filename='feature_correlation.pdf', ax=None,
+	save_and_close=True):
 	"""
 
 
@@ -38,15 +39,26 @@ def correlation_plot_DC(dc, fields, filename='feature_correlation.pdf'):
 	corrs = corrs[perm]
 	fields = np.array(fields)[perm]
 	# Plot.
-	X = np.arange(len(field_data))
-	tick_labels = [PRETTY_NAMES[field] for field in fields]
-	plt.bar(X, corrs)
-	plt.xticks(X, tick_labels, rotation=60)
-	plt.ylim(0,1)
-	plt.tight_layout()
-	plt.title("Latent/Traditional Feature $R^2$ Values")
-	plt.savefig(os.path.join(dc.plots_dir, filename))
-	plt.close('all')
+	if ax is None:
+		ax = plt.gca()
+	Y = np.arange(len(field_data), dtype='int')
+	tick_labels = [PRETTY_NAMES_NO_UNITS[field] for field in fields]
+	ax.barh(Y, corrs)
+	ax.set_xticks([0,0.25,0.5,0.75,1.0])
+	ax.set_xticklabels([0.0,'',0.5,'',1.0])
+	ax.set_xlabel("Correlation with Latent Axis")
+	ax.set_ylabel("MUPET Feature")
+	# for val in [0.25, 0.50, 0.75]:
+	# 	ax.axvline(x=val, c='k', alpha=0.5, lw=0.5)
+	ax.set_yticks([])
+	# ax.set_yticklabels(tick_labels, fontdict={'fontsize':8})
+	for i in Y:
+		plt.text(0.01, i-0.1, tick_labels[i], fontsize=8, color='w')
+	ax.set_xlim(0,1)
+	# ax.set_title("Latent/Traditional Feature Correlations", fontsize=10)
+	if save_and_close:
+		plt.savefig(os.path.join(dc.plots_dir, filename))
+		plt.close('all')
 
 
 def knn_variance_explained_plot_DC(dc, fields, k=8, n_fold=5, \
@@ -72,7 +84,7 @@ def knn_variance_explained_plot_DC(dc, fields, k=8, n_fold=5, \
 	fields = np.array(fields)[perm]
 	# Plot.
 	X = np.arange(len(fields))
-	tick_labels = [PRETTY_NAMES[field] for field in fields]
+	tick_labels = [PRETTY_NAMES_NO_UNITS[field] for field in fields]
 	plt.bar(X, r2s)
 	plt.xticks(X, tick_labels, rotation=80)
 	plt.ylim(0,1)
@@ -102,7 +114,7 @@ def pairwise_correlation_plot_DC(dc, fields, filename='pairwise.pdf'):
 	cbar.set_ticks([-1, 0, 1])
 	cbar.set_ticklabels([-1, 0, 1])
 	plt.title("Pairwise feature correlations")
-	tick_labels = [PRETTY_NAMES[field] for field in fields]
+	tick_labels = [PRETTY_NAMES_NO_UNITS[field] for field in fields]
 	plt.yticks(np.arange(len(fields)), tick_labels)
 	plt.xticks([],[])
 	plt.tight_layout()

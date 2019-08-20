@@ -447,7 +447,8 @@ class VAE(nn.Module):
 		self.epoch = checkpoint['epoch']
 
 
-	def visualize(self, loader, num_specs=5, gap=4, save_filename='temp.pdf'):
+	def visualize(self, loader, num_specs=5, gap=4, \
+		save_filename='rconstruction.pdf'):
 		"""
 		Plot spectrograms and their reconstructions.
 
@@ -467,6 +468,10 @@ class VAE(nn.Module):
 		save_filename : str, optional
 			Where to save the plot, relative to self.save_dir. Defaults to
 			'temp.pdf'.
+
+		Returns
+		-------
+		
 		"""
 		# Collect random indices.
 		assert num_specs <= len(loader.dataset) and num_specs >= 1
@@ -481,6 +486,7 @@ class VAE(nn.Module):
 		all_specs = np.stack([specs, rec_specs])
 		# Plot.
 		grid_plot(all_specs, os.path.join(self.save_dir, save_filename))
+		return specs, rec_specs
 
 
 	def get_latent(self, loader):

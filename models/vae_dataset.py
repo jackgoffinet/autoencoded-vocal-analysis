@@ -3,18 +3,21 @@ Data stuff for animal vocalization syllables.
 
 """
 __author__ = "Jack Goffinet"
-__date__ = "November 2018 - July 2019"
+__date__ = "November 2018 - August 2019"
 
 
 import h5py
 import numpy as np
 import os
+from scipy.interpolate import interp2d
 from scipy.io import wavfile
+from scipy.ndimage import gaussian_filter
+from scipy.optimize import minimize
+from scipy.signal import stft
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-from preprocessing.preprocessing import time_from_filename
-
+EPSILON = 1e-12
 
 
 def get_syllable_partition(dirs, split, shuffle=True):
@@ -76,7 +79,8 @@ def get_window_partition(audio_dirs, roi_dirs, split, roi_extension='.txt', \
 	if shuffle:
 		np.random.seed(42)
 		perm = np.random.permutation(len(audio_filenames))
-		audio_filenames, roi_filenames = audio_filenames[perm], roi_filenames[perm]
+		audio_filenames = audio_filenames[perm]
+		roi_filenames = roi_filenames[perm]
 		np.random.seed(None)
 	# Split.
 	i = int(round(split * len(audio_filenames)))
@@ -119,13 +123,13 @@ def get_syllable_data_loaders(partition, batch_size=64, shuffle=(True, False), \
 	train_dataset = SyllableDataset(filenames=partition['train'], \
 		transform=numpy_to_tensor, sylls_per_file=sylls_per_file)
 	train_dataloader = DataLoader(train_dataset, batch_size=batch_size, \
-		shuffle=shuffle[0], num_workers=3)
+		shuffle=shuffle[0], num_workers=num_workers)
 	if not partition['test']:
 		return {'train':train_dataloader, 'test':None}
 	test_dataset = SyllableDataset(filenames=partition['test'], \
 		transform=numpy_to_tensor, sylls_per_file=sylls_per_file)
 	test_dataloader = DataLoader(test_dataset, batch_size=batch_size, \
-		shuffle=shuffle[1], num_workers=3)
+		shuffle=shuffle[1], num_workers=num_workers)
 	return {'train':train_dataloader, 'test':test_dataloader}
 
 
@@ -137,14 +141,30 @@ def get_window_data_loaders(partition, p, batch_size=64, shuffle=(True, False),\
 	train_dataset = WindowDataset(partition['train']['audio'], \
 		partition['train']['rois'], p, transform=numpy_to_tensor)
 	train_dataloader = DataLoader(train_dataset, batch_size=batch_size, \
-		shuffle=shuffle[0], num_workers=3)
+		shuffle=shuffle[0], num_workers=num_workers)
 	if not partition['test']:
 		return {'train':train_dataloader, 'test':None}
 	test_dataset = WindowDataset(partition['test']['audio'], \
 		partition['test']['rois'], p, transform=numpy_to_tensor)
 	test_dataloader = DataLoader(test_dataset, batch_size=batch_size, \
-		shuffle=shuffle[1], num_workers=3)
+		shuffle=shuffle[1], num_workers=num_workers)
 	return {'train':train_dataloader, 'test':test_dataloader}
+
+
+def get_warped_window_data_loaders(audio_dirs, template_dir, p, batch_size=64, \
+	num_workers=3):
+	"""
+	Audio files must all be the same duration!
+	"""
+	audio_fns = []
+	for audio_dir in audio_dirs:
+		audio_fns += [os.path.join(audio_dir, i) for i in \
+			os.listdir(audio_dir) if i[-4:] == '.wav']
+	dataset = WarpedWindowDataset(audio_fns, template_dir, p, \
+		transform=numpy_to_tensor)
+	dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, \
+		num_workers=num_workers)
+	return {'train': dataloader, 'test': dataloader}
 
 
 class SyllableDataset(Dataset):
@@ -301,6 +321,169 @@ class WindowDataset(Dataset):
 			fn = os.path.join(save_dir, fn)
 			with h5py.File(fn, "w") as f:
 				f.create_dataset('specs', data=specs)
+
+
+
+class WarpedWindowDataset(Dataset):
+	"""torch.utils.data.Dataset for chunks of animal vocalization"""
+
+	def __init__(self, audio_filenames, template_dir, p, \
+		transform=None, dataset_length=2000):
+		"""
+		Create a torch.utils.data.Dataset for chunks of animal vocalization.
+
+		Parameters
+		----------
+		audio_filenames : list of strings
+			List of wav files.
+
+		roi_filenames : list of strings
+			List of files containing animal vocalization times. Format: ...
+
+		transform : None or function, optional
+			Transformation to apply to each item. Defaults to None (no
+			transformation)
+		"""
+		self.audio_filenames = audio_filenames
+		self.audio = [wavfile.read(fn)[1] for fn in audio_filenames]
+		self.fs = wavfile.read(audio_filenames[0])[0]
+		self.dataset_length = dataset_length
+		self.p = p
+		self.transform = transform
+		self.linear_warp(template_dir)
+
+
+	def __len__(self):
+		"""NOTE: length is arbitrary."""
+		return self.dataset_length
+
+
+	def write_hdf5_files(self, save_dir, num_files=400, sylls_per_file=100):
+		"""
+		Write hdf5 files containing spectrograms of random audio chunks.
+
+		NOTE
+		----
+	 	This should be consistent with
+		preprocessing.preprocessing.process_sylls.
+		"""
+		if not os.path.exists(save_dir):
+			os.mkdir(save_dir)
+		for write_file_num in range(num_files):
+			specs = self.__getitem__(np.arange(sylls_per_file),
+				seed=write_file_num)
+			specs = np.array([spec.detach().numpy() for spec in specs])
+			fn = "sylls_" + str(write_file_num).zfill(4) + '.hdf5'
+			fn = os.path.join(save_dir, fn)
+			with h5py.File(fn, "w") as f:
+				f.create_dataset('specs', data=specs)
+
+
+	def get_template(self, feature_dir):
+		"""Adapted from segmentation/template_segmentation_v2.py"""
+		filenames = [os.path.join(feature_dir, i) for i in os.listdir(feature_dir) \
+			if is_wav_file(i)]
+		specs = []
+		for i, filename in enumerate(filenames):
+			fs, audio = wavfile.read(filename)
+			assert fs == self.fs, "Found samplerate="+str(fs)+\
+				", expected "+str(self.fs)
+			spec, dt = self.get_spec(audio)
+			spec = gaussian_filter(spec, (0.5,0.5))
+			specs.append(spec)
+		min_time_bins = min(spec.shape[1] for spec in specs)
+		specs = np.array([i[:,:min_time_bins] for i in specs])
+		template = np.mean(specs, axis=0) # Average over all the templates.
+		self.template_dur = template.shape[1]*dt
+		return template
+
+
+	def get_spec(self, audio, target_ts=None):
+		"""Not many options here."""
+		f, t, spec = stft(audio, fs=self.fs, nperseg=self.p['nperseg'], \
+			noverlap=self.p['noverlap'])
+		i1 = np.searchsorted(f, self.p['min_freq'])
+		i2 = np.searchsorted(f, self.p['max_freq'])
+		spec = spec[i1:i2]
+		f = f[i1:i2]
+		spec = np.log(np.abs(spec) + EPSILON)
+		if target_ts is not None:
+			interp = interp2d(t, f, spec, copy=False, bounds_error=False, \
+				fill_value=self.p['spec_min_val'])
+			interp_spec = interp(target_ts, f, assume_sorted=True)
+			spec = interp_spec
+		spec -= self.p['spec_min_val']
+		spec /= self.p['spec_max_val'] - self.p['spec_min_val'] + EPSILON
+		spec = np.clip(spec, 0.0, 1.0)
+		return spec, t[1]-t[0]
+
+
+	def make_loss_func(self, template, audio):
+		"""Make a time warping loss function."""
+		def loss_func(coeffs):
+			target_ts = coeffs[0] + coeffs[1] * \
+				np.linspace(0,self.template_dur,template.shape[1],endpoint=True)
+			try:
+				predicted, _ = self.get_spec(audio, target_ts=target_ts)
+			except:
+				print(type(audio), len(audio))
+				print(type(target_ts), len(target_ts))
+				print(coeffs)
+				print(target_ts)
+				quit()
+			return np.sum(np.power(template - predicted, 2))
+		return loss_func
+
+
+	def linear_warp(self, template_dir):
+		"""Linearly warp each song rendition to the template."""
+		template = self.get_template(template_dir)
+		self.coeffs = np.zeros((len(self.audio), 2))
+		# warps = {}
+		# for i in range(len(self.audio)):
+		# 	loss_func = self.make_loss_func(template, self.audio[i])
+		# 	x0 = np.array([0.0,1.0])
+		# 	res = minimize(loss_func, x0, bounds=[(-.1,.1),(.6,1.2)])
+		# 	# print(res.x)
+		# 	self.coeffs[i] = res.x[:]
+		# 	warps[self.audio_filenames[i]] = self.coeffs[i]
+		# np.save('warps.npy', warps)
+		warps = np.load('warps.npy', allow_pickle=True).item()
+		for i in range(len(self.audio)):
+			self.coeffs[i] = warps[self.audio_filenames[i]]
+
+
+	def __getitem__(self, index, seed=None):
+		result = []
+		single_index = False
+		try:
+			iterator = iter(index)
+		except TypeError:
+			index = [index]
+			single_index = True
+		np.random.seed(seed)
+		for i in index:
+			while True:
+				# First find the file, then the ROI.
+				file_index = np.random.randint(len(self.audio))
+				# Then choose a chunk of audio uniformly at random.
+				start_t = np.random.rand() * (self.template_dur - self.p['window_length'])
+				stop_t = start_t + self.p['window_length']
+				# Warp to the current audio chunk.
+				start_t = self.coeffs[file_index,0] + self.coeffs[file_index,1] * start_t
+				stop_t = self.coeffs[file_index,0] + self.coeffs[file_index,1] * stop_t
+				# Then make a spectrogram.
+				spec, flag = self.p['get_spec'](start_t, stop_t, self.audio[file_index], self.p, fs=self.fs)
+				if not flag:
+					continue
+				if self.transform:
+					spec = self.transform(spec)
+				result.append(spec)
+				break
+		np.random.seed(None)
+		if single_index:
+			return result[0]
+		return result
 
 
 def get_sylls_per_file(partition):

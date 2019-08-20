@@ -100,12 +100,14 @@ def process_sylls(audio_dir, segment_dir, save_dir, p):
 				return
 
 
-def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None):
+def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None, \
+	fill_value=-1/EPSILON):
 	"""
-	Norm, threshold, and resize a STFT.
+	Norm, scale, threshold, strech, and resize a Short Time Fourier Transform.
 
 	Parameters
 	----------
+	t1 : float or None
 	"""
 	s1, s2 = int(round(t1*fs)), int(round(t2*fs))
 	assert s2 <= len(audio)
@@ -116,14 +118,12 @@ def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None):
 	if remainder != 0:
 		s2 += (p['nperseg'] - p['noverlap']) - remainder
 	assert s1 < s2, "s1: " + str(s1) + " s2: " + str(s2)
-	# assert s2 < len(audio), "s1: " + str(s1) + " s2: " + str(s2) + \
-		# " len(audio): " + str(len(audio))
 	# Get a spectrogram and define the interpolation object.
 	f, t, spec = stft(audio[s1:s2], fs=fs, nperseg=p['nperseg'], \
 		noverlap=p['noverlap'])
 	spec = np.log(np.abs(spec) + EPSILON)
 	interp = interp2d(t, f, spec, copy=False, bounds_error=False, \
-		fill_value=-1/EPSILON)
+		fill_value=fill_value)
 	# Define target frequencies.
 	if target_freqs is None:
 		if p['mel']:
@@ -145,9 +145,8 @@ def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None):
 	spec = interp_spec
 	# Normalize.
 	spec -= p['spec_min_val']
-	spec[spec < 0.0] = 0.0
 	spec /= (p['spec_max_val'] - p['spec_min_val'])
-	spec[spec > 1.0] = 1.0
+	spec = np.clip(spec, 0.0, 1.0)
 	# Within-syllable normalize.
 	if p['within_syll_normalize']:
 		spec -= np.percentile(spec, 10.0)

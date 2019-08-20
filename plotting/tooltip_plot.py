@@ -4,6 +4,7 @@ Plot a syllable projection with spectrograms appearing as tooltips.
 
 TO DO:
 - Stop reading and writing the embedding.
+- Draw a random subset for images.
 """
 __author__ = "Jack Goffinet"
 __date__ = "March 2019 - July 2019"
@@ -67,6 +68,8 @@ def tooltip_plot(embedding, images, output_dir='temp', num_imgs=10000, title="",
 	n : int, optional
 		Total number of scatterpoints to plot. Defaults to 30000.
 	"""
+	n = min(len(embedding), n)
+	num_imgs = min(len(images), num_imgs)
 	write_images(embedding, images, output_dir=output_dir, num_imgs=num_imgs, n=n)
 	output_file(os.path.join(output_dir, "main.html"))
 	source = ColumnDataSource(

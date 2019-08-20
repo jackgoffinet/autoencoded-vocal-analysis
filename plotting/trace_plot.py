@@ -43,8 +43,8 @@ def trace_plot_DC(dc, p, song_filename, num_segs=200, \
 		for audio_fn in segment_audio[audio_dir]:
 			temp = segment_audio[audio_dir][audio_fn]
 			audio_chunks += temp
-			k += 1
 			audio_filenames += [os.path.join(audio_dir, audio_fn)] * len(temp)
+			k += 1
 	# # Find samplerate.
 	# fs, _ = wavfile.read(audio_filenames[0])
 	# # Set up the model.
