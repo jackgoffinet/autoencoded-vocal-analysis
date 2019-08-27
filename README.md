@@ -1,6 +1,9 @@
-## Generative modeling for animal vocalizations
+## Autoencoded Vocal Analysis
+#### Generative modeling of animal vocalizations
 
 Jack Goffinet
-November 2018 - Decemeber 2019
+November 2018 - August 2019
 
-To build: python setup.py sdist bdist_wheel
+To build:
+$ cd path/to/ava
+$ python setup.py sdist bdist_wheel

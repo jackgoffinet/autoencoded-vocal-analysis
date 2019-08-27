@@ -54,26 +54,8 @@ if __name__ == '__main__':
 	}
 	rcParams.update(params)
 	fig = plt.figure()
-	# gs = gridspec.GridSpec(1,2,
-	# 	width_ratios=[1, 1.7],
-	# 	height_ratios=[1],
-	# 	)
-
-	# gs0 = gridspec.GridSpecFromSubplotSpec(3, 1, subplot_spec=gs[0])
-	# gs1 = gridspec.GridSpecFromSubplotSpec(2, 3, subplot_spec=gs[1])
-
-	# gs0 = gridspec.GridSpec(3,1,
-	# 	width_ratios=[1],
-	# 	height_ratios=[1,1,1],
-	# )
-	# gs1 = gridspec.GridSpec(2,3,
-	# 	width_ratios=[1,1,1],
-	# 	height_ratios=[2,3],
-	# )
-
 
 	gsarr = [gridspec.GridSpec(1,1) for _ in range(7)]
-
 
 	gsarr[0].update(left=0, right=0.4, top=0.98, bottom=0.67)
 	plt.text(0.05,0.92,'a',transform=fig.transFigure, size=14, weight='bold')

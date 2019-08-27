@@ -1,9 +1,11 @@
-data/raw/
-data/processed/
-data/models/
-plots/*
+dist/
+build/
+dist/
+plots/
+__pycache__/
 *.pdf
+*.png
 *.jpg
 *.npy
 *.sh
-
+*.txt

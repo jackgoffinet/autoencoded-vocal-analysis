@@ -4,10 +4,10 @@ with open("README.md", "r") as fh:
 	long_description = fh.read()
 
 setuptools.setup(
-	name="syllable_modeling",
+	name="AVA: Autoencoded Vocal Analysis",
 	version="0.0.1",
 	author="Jack Goffinet",
-	author_email="jg420@duke.edu",
+	author_email="jack.goffinet@duke.edu",
 	description="Generative modeling of animal vocalizations",
 	long_description=long_description,
 	long_description_content_type="text/markdown",
