@@ -56,7 +56,7 @@ if __name__ == '__main__':
 	fig = plt.figure()
 
 	gsarr = [gridspec.GridSpec(1,1) for _ in range(7)]
-
+	axarr = [plt.Subplot(fig, gs[0,0]) for gs in gsarr]
 	gsarr[0].update(left=0, right=0.4, top=0.98, bottom=0.67)
 	plt.text(0.05,0.92,'a',transform=fig.transFigure, size=14, weight='bold')
 	gsarr[1].update(left=0, right=0.4, top=0.64, bottom=0.40)
@@ -72,7 +72,7 @@ if __name__ == '__main__':
 	gsarr[6].update(left=0.39, right=0.98, top=0.5, bottom=-0.02)
 	plt.text(0.385,0.45,'g',transform=fig.transFigure, size=14, weight='bold')
 
-	axarr = [plt.Subplot(fig, gs[0,0]) for gs in gsarr]
+
 
 
 

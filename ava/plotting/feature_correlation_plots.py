@@ -7,10 +7,12 @@ __author__ = "Jack Goffinet"
 __date__ = "July-August 2019"
 
 
+import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
 import os
 import numpy as np
+from scipy.stats import zscore
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import KFold
 from sklearn.neighbors import KNeighborsRegressor
@@ -18,44 +20,57 @@ from sklearn.decomposition import PCA
 from sklearn.cross_decomposition import CCA
 from sklearn import preprocessing
 
-from ava.plotting.data_container import PRETTY_NAMES_NO_UNITS
+from ava.data.data_container import PRETTY_NAMES_NO_UNITS
 
 
 
-def correlation_plot_DC(dc, fields, filename='feature_correlation.pdf', ax=None,
-	save_and_close=True):
+def correlation_plot_DC(dcs, all_fields, axarr=None, save_and_close=True, \
+	filename='feature_correlation.pdf'):
 	"""
 
 
 	"""
-	latent = dc.request('latent_means')
-	field_data = {}
-	field_corrs = {}
-	for field in fields:
-		field_data[field] = dc.request(field)
-		field_corrs[field] = get_correlation(latent, field_data[field])
+	trad_r2s, latent_r2s = [], []
+	trad_names, latent_names = [], []
+	for dc, fields in zip(dcs, all_fields):
+		latent = dc.request('latent_means')
+		latent = PCA(n_components=latent.shape[1]).fit_transform(latent)
+		field_data = []
+		field_r2s = {}
+		for field in fields:
+			data = zscore(dc.request(field))
+			field_data.append(data)
+			r2 = get_r2(latent, field_data[-1])
+			trad_r2s.append(r2)
+			trad_names.append(PRETTY_NAMES_NO_UNITS[field])
+		field_data = np.stack(field_data)
+		for latent_pc in range(latent.shape[1]):
+			r2 = get_r2(field_data, latent[:,latent_pc])
+			latent_r2s.append(r2)
+			latent_names.append("Latent "+str(latent_pc+1))
+
 	# Sort.
-	corrs = np.array([field_corrs[field] for field in fields])
-	perm = np.argsort(corrs)
-	corrs = corrs[perm]
+	trad_r2s = np.array([field_r2s[field] for field in fields])
+	perm = np.argsort(r2s)
+	r2s = r2s[perm]
 	fields = np.array(fields)[perm]
 	# Plot.
-	if ax is None:
-		ax = plt.gca()
+	if axarr is None:
+		_, axarr = plt.subplots(1,2)
 	Y = np.arange(len(field_data), dtype='int')
 	tick_labels = [PRETTY_NAMES_NO_UNITS[field] for field in fields]
-	ax.barh(Y, corrs)
-	ax.set_xticks([0,0.25,0.5,0.75,1.0])
-	ax.set_xticklabels([0.0,'',0.5,'',1.0])
-	ax.set_xlabel("Correlation with Latent Axis")
-	ax.set_ylabel("MUPET Feature")
+	axarr[0].barh(Y, r2s)
+	axarr[0].set_xticks([0,0.25,0.5,0.75,1.0])
+	axarr[0].set_xticklabels([0.0,'',0.5,'',1.0])
+	axarr[0].set_xlabel("Variance Explained by Latent Features")
+	# ax.set_ylabel("MUPET Feature")
 	# for val in [0.25, 0.50, 0.75]:
 	# 	ax.axvline(x=val, c='k', alpha=0.5, lw=0.5)
-	ax.set_yticks([])
+	axarr[0].set_yticks([])
 	# ax.set_yticklabels(tick_labels, fontdict={'fontsize':8})
 	for i in Y:
-		plt.text(0.01, i-0.1, tick_labels[i], fontsize=8, color='w')
-	ax.set_xlim(0,1)
+		axarr[0].text(0.01, i-0.1, tick_labels[i], fontsize=8, color='w')
+	axarr[0].set_xlim(0,1)
 	# ax.set_title("Latent/Traditional Feature Correlations", fontsize=10)
 	if save_and_close:
 		plt.savefig(os.path.join(dc.plots_dir, filename))
@@ -150,9 +165,9 @@ def feature_pca_plot_DC(dc, fields, filename='feature_pca.pdf'):
 
 
 def two_subplot_correlation_plot_DC(dcs, all_fields, colors=None, axs=None, \
-	save_and_close=True, filename='temp.pdf'):
+	save_and_close=True, labels=None, filename='temp.pdf'):
 	"""
-
+	TO DO: shuffle scatter
 	"""
 	if colors is None:
 		colors = ['k'] * len(dcs)
@@ -185,21 +200,30 @@ def two_subplot_correlation_plot_DC(dcs, all_fields, colors=None, axs=None, \
 	# Plot.
 	if axs is None:
 		_, axs = plt.subplots(2,1)
-	axs[0].scatter(plot_1_xs, plot_1_ys, c=plot_1_colors)
-	axs[0].set_title('latent predicts trad')
+	axs[0].scatter(plot_1_xs, plot_1_ys, c=plot_1_colors, alpha=0.6)
+	# axs[0].set_title('Latent Features redicts trad')
+	axs[0].set_ylabel('Traditional Feature Variance')
+	axs[0].set_xlabel('Variance Explained by Latent Features')
 	max_val = max(plot_1_xs)
-	axs[0].set_xlim(-0.02,max_val+0.02)
-	axs[0].set_ylim(-0.02,max_val+0.02)
-	axs[0].plot([0,max_val], [0,max_val], ls='--')
-	axs[1].scatter(plot_2_xs, plot_2_ys, c=plot_2_colors)
-	axs[1].set_title('trad predicts latent')
+	# axs[0].set_xlim(-0.02,max_val+0.02)
+	# axs[0].set_ylim(-0.02,max_val+0.02)
+	# axs[0].plot([0,max_val], [0,max_val], ls='--')
+	axs[1].scatter(plot_2_xs, plot_2_ys, c=plot_2_colors, alpha=0.6)
+	# axs[1].set_title('trad predicts latent')
+	axs[1].set_ylabel('Latent Feature Variance')
+	axs[1].set_xlabel('Variance Explained by Traditional Features')
 	max_val = max(plot_2_xs)
-	axs[1].plot([0,max_val], [0,max_val], ls='--')
-	axs[1].set_xlim(-0.02,max_val+0.02)
-	axs[1].set_ylim(-0.02,max_val+0.02)
+	# axs[1].plot([0,max_val], [0,max_val], ls='--')
+	if labels is not None:
+		patches = [mpatches.Patch(color=colors[i], label=labels[i]) \
+				for i in range(len(labels))]
+		axs[0].legend(handles=patches, loc='upper left') # bbox_to_anchor=(0.5, 0.5)
+	# axs[1].set_xlim(-0.02,max_val+0.02)
+	# axs[1].set_ylim(-0.02,max_val+0.02)
 	if save_and_close:
 		plt.savefig(filename)
 		plt.close('all')
+
 
 def triptych_correlation_plot_DC(dcs, all_fields, colors=None, ax=None, \
 	save_and_close=True, jitter=0.25, filename='triptych.pdf'):
@@ -263,7 +287,7 @@ def triptych_correlation_plot_DC(dcs, all_fields, colors=None, ax=None, \
 
 
 
-def get_correlation(latent, feature_vals):
+def get_r2(latent, feature_vals):
 	""" """
 	reg = LinearRegression().fit(latent, feature_vals.reshape(-1,1))
 	return reg.score(latent, feature_vals.reshape(-1,1))

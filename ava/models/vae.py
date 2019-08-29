@@ -1,5 +1,5 @@
 """
-A Variational Autoencoder (VAE) for spectrogram data implemented using PyTorch.
+A Variational Autoencoder (VAE) for spectrogram data implemented in PyTorch.
 
 References
 ----------
@@ -448,7 +448,7 @@ class VAE(nn.Module):
 
 
 	def visualize(self, loader, num_specs=5, gap=4, \
-		save_filename='rconstruction.pdf'):
+		save_filename='reconstruction.pdf'):
 		"""
 		Plot spectrograms and their reconstructions.
 

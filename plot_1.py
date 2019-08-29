@@ -3,6 +3,7 @@
 
 """
 
+from matplotlib import rcParams
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
 import matplotlib.gridspec as gridspec
@@ -16,6 +17,7 @@ from ava.plotting.latent_projection import latent_projection_plot_DC
 
 
 if __name__ == '__main__':
+	# Define data.
 	root = '/media/jackg/Jacks_Animal_Sounds/mice/MUPET/'
 	proj_dirs = [root+'C57_projections', root+'DBA_projections']
 	mupet_feature_dirs = [root+'C57_MUPET_detect', root+'DBA_MUPET_detect']
@@ -38,33 +40,53 @@ if __name__ == '__main__':
 		feature_dirs=ds_feature_dirs, spec_dirs=spec_dirs, \
 		model_filename=model_fn)
 
-	import seaborn as sns
-	sns.set_style("whitegrid")
-	fig = plt.gcf()
-	fig.set_size_inches(7.5,4)
-	gs1 = gridspec.GridSpec(2, 2,
-					width_ratios=[1, 1],
-					height_ratios=[1, 1],
-					figure=fig,
-					)
-	gs1.update(bottom=0.05, top=0.95, left=0.06, right=0.58, wspace=0.05, hspace=0.05)
 
-	ax1 = plt.subplot(gs1[0,0])
-	ax2 = plt.subplot(gs1[0,1])
-	ax3 = plt.subplot(gs1[1,0])
-	ax4 = plt.subplot(gs1[1,1])
+	# Define layout.
+	# import seaborn as sns
+	# sns.set_style("whitegrid")
 
-	gs2 = gridspec.GridSpec(1, 1)
-	gs2.update(bottom=0.13, top=0.95, left=0.65, right=0.98, hspace=0.05)
-	sns.set_style("darkgrid")
-	ax5 = plt.subplot(gs2[0,0])
+	params = {
+		'axes.labelsize': 8,
+		'axes.labelpad': 0.05,
+		'legend.fontsize': 8,
+		'xtick.labelsize': 7,
+		'ytick.labelsize': 7,
+		'text.usetex': False,
+		'figure.figsize': [6.5, 4]
+	}
+	rcParams.update(params)
+	fig = plt.figure()
 
+	gsarr = [gridspec.GridSpec(1,1) for _ in range(10)]
+
+	# 0 1 2
+	# 3 4 5
+	gsarr[0].update(left=0.01, right=0.28, top=1.0, bottom=0.55)
+	gsarr[1].update(left=0.3, right=0.57, top=1.0, bottom=0.55)
+	gsarr[2].update(left=0.65, right=0.97, top=0.94, bottom=0.585)
+	gsarr[3].update(left=0.01, right=0.28, top=0.49, bottom=0.08)
+	gsarr[4].update(left=0.3, right=0.57, top=0.49, bottom=0.08)
+	gsarr[5].update(left=.65, right=0.97, top=0.45, bottom=0.1)
+	# Colorbar axes.
+	gsarr[6].update(left=0.06, right=0.23, top=0.56, bottom=0.54)
+	gsarr[7].update(left=0.35, right=0.52, top=0.56, bottom=0.54)
+	gsarr[8].update(left=0.06, right=0.23, top=0.08, bottom=0.06)
+	gsarr[9].update(left=0.35, right=0.52, top=0.08, bottom=0.06)
+
+	axarr = [plt.Subplot(fig, gs[0,0]) for gs in gsarr]
+	for ax in axarr:
+		fig.add_subplot(ax)
+
+	# Plot.
 	inset_fields = ['frequency_bandwidth', 'maximum_frequency', \
 		'total_syllable_energy', 'syllable_duration']
-	# with sns.axes_style("darkgrid"):
-	# 	for ax, field in zip([ax1, ax2, ax3, ax4], inset_fields):
-	# 		latent_projection_plot_DC(dc1, color_by=field, colorbar=True,
-	# 			ax=ax, save_and_close=False)
+
+	caxs = [axarr[i] for i in [6,7,8,9]]
+	axs = [axarr[i] for i in [0,1,3,4]]
+	for cax, ax, field in zip(caxs, axs, inset_fields):
+		latent_projection_plot_DC(dc1, color_by=field, colorbar=True,
+			ax=ax, cax=cax, save_and_close=False)
+
 	mupet_fields = inset_fields + ['minimum_frequency', 'mean_frequency', \
 		'peak_syllable_amplitude', 'starting_frequency', 'final_frequency']
 
@@ -79,11 +101,27 @@ if __name__ == '__main__':
 		'pitch_goodness_variance', 'mean_freq_variance', 'AM_variance']
 
 	# correlation_plot_DC(dc, fields, ax=ax5, save_and_close=False)
-	colors = ['cyan', 'magenta', 'green']
+	colors = ['cyan', 'magenta']
+	labels = ['MUPET', 'SAP']
 	# triptych_correlation_plot_DC([dc1,dc3], [mupet_fields, sap_fields], \
 		# colors=colors, ax=ax5, save_and_close=False)
-	two_subplot_correlation_plot_DC([dc1,dc3], [mupet_fields, sap_fields], \
-		colors=colors, axs=[ax1,ax2], save_and_close=False)
+	two_subplot_correlation_plot_DC([dc1, dc3], [mupet_fields, sap_fields], \
+		colors=colors, axs=[axarr[2],axarr[5]], labels=labels, \
+		save_and_close=False)
+
+	for i in [2,5]:
+		axarr[i].set_xlim(-0.02,0.51)
+		axarr[i].set_ylim(-0.02,0.51)
+		axarr[i].plot([0,0.5], [0,0.5], ls='--', c='k')
+		axarr[i].spines['right'].set_visible(False)
+		axarr[i].spines['top'].set_visible(False)
+
+	plt.text(0.05,0.94,'a',transform=fig.transFigure, size=14, weight='bold')
+	plt.text(0.3,0.94,'c',transform=fig.transFigure, size=14, weight='bold')
+	plt.text(0.57,0.94,'e',transform=fig.transFigure, size=14, weight='bold')
+	plt.text(0.05,0.46,'b',transform=fig.transFigure, size=14, weight='bold')
+	plt.text(0.3,0.46,'d',transform=fig.transFigure, size=14, weight='bold')
+	plt.text(0.57,0.46,'f',transform=fig.transFigure, size=14, weight='bold')
 
 
 	# plt.tight_layout()

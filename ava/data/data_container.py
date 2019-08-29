@@ -132,7 +132,7 @@ class DataContainer():
 	be handled here in a central location, which can cut down on redundant code
 	and processing steps.
 
-	Recommended directory structure:
+	Supported directory structure:
 
 	├──	animal_1
 	│	├──	audio						(raw audio)

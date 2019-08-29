@@ -3,9 +3,11 @@ build/
 dist/
 plots/
 __pycache__/
+ava/__pycache__/
 *.pdf
 *.png
 *.jpg
 *.npy
+*.pyc
 *.sh
 *.txt

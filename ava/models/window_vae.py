@@ -13,6 +13,9 @@ References
 	preprint arXiv:1401.4082 (2014).
 
 	https://arxiv.org/abs/1401.4082
+
+
+NOTE: Is this too redundant given vae.py?
 """
 __author__ = "Jack Goffinet"
 __date__ = "November 2018 - July 2019"

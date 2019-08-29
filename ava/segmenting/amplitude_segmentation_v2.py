@@ -7,29 +7,17 @@ __date__ = "December 2018 - August 2019"
 
 
 import numpy as np
+from scipy.io import wavfile
 from scipy.ndimage.filters import gaussian_filter, gaussian_filter1d
-from scipy.signal import convolve2d
+
+from ava.segmenting.utils import get_spec
 
 
 EPSILON = 1e-12
 
-# Segmenting parameters. # KEEP THIS?
-default_seg_params = {
-	'th_1':0.1,
-	'th_2':0.2,
-	'th_3':0.3,
-	'min_dur':0.1,
-	'max_dur':2.0,
-	'freq_smoothing': 3.0,
-	'smoothing_timescale': 0.02,
-	'num_time_bins': 128,
-	'num_freq_bins': 128,
-	'softmax': False,
-	'temperature':0.5,
-}
 
 
-def get_onsets_offsets(audio, seg_params, return_traces=False):
+def get_onsets_offsets(audio, p, return_traces=False):
 	"""
 	Segment the spectrogram using thresholds on its ampltiude.
 
@@ -39,7 +27,7 @@ def get_onsets_offsets(audio, seg_params, return_traces=False):
 
 	dt :
 
-	seg_params :
+	p :
 
 	return_traces : bool, optional
 
@@ -55,8 +43,7 @@ def get_onsets_offsets(audio, seg_params, return_traces=False):
 		The amplitude trace used in segmenting decisions. Returned if
 		return_traces is True.
 	"""
-	p = {**default_seg_params, **seg_params}
-	spec, dt = get_spec(audio, p)
+	spec, dt, _ = get_spec(audio, p)
 	min_syll_len = int(np.floor(p['min_dur'] / dt))
 	max_syll_len = min(p['num_time_bins'], int(np.ceil(p['max_dur'] / dt)))
 	th_1, th_2, th_3 = p['th_1'], p['th_2'], p['th_3'] # treshholds
@@ -69,7 +56,14 @@ def get_onsets_offsets(audio, seg_params, return_traces=False):
 	# mad = np.median(np.abs(spec - median)) # Median Absolute Deviation
 	# spec -= median
 	# spec[spec<0.0] = 0.0
-	# spec /= mad
+	# spec /= mad + EPSILON
+
+	# Automated thresholding.
+	quantile = np.quantile(spec, 0.05)
+	spec -= quantile
+	spec[spec<0.0] = 0.0
+	mad = np.median(np.abs(spec)) # Median Absolute Deviation
+	spec /= mad + EPSILON
 
 	# smoothing_time = p['smoothing_timescale'] / dt
 	# smooth = gaussian_filter(spec, [p['freq_smoothing'], smoothing_time])
@@ -82,10 +76,10 @@ def get_onsets_offsets(audio, seg_params, return_traces=False):
 	# if p['smoothing'] ??
 	amps = gaussian_filter(amps, smoothing_time)
 	# Scale by MAD.
-	median = np.median(amps)
+	median = np.min(amps)
 	mad = np.median(np.abs(amps - median)) # Median Absolute Deviation
 	amps -= median
-	amps /= mad
+	amps /= mad + EPSILON
 
 	# Find local maxima greater than th_3.
 	local_maxima = []
@@ -141,45 +135,10 @@ def get_onsets_offsets(audio, seg_params, return_traces=False):
 	return new_onsets, new_offsets
 
 
-def get_spec(audio, p):
-	"""
-	Get a spectrogram.
-
-	Parameters
-	----------
-	audio : numpy array of floats
-		Audio
-
-	p : dict
-		Spectrogram parameters.
-
-	Returns
-	-------
-	spec : numpy array of floats
-		Spectrogram of shape [freq_bins x time_bins]
-
-	dt : float
-		Time step associated with time bins.
-
-	f : Array of frequencies.
-	"""
-	fs, audio = wavfile.read(audio)
-	assert fs == p['fs']
-	f, t, spec = stft(audio, fs=fs, nperseg=p['nperseg'], \
-		noverlap=p['noverlap'])
-	i1 = np.searchsorted(f, p['min_freq'])
-	i2 = np.searchsorted(f, p['max_freq'])
-	f, spec = f[i1:i2], spec[i1:i2]
-	spec = np.log(np.abs(spec) + EPSILON)
-	spec -= p['spec_min_val']
-	spec /= p['spec_max_val'] - p['spec_min_val']
-	spec = np.clip(spec, 0.0, 1.0)
-	return spec, t[1]-t[0], f
-
 
 def softmax(arr, t=0.5):
 	temp = np.exp(arr/t)
-	temp /= np.sum(temp, axis=0)
+	temp /= np.sum(temp, axis=0) + EPSILON
 	return np.sum(np.multiply(arr, temp), axis=0)
 
 

@@ -13,12 +13,12 @@ import matplotlib.gridspec as gridspec
 import numpy as np
 import os
 
-from models.window_vae import X_SHAPE
-from plotting.data_container import DataContainer
-from plotting.latent_projection import latent_projection_plot_DC
-from plotting.trace_plot import warped_trace_plot_DC, warped_variability_plot_DC, \
-	spectrogram_plot
-from preprocessing.preprocessing import get_spec
+from ava.models.window_vae import X_SHAPE
+from ava.data.data_container import DataContainer
+from ava.plotting.trace_plot import warped_trace_plot_DC, warped_variability_plot_DC, \
+		spectrogram_plot
+from ava.plotting.latent_projection import latent_projection_plot_DC
+from ava.preprocessing.preprocessing import get_spec
 
 
 if __name__ == '__main__':
@@ -45,7 +45,7 @@ if __name__ == '__main__':
 	template_dir = root + 'templates'
 	spec_dirs = [root+'h5s']
 	proj_dirs = [root+'song_window/proj/']
-	model_filename = root + 'song_window/checkpoint_201.tar'
+	model_filename = root + 'song_window/checkpoint_400.tar'
 	plots_dir = root + 'song_window/plots/'
 	feature_dirs = None
 	seg_dirs = None
@@ -58,7 +58,7 @@ if __name__ == '__main__':
 	params = {
 		'axes.labelsize': 8,
 		'axes.labelpad': 0.05,
-		'legend.fontsize': 10,
+		'legend.fontsize': 8,
 		'xtick.labelsize': 8,
 		'ytick.labelsize': 8,
 		'text.usetex': False,
@@ -98,10 +98,10 @@ if __name__ == '__main__':
 	ax3.set_yticks([2,6,10])
 	ax3.xaxis.set_ticklabels([])
 	# Traces.
-	warped_trace_plot_DC(finch_dc, p, ax=ax4, save_and_close=False)
+	warped_trace_plot_DC(finch_dc, p, ax=ax4, load_warp=True, save_and_close=False, load_traces=True)
 	ax4.xaxis.set_ticklabels([])
 	# Variability.
-	warped_variability_plot_DC(finch_dc, p, ax=ax5, save_and_close=False)
+	warped_variability_plot_DC(finch_dc, p, ax=ax5, load_warp=True, save_and_close=False, load_traces=True)
 	ax5.set_xticks([0,100,200,300,400,500,600,700])
 	ax5.xaxis.set_ticklabels(['0', '', '200', '', '400', '', '600', ''])
 

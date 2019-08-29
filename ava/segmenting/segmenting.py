@@ -1,6 +1,11 @@
 """
 Segment audio files and write segmenting decisions.
 
+TO DO:
+	- Toggle booleans
+	- Plot in kHz, with labels
+	- tune window size
+	- make the directory if it doesn't exist.
 
 """
 __author__ = "Jack Goffinet"
@@ -15,15 +20,38 @@ from scipy.io import wavfile, loadmat
 from scipy.signal import stft
 import warnings
 
+from ava.segmenting.utils import get_spec
 
 # Constants
 EPSILON = 1e-12
 
 
 
-def segment(audio_dirs, seg_dirs, p):
-	"""Segment audio files in audio_dirs and write decisions to seg_dirs."""
-	pass
+def segment(audio_dir, seg_dir, p):
+	"""
+	Segment audio files in audio_dir and write decisions to seg_dir.
+
+	Parameters
+	----------
+	...
+	"""
+	if not os.path.exists(seg_dir):
+		os.makedirs(seg_dir)
+	audio_fns, seg_fns = get_audio_seg_filenames(audio_dir, seg_dir, p)
+	for audio_fn, seg_fn in zip(audio_fns, seg_fns):
+		# Collect audio.
+		fs, audio = wavfile.read(audio_fn)
+		# Segment.
+		onsets, offsets, traces = p['algorithm'](audio, p)
+		print("in segment")
+		print(onsets[0], offsets[0])
+		combined = np.stack(onsets, offsets).T
+		print(combined[0])
+		# Write.
+		header = "Onsets/offsets for " + audio_fn
+		np.savetxt(seg_fn, combined, fmt='%.5f', header=header)
+		quit()
+
 
 
 def tune_segmenting_params(load_dirs, p, window_dur=None):
@@ -75,16 +103,17 @@ def tune_segmenting_params(load_dirs, p, window_dur=None):
 				p[key] = float(temp)
 
 		# Visualize segmenting decisions.
-		temp = 'not (q or r)'
+		temp = 'not (s or r)'
 		iteration = 0
-		while temp != 'q' and temp != 'r':
+		while temp != 's' and temp != 'r':
 
 			# Get a random audio file.
 			file_index = np.random.randint(len(filenames))
 			filename = filenames[file_index]
 
 			# Get spectrogram.
-			_, audio = wavfile.read(filename)
+			fs, audio = wavfile.read(filename)
+			assert fs == p['fs'], 'Found fs='+str(fs)+', expected '+str(p['fs'])
 			if len(audio) < 3*window_samples:
 				temp = len(audio) / p['fs']
 				warnings.warn( \
@@ -93,7 +122,7 @@ def tune_segmenting_params(load_dirs, p, window_dur=None):
 			start_index = np.random.randint(len(audio) - 3*window_samples)
 			stop_index = start_index + 3*window_samples
 			audio = audio[start_index:stop_index]
-			spec, f, dt = get_spec(audio, p)
+			spec, dt, f = get_spec(audio, p)
 
 			# Get onsets and offsets.
 			onsets, offsets, traces = \
@@ -130,49 +159,23 @@ def tune_segmenting_params(load_dirs, p, window_dur=None):
 			all_events = [j for j in onsets if j>i1 and j<i2] + \
 					[j for j in offsets if j>i1 and j<i2]
 			if len(all_events) > 0 or (iteration+1) % 5 == 0:
-				temp = input('Continue? [y] or [q]uit or [r]etune params: ')
+				temp = input('Continue? [y] or [s]top tuning or [r]etune params: ')
 			else:
 				iteration += 1
 				print("searching")
-				temp = 'not (q or r)'
-			if temp == 'q':
+				temp = 'not (s or r)'
+			if temp == 's':
 				return p
 
 
-def get_spec(audio, p):
-	"""
-	Get a spectrogram.
-
-	Parameters
-	----------
-	audio : numpy array of floats
-		Audio
-
-	p : dict
-		Spectrogram parameters.
-
-	Returns
-	-------
-	spec : numpy array of floats
-		Spectrogram of shape [freq_bins x time_bins]
-
-	dt : float
-		Time step associated with time bins.
-
-	f : Array of frequencies.
-	"""
-	fs, audio = wavfile.read(audio)
-	assert fs == p['fs']
-	f, t, spec = stft(audio, fs=fs, nperseg=p['nperseg'], \
-		noverlap=p['noverlap'])
-	i1 = np.searchsorted(f, p['min_freq'])
-	i2 = np.searchsorted(f, p['max_freq'])
-	f, spec = f[i1:i2], spec[i1:i2]
-	spec = np.log(np.abs(spec) + EPSILON)
-	spec -= p['spec_min_val']
-	spec /= p['spec_max_val'] - p['spec_min_val']
-	spec = np.clip(spec, 0.0, 1.0)
-	return spec, t[1]-t[0], f
+def get_audio_seg_filenames(audio_dir, segment_dir, p):
+	"""Return lists of sorted filenames."""
+	temp_filenames = [i for i in sorted(os.listdir(audio_dir)) if \
+			is_audio_file(i)]
+	audio_filenames = [os.path.join(audio_dir, i) for i in temp_filenames]
+	temp_filenames = [i[:-4] + p['seg_extension'] for i in temp_filenames]
+	seg_filenames = [os.path.join(segment_dir, i) for i in temp_filenames]
+	return audio_filenames, seg_filenames
 
 
 def is_audio_file(fn):
