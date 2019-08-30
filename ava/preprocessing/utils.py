@@ -10,6 +10,8 @@ import numpy as np
 from scipy.signal import stft
 from scipy.interpolate import interp2d
 
+EPSILON = 1e-12
+
 
 
 def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None, target_times=None, \

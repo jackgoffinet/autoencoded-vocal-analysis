@@ -5,13 +5,13 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
 	name="AVA: Autoencoded Vocal Analysis",
-	version="0.0.1",
+	version="0.1.0",
 	author="Jack Goffinet",
 	author_email="jack.goffinet@duke.edu",
 	description="Generative modeling of animal vocalizations",
 	long_description=long_description,
 	long_description_content_type="text/markdown",
-	url="https://github.com/jackgoffinet/syllable_modeling",
+	url="https://github.com/jackgoffinet/autoencoded-vocal-analysis",
 	packages=setuptools.find_packages(),
 	classifiers=[
 		"Programming Language :: Python :: 3",

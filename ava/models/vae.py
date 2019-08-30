@@ -393,8 +393,8 @@ class VAE(nn.Module):
 		"""
 		print("="*40)
 		print("Training: epochs", self.epoch, "to", self.epoch+epochs-1)
-		print("Test set:", len(loaders['test'].dataset))
 		print("Training set:", len(loaders['train'].dataset))
+		print("Test set:", len(loaders['test'].dataset))
 		print("="*40)
 		# For some number of epochs...
 		for epoch in range(self.epoch, self.epoch+epochs):
@@ -402,15 +402,15 @@ class VAE(nn.Module):
 			loss = self.train_epoch(loaders['train'])
 			self.loss['train'][epoch] = loss
 			# Run through the test data and record a loss.
-			if epoch % test_freq == 0:
+			if (test_freq is not None) and (epoch % test_freq == 0):
 				loss = self.test_epoch(loaders['test'])
 				self.loss['test'][epoch] = loss
 			# Save the model.
-			if epoch % save_freq == 0:
+			if (save_freq is not None) and (epoch % save_freq == 0):
 				filename = "checkpoint_"+str(epoch).zfill(3)+'.tar'
 				self.save_state(filename)
 			# Visualize reconstructions.
-			if epoch % vis_freq == 0:
+			if (vis_freq is not None) and (epoch % vis_freq == 0):
 				self.visualize(loaders['test'])
 
 
@@ -485,7 +485,8 @@ class VAE(nn.Module):
 		specs = specs.detach().cpu().numpy()
 		all_specs = np.stack([specs, rec_specs])
 		# Plot.
-		grid_plot(all_specs, os.path.join(self.save_dir, save_filename))
+		save_filename = os.path.join(self.save_dir, save_filename)
+		grid_plot(all_specs, gap=(3,6), filename=save_filename)
 		return specs, rec_specs
 
 

@@ -5,7 +5,6 @@ TO DO:
 	- Toggle booleans
 	- Plot in kHz, with labels
 	- tune window size
-	- make the directory if it doesn't exist.
 
 """
 __author__ = "Jack Goffinet"
@@ -27,7 +26,7 @@ EPSILON = 1e-12
 
 
 
-def segment(audio_dir, seg_dir, p):
+def segment(audio_dir, seg_dir, p, verbose=True):
 	"""
 	Segment audio files in audio_dir and write decisions to seg_dir.
 
@@ -35,6 +34,8 @@ def segment(audio_dir, seg_dir, p):
 	----------
 	...
 	"""
+	if verbose:
+		print("\nSegmenting audio in", audio_dir+"\n-------------------")
 	if not os.path.exists(seg_dir):
 		os.makedirs(seg_dir)
 	audio_fns, seg_fns = get_audio_seg_filenames(audio_dir, seg_dir, p)
@@ -42,19 +43,14 @@ def segment(audio_dir, seg_dir, p):
 		# Collect audio.
 		fs, audio = wavfile.read(audio_fn)
 		# Segment.
-		onsets, offsets, traces = p['algorithm'](audio, p)
-		print("in segment")
-		print(onsets[0], offsets[0])
-		combined = np.stack(onsets, offsets).T
-		print(combined[0])
+		onsets, offsets = p['algorithm'](audio, p)
+		combined = np.stack([onsets, offsets]).T
 		# Write.
 		header = "Onsets/offsets for " + audio_fn
 		np.savetxt(seg_fn, combined, fmt='%.5f', header=header)
-		quit()
 
 
-
-def tune_segmenting_params(load_dirs, p, window_dur=None):
+def tune_segmenting_params(load_dirs, p):
 	"""
 	Tune segementing parameters by visualizing segmenting decisions.
 
@@ -66,15 +62,12 @@ def tune_segmenting_params(load_dirs, p, window_dur=None):
 	p : dict
 		Segmenting parameters.
 
-	window_dur : float or None, optional
-		The length of audio plotted. If None, this is set to 2*p['max_dur'].
-		Defaults to None.
-
 	Returns
 	-------
 	p : dict
 		Adjusted segmenting parameters
 	"""
+	print("Tune segmenting parameters\n---------------------------")
 	# Collect filenames.
 	filenames = []
 	for load_dir in load_dirs:
@@ -84,7 +77,9 @@ def tune_segmenting_params(load_dirs, p, window_dur=None):
 		warnings.warn("Found no audio files in directories: "+str(load_dirs))
 		return
 	# Set the amount of audio to display.
-	if window_dur is None:
+	if 'window_dur' in p:
+		window_dur = p['window_dur']
+	else:
 		window_dur = 2.0 * p['max_dur']
 	window_samples = int(window_dur * p['fs'])
 
@@ -127,6 +122,8 @@ def tune_segmenting_params(load_dirs, p, window_dur=None):
 			# Get onsets and offsets.
 			onsets, offsets, traces = \
 					p['algorithm'](audio, p, return_traces=True)
+			onsets = [onset/dt for onset in onsets]
+			offsets = [offset/dt for offset in offsets]
 
 			# Plot.
 			i1 = int(window_dur / dt)

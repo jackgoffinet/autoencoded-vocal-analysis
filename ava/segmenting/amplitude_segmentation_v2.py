@@ -23,11 +23,11 @@ def get_onsets_offsets(audio, p, return_traces=False):
 
 	Parameters
 	----------
-	spec :
-
-	dt :
+	audio :
+		...
 
 	p :
+		...
 
 	return_traces : bool, optional
 
@@ -45,7 +45,7 @@ def get_onsets_offsets(audio, p, return_traces=False):
 	"""
 	spec, dt, _ = get_spec(audio, p)
 	min_syll_len = int(np.floor(p['min_dur'] / dt))
-	max_syll_len = min(p['num_time_bins'], int(np.ceil(p['max_dur'] / dt)))
+	max_syll_len = int(np.ceil(p['max_dur'] / dt))
 	th_1, th_2, th_3 = p['th_1'], p['th_2'], p['th_3'] # treshholds
 	smoothing_time = p['smoothing_timescale'] / dt
 	onsets, offsets = [], []
@@ -58,7 +58,7 @@ def get_onsets_offsets(audio, p, return_traces=False):
 	# spec[spec<0.0] = 0.0
 	# spec /= mad + EPSILON
 
-	# Automated thresholding.
+	# Automated scaling.
 	quantile = np.quantile(spec, 0.05)
 	spec -= quantile
 	spec[spec<0.0] = 0.0
@@ -122,8 +122,8 @@ def get_onsets_offsets(audio, p, return_traces=False):
 	for i in range(len(offsets)):
 		t1, t2 = onsets[i], offsets[i]
 		if t2 - t1 + 1 <= max_syll_len and t2 - t1 + 1 >= min_syll_len:
-			new_onsets.append(t1)
-			new_offsets.append(t2)
+			new_onsets.append(t1 * dt)
+			new_offsets.append(t2 * dt)
 		elif t2 - t1 + 1 > max_syll_len:
 			too_long += 1
 		else:

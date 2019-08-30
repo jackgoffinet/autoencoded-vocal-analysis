@@ -22,18 +22,28 @@ def indexed_grid_plot(dc, indices, ax=None, save_and_close=True, \
 	result = []
 	for row in indices:
 		result.append([specs[j] for j in row])
-	grid_plot(np.array(result), os.path.join(dc.plots_dir, filename), ax=ax, \
-		save_and_close=save_and_close)
+	filename = os.path.join(dc.plots_dir, filename)
+	grid_plot(np.array(result), ax=ax, save_and_close=save_and_close, \
+			filename=filename)
 
 
-def grid_plot(specs, filename, gap=3, ax=None, save_and_close=True):
+def grid_plot(specs, gap=3, ax=None, save_and_close=True, filename='temp.pdf'):
 	"""
 	Parameters
 	----------
 	specs : numpy.ndarray
 		...
 
-	filename : str
+	gap : int or tuple of two ints, optional
+		The vertical and horizontal gap between images, in pixels.
+
+	ax : matplotlib.pyplot.axis, optional
+		Axis to plot figure. Defaults to matplotlib.pyplot.gca().
+
+	save_and_close : bool, optional
+		Whether to save and close after plotting. Defaults to True.
+
+	filename : str, optional
 		Save the image here.
 	"""
 	if type(gap) == type(4):

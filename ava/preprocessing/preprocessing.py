@@ -1,6 +1,8 @@
 """
 Compute and process syllable spectrograms.
 
+TO DO:
+	- support sliding/warped window for tune_preprocessing_params
 """
 __author__ = "Jack Goffinet"
 __date__ = "December 2018 - July 2019"
@@ -24,7 +26,7 @@ EPSILON = 1e-12
 
 
 
-def process_sylls(audio_dir, segment_dir, save_dir, p):
+def process_sylls(audio_dir, segment_dir, save_dir, p, verbose=True):
 	"""
 	Extract syllables from <audio_dir> and save to <save_dir>.
 
@@ -45,6 +47,8 @@ def process_sylls(audio_dir, segment_dir, save_dir, p):
 	-----
 
 	"""
+	if verbose:
+		print("Processing audio files in", audio_dir)
 	if not os.path.exists(save_dir):
 		os.makedirs(save_dir)
 	audio_filenames, seg_filenames = \
@@ -56,7 +60,6 @@ def process_sylls(audio_dir, segment_dir, save_dir, p):
 		'offsets':[],
 		'audio_filenames':[],
 	}
-	print("Processing audio files in", audio_dir)
 	sylls_per_file = p['sylls_per_file']
 
 	# For each pair of files...
@@ -162,6 +165,7 @@ def get_audio(filename, p, start_index=None, stop_index=None):
 
 def tune_preprocessing_params(audio_dirs, seg_dirs, p):
 	"""Flip through spectrograms and tune preprocessing parameters."""
+	print("Tune preprocessing parameters:")
 	# Collect all the relevant filenames.
 	audio_filenames, seg_filenames = [], []
 	for audio_dir, seg_dir in zip(audio_dirs, seg_dirs):
@@ -238,9 +242,10 @@ def get_audio_seg_filenames(audio_dir, segment_dir, p):
 
 def read_onsets_offsets_from_file(txt_filename, p):
 	"""Read a text file to collect onsets and offsets."""
-	delimiter, skiprows, usecols = p['delimiter'], p['skiprows'], p['usecols']
-	segs = np.loadtxt(txt_filename, delimiter=delimiter, skiprows=skiprows, \
-		usecols=usecols).reshape(-1,2)
+	# delimiter, skiprows, usecols = p['delimiter'], p['skiprows'], p['usecols']
+	# segs = np.loadtxt(txt_filename, delimiter=delimiter, skiprows=skiprows, \
+	# 	usecols=usecols).reshape(-1,2)
+	segs = np.loadtxt(txt_filename).reshape(-1,2)
 	return segs[:,0], segs[:,1]
 
 

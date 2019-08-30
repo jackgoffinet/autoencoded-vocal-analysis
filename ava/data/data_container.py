@@ -23,10 +23,14 @@ from scipy.io import wavfile
 from sklearn.decomposition import PCA
 import torch
 import umap
+import warnings
 
 from ava.models.vae import VAE
 from ava.models.vae_dataset import get_syllable_partition, \
 	get_syllable_data_loaders, get_hdf5s_from_dir
+
+# https://github.com/lmcinnes/umap/issues/252
+warnings.filterwarnings("ignore", message="NumbaPerformanceWarning")
 
 
 AUDIO_FIELDS = ['audio']
@@ -108,18 +112,6 @@ PRETTY_NAMES = {
 PRETTY_NAMES_NO_UNITS = {}
 for k in PRETTY_NAMES:
 	PRETTY_NAMES_NO_UNITS[k] = ' '.join(PRETTY_NAMES[k].split('(')[0].split(' '))
-MUPET_PARAMS = {
-	'kwargs': {},
-	'extension': '.csv',
-}
-DEEPSQUEAK_PARAMS = {
-	'kwargs': {},
-	'extension': '.csv',
-}
-SAP_PARAMS = {
-	'kwargs': {},
-	'extension': '.csv',
-}
 
 
 
@@ -626,16 +618,6 @@ class DataContainer():
 				raise NotImplementedError
 			assert temp is not None, dir_name + " must be specified before " + \
 				field + " is made!"
-
-
-	def clean_projection_dir(self):
-		"""Remove all the latent projections."""
-		raise NotImplementedError
-
-
-	def clean_plots_dir(self):
-		"""Remove all the plots."""
-		raise NotImplementedError
 
 
 

@@ -4,7 +4,6 @@ Plot a syllable projection with spectrograms appearing as tooltips.
 
 TO DO:
 - Stop reading and writing the embedding.
-- Draw a random subset for images.
 """
 __author__ = "Jack Goffinet"
 __date__ = "March 2019 - July 2019"
@@ -68,21 +67,28 @@ def tooltip_plot(embedding, images, output_dir='temp', num_imgs=10000, title="",
 	n : int, optional
 		Total number of scatterpoints to plot. Defaults to 30000.
 	"""
+	# Shuffle the embedding and images.
+	np.random.seed(42)
+	perm = np.random.permutation(len(embedding))
+	np.random.seed(None)
+	embedding = embedding[perm]
+	images = images[perm]
+
 	n = min(len(embedding), n)
 	num_imgs = min(len(images), num_imgs)
 	write_images(embedding, images, output_dir=output_dir, num_imgs=num_imgs, n=n)
 	output_file(os.path.join(output_dir, "main.html"))
 	source = ColumnDataSource(
 			data=dict(
-				x=np.load('embedding.npy')[:num_imgs,0],
-				y=np.load('embedding.npy')[:num_imgs,1],
+				x=embedding[:num_imgs,0],
+				y=embedding[:num_imgs,1],
 				imgs = ['./'+str(i)+'.jpg' for i in range(num_imgs)],
 			)
 		)
 	source2 = ColumnDataSource(
 			data=dict(
-				x=np.load('embedding.npy')[num_imgs:,0],
-				y=np.load('embedding.npy')[num_imgs:,1],
+				x=embedding[num_imgs:,0],
+				y=embedding[num_imgs:,1],
 			)
 		)
 	p = figure(plot_width=800, plot_height=600, title=title)
@@ -131,7 +137,6 @@ def write_images(embedding, images, output_dir='temp/', num_imgs=100, n=30000):
 		os.makedirs(output_dir)
 	X = embedding[:,0]
 	Y = embedding[:,1]
-	np.save('embedding.npy', embedding)
 	for i in range(num_imgs):
 		save_image(images[i], os.path.join(output_dir, str(i) + '.jpg'))
 	return embedding
