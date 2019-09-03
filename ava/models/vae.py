@@ -1,18 +1,19 @@
 """
-A Variational Autoencoder (VAE) for spectrogram data implemented in PyTorch.
+A Variational Autoencoder (VAE) for spectrogram data.
 
-References
-----------
-[1] Kingma, Diederik P., and Max Welling. "Auto-encoding variational bayes."
+VAE References
+--------------
+.. [1] Kingma, Diederik P., and Max Welling. "Auto-encoding variational bayes."
 	arXiv preprint arXiv:1312.6114 (2013).
 
-	https://arxiv.org/abs/1312.6114
+	`<https://arxiv.org/abs/1312.6114>`_
 
-[2] Rezende, Danilo Jimenez, Shakir Mohamed, and Daan Wierstra. "Stochastic
+
+.. [2] Rezende, Danilo Jimenez, Shakir Mohamed, and Daan Wierstra. "Stochastic
 	backpropagation and approximate inference in deep generative models." arXiv
 	preprint arXiv:1401.4082 (2014).
 
-	https://arxiv.org/abs/1401.4082
+	`<https://arxiv.org/abs/1401.4082>`_
 """
 __author__ = "Jack Goffinet"
 __date__ = "November 2018 - July 2019"
@@ -33,69 +34,78 @@ from ava.plotting.grid_plot import grid_plot
 
 
 X_SHAPE = (128,128)
+"""Processed spectrogram shape: ``[freq_bins, time_bins]``"""
 X_DIM = np.prod(X_SHAPE)
+"""Processed spectrogram dimension: ``freq_bins * time_bins``"""
 
 
 
 class VAE(nn.Module):
-	"""
-	Variational Auto-Encoder class for single-channel images.
+	"""Variational Autoencoder class for single-channel images.
+
+	Attributes
+	----------
+	save_dir : str, optional
+		Directory where the model is saved. Defaults to ``''``.
+	lr : float, optional
+		Model learning rate. Defaults to ``1e-3``.
+	z_dim : int, optional
+		Latent dimension. Defaults to ``32``.
+	model_precision : float, optional
+		Precision of the observation model. Defaults to ``10.0``.
+	device_name : {'cpu', 'cuda', 'auto'}, optional
+		Name of device to train the model on. When ``'auto'`` is passed,
+		``'cuda'`` is chosen if ``torch.cuda.is_available()``, otherwise
+		``'cpu'`` is chosen. Defaults to ``'auto'``.
 
 	Notes
 	-----
-	The prior p(z) is a unit normal distribution. The conditional distribution
-	p(x|z) is set as a spherical normal distribution to prevent overfitting.
-	The variational distribution, q(z|x) is a rank-1 multivariate normal
-	distribution.
+	The model is trained to maximize the standard ELBO objective:
 
-	The model is trained using the standard ELBO objective:
+	.. math:: \mathcal{L} = \mathbb{E}_{q(z|x)} log p(x,z) + \mathbb{H}[q(z|x)]
 
-	ELBO = E_{q(z|x)} log p(x,z) + H[q(z|x)]
+	where :math:`p(x,z) = p(z)p(x|z)` and :math:`\mathbb{H}` is differential
+	entropy. The prior :math:`p(z)` is a unit spherical normal distribution. The
+	conditional distribution :math:`p(x|z)` is set as a spherical normal
+	distribution to prevent overfitting. The variational distribution,
+	:math:`q(z|x)` is an approximately rank-1 multivariate normal distribution.
+	Here, :math:`q(z|x)` and :math:`p(x|z)` are parameterized by neural
+	networks. Gradients are passed through stochastic layers via the
+	reparameterization trick, implemented by the PyTorch `rsample` method.
 
-	where p(x,z) = p(z)p(x|z) and H is differential entropy. Here, q(z|x) and
-	p(x|z) are parameterized by neural networks. Gradients are passed through
-	stochastic layers via the reparameterization trick, implemented by the
-	PyTorch rsample method.
-
-	The dimensions of the network are hard-coded for use with 128x128
-	spectrograms. While a desired latent dimension can be passed to __init__,
-	the dimensions of the network limit the practical range of values roughly 8
-	to 64 dimensions. Fiddling with the image dimensions will require updating
-	the parameters of the layers defined in VAE.build_network.
-
-	TO DO: numerical issues and learning rates
+	The dimensions of the network are hard-coded for use with 128 x 128
+	spectrograms. Although a desired latent dimension can be passed to
+	`__init__`, the dimensions of the network limit the practical range of
+	values roughly 8 to 64 dimensions. Fiddling with the image dimensions will
+	require updating the parameters of the layers defined in `_build_network`.
 	"""
 
 	def __init__(self, save_dir='', lr=1e-3, z_dim=32, model_precision=10.0,
 		device_name="auto"):
-		"""
-		Construct the VAE.
+		"""Construct a VAE.
 
 		Parameters
 		----------
 		save_dir : str, optional
 			Directory where the model is saved. Defaults to the current working
 			directory.
-
 		lr : float, optional
 			Learning rate of the ADAM optimizer. Defaults to 1e-3.
-
 		z_dim : int, optional
 			Dimension of the latent space. Defaults to 32.
-
 		model_precision : float, optional
 			Precision of the noise model, p(x|z) = N(mu(z), \Lambda) where
 			\Lambda = model_precision * I. Defaults to 10.0.
-
 		device_name: str, optional
-			Device to train the model on. Valid options are ["cpu", "cuda",
+			Name of device to train the model on. Valid options are ["cpu", "cuda",
 			"auto"]. "auto" will choose "cuda" if it is available. Defaults to
 			"auto".
 
-		Notes
-		-----
-		The model is built before it's parameters can be loaded from a file.
-		This means self.z_dim must match z_dim of the model being loaded.
+		Note
+		----
+		- The model is built before it's parameters can be loaded from a file.
+			This means `self.z_dim` must match `z_dim` of the model being
+			loaded.
 		"""
 		super(VAE, self).__init__()
 		self.save_dir = save_dir
@@ -108,14 +118,14 @@ class VAE(nn.Module):
 		self.device = torch.device(device_name)
 		if self.save_dir != '' and not os.path.exists(self.save_dir):
 			os.makedirs(self.save_dir)
-		self.build_network()
+		self._build_network()
 		self.optimizer = Adam(self.parameters(), lr=self.lr)
 		self.epoch = 0
 		self.loss = {'train':{}, 'test':{}}
 		self.to(self.device)
 
 
-	def build_network(self):
+	def _build_network(self):
 		"""Define all the network layers."""
 		# Encoder
 		self.conv1 = nn.Conv2d(1, 8, 3,1,padding=1)
@@ -161,7 +171,7 @@ class VAE(nn.Module):
 		self.bn14 = nn.BatchNorm2d(8)
 
 
-	def get_layers(self):
+	def _get_layers(self):
 		"""Return a dictionary mapping names to network layers."""
 		return {'fc1':self.fc1, 'fc2':self.fc2, 'fc31':self.fc31,
 				'fc32':self.fc32, 'fc33':self.fc33, 'fc41':self.fc41,
@@ -181,29 +191,31 @@ class VAE(nn.Module):
 
 	def encode(self, x):
 		"""
-		Compute q(z|x).
+		Compute :math:`q(z|x)`.
 
-		q(z|x) = N(mu, \Sigma), \Sigma = u @ u.T + d
-		where mu, u, and d are deterministic functions of x, @ denotes matrix
-		multiplication, and \Sigma denotes a covariance matrix.
+		.. math:: q(z|x) = \mathcal{N}(\mu, \Sigma)
+		.. math:: \Sigma = u u^{T} + \mathtt{diag}(d)
+
+		where :math:`\mu`, :math:`u`, and :math:`d` are deterministic functions
+		of `x` and :math:`\Sigma` denotes a covariance matrix.
 
 		Parameters
 		----------
 		x : torch.Tensor
-			The input images, with shape [batch_size, height=128, width=128]
+			The input images, with shape: ``[batch_size, height=128,
+			width=128]``
 
 		Returns
 		-------
 		mu : torch.Tensor
-			Posterior mean, with shape [batch_size, self.z_dim]
-
+			Posterior mean, with shape ``[batch_size, self.z_dim]``
 		u : torch.Tensor
-			Posterior covariance factor, as defined above.
-			Shape: [batch_size, self.z_dim]
-
+			Posterior covariance factor, as defined above. Shape:
+			``[batch_size, self.z_dim]``
 		d : torch.Tensor
-			Posterior diagonal factor, as defined above.
-			Shape: [batch_size, self.z_dim]
+			Posterior diagonal factor, as defined above. Shape:
+			``[batch_size, self.z_dim]``
+
 		"""
 		x = x.unsqueeze(1)
 		x = F.relu(self.conv1(self.bn1(x)))
@@ -227,22 +239,25 @@ class VAE(nn.Module):
 
 	def decode(self, z):
 		"""
-		Compute p(x|z).
+		Compute :math:`p(x|z)`.
 
-		p(x|z) = N(mu, \Lambda), \Lambda = <model_precision> * I
-		where mu is a deterministic function of z, \Lambda is a precision
-		matrix, and I is an identity matrix.
+		.. math:: p(x|z) = \mathcal{N}(\mu, \Lambda)
+
+		.. math:: \Lambda = \mathtt{model\_precision} \cdot I
+
+		where :math:`\mu` is a deterministic function of `z`, :math:`\Lambda` is
+		a precision matrix, and :math:`I` is the identity matrix.
 
 		Parameters
 		----------
 		z : torch.Tensor
-			Batch of latent samples with shape [batch_size, self.z_dim]
+			Batch of latent samples with shape ``[batch_size, self.z_dim]``
 
 		Returns
 		-------
 		x : torch.Tensor
-			Batch of means mu, described above. Shape: [batch_size,
-			X_DIM=128*128]
+			Batch of means mu, described above. Shape: ``[batch_size,
+			X_DIM=128*128]``
 		"""
 		z = F.relu(self.fc5(z))
 		z = F.relu(self.fc6(z))
@@ -261,36 +276,41 @@ class VAE(nn.Module):
 
 	def forward(self, x, return_latent_rec=False):
 		"""
-		Send x round trip and compute a loss.
+		Send `x` round trip and compute a loss.
 
-		In more detail: Given x, compute q(z|x) and sample: z ~ q(z|x). Then
-		compute p(x|z) to get the log-likelihood of x, the input, given z, the
-		sampled latent variable. We will also need the likelihood of z under the
-		model's prior, p(z), and the entropy of the latent conditional
-		distribution, H[q(z|x)]. ELBO can then be estimated:
+		In more detail: Given `x`, compute :math:`q(z|x)` and sample:
+		:math:`\hat{z} \sim q(z|x)` . Then compute :math:`\log p(x|\hat{z})`,
+		the log-likelihood of `x`, the input, given :math:`\hat{z}`, the latent
+		sample. We will also need the likelihood of :math:`\hat{z}` under the
+		model's prior: :math:`p(\hat{z})`, and the entropy of the latent
+		conditional distribution, :math:`\mathbb{H}[q(z|x)]` . ELBO can then be
+		estimated as:
 
-		ELBO = E_{q(z|x)}[log p(z) + log p(x|z)] + H[q(z|x)]
+		.. math:: 1/N \sum_{i=1}^N \mathbb{E}_{\hat{z} \sim q(z|x_i)}
+			\log p(x_i,\hat{z}) + \mathbb{H}[q(z|x_i)]
+
+		where :math:`N` denotes the number of samples from the data distribution
+		and the expectation is estimated by a single latent sample,
+		:math:`\hat{z}`.
 
 		Parameters
 		----------
 		x : torch.Tensor
 			A batch of samples from the data distribution (spectrograms).
-			Shape: [batch_size, height=128, width=128]
-
+			Shape: ``[batch_size, height=128, width=128]``
 		return_latent_rec : bool, optional
 			Whether to return latent means and reconstructions. Defaults to
-			False.
+			``False``.
 
 		Returns
 		-------
 		loss : torch.Tensor
-			Negative ELBO times the batch size. Shape: []
+			Negative ELBO times the batch size. Shape: ``[]``
+		latent : numpy.ndarray, if `return_latent_rec`
+			Latent means. Shape: ``[batch_size, self.z_dim]``
+		reconstructions : numpy.ndarray, if `return_latent_rec`
+			Reconstructed means. Shape: ``[batch_size, height=128, width=128]``
 
-		latent : numpy.ndarray, if return_latent_rec
-			Latent means. Shape: [batch_size, self.z_dim]
-
-		reconstructions : numpy.ndarray, if return_latent_rec
-			Reconstructed means. Shape: [batch_size, height=128, width=128]
 		"""
 		mu, u, d = self.encode(x)
 		latent_dist = LowRankMultivariateNormal(mu, u, d)
@@ -314,14 +334,15 @@ class VAE(nn.Module):
 
 		Parameters
 		----------
-		train_loader : torch.utils.data.DataLoader
-			Dataloader for training set spectrograms
+		train_loader : torch.utils.data.Dataloader
+			ava.models.vae_dataset.SyllableDataset Dataloader for training set
 
 		Returns
 		-------
 		elbo : float
-			A biased estimate of the Evidence Lower BOund, estimated using
-			samples from train_loader.
+			A biased estimate of the ELBO, estimated using samples from
+			`train_loader`.
+
 		"""
 		self.train()
 		train_loss = 0.0
@@ -343,16 +364,17 @@ class VAE(nn.Module):
 		"""
 		Test the model on a held-out validation set, return an ELBO estimate.
 
-		Paramters
-		---------
+		Parameters
+		----------
 		test_loader : torch.utils.data.Dataloader
-			Dataloader for test set spectrograms
+			ava.models.vae_dataset.SyllableDataset Dataloader for test set
 
 		Returns
 		-------
 		elbo : float
-			An unbiased estimate of the Evidence Lower BOund, estimated using
-			samples from test_loader.
+			An unbiased estimate of the ELBO, estimated using samples from
+			`test_loader`.
+
 		"""
 		self.eval()
 		test_loss = 0.0
@@ -374,22 +396,19 @@ class VAE(nn.Module):
 		Parameters
 		----------
 		loaders : dictionary
-			Dictionary mapping the keys 'test' and 'train' to respective
+			Dictionary mapping the keys ``'test'`` and ``'train'`` to respective
 			torch.utils.data.Dataloader objects.
-
 		epochs : int, optional
 			Number of (possibly additional) epochs to train the model for.
-			Defaults to 100.
-
+			Defaults to ``100``.
 		test_freq : int, optional
-			Testing is performed every <test_freq> epochs. Defaults to 2.
-
+			Testing is performed every `test_freq` epochs. Defaults to ``2``.
 		save_freq : int, optional
-			The model is saved every <save_freq> epochs. Defaults to 10.
-
+			The model is saved every `save_freq` epochs. Defaults to ``10``.
 		vis_freq : int, optional
-			Syllable reconstructions are plotted every <vist_freq> epochs.
-			Defaults to 1.
+			Syllable reconstructions are plotted every `vis_freq` epochs.
+			Defaults to ``1``.
+
 		"""
 		print("="*40)
 		print("Training: epochs", self.epoch, "to", self.epoch+epochs-1)
@@ -416,7 +435,7 @@ class VAE(nn.Module):
 
 	def save_state(self, filename):
 		"""Save all the model parameters to the given file."""
-		layers = self.get_layers()
+		layers = self._get_layers()
 		state = {}
 		for layer_name in layers:
 			state[layer_name] = layers[layer_name].state_dict()
@@ -432,13 +451,23 @@ class VAE(nn.Module):
 
 	def load_state(self, filename):
 		"""
-		Load all the model parameters from the given file.
+		Load all the model parameters from the given ``.tar`` file.
 
-		Note that self.lr, self.save_dir, and self.z_dim are not loaded.
+		The ``.tar`` file should have been written by `self.save_state`.
+
+		Parameters
+		----------
+		filename : str
+			File containing a model state.
+
+		Note
+		----
+		- `self.lr`, `self.save_dir`, and `self.z_dim` are not loaded.
+
 		"""
 		checkpoint = torch.load(filename)
 		assert checkpoint['z_dim'] == self.z_dim
-		layers = self.get_layers()
+		layers = self._get_layers()
 		for layer_name in layers:
 			layer = layers[layer_name]
 			layer.load_state_dict(checkpoint[layer_name])
@@ -458,19 +487,21 @@ class VAE(nn.Module):
 		----------
 		loader : torch.utils.data.Dataloader
 			Spectrogram Dataloader
-
 		num_specs : int, optional
-			Number of spectrogram pairs to plot. Defaults to 5.
-
-		gap : int, optional
-			Number of empty pixels between images. Defaults to 4.
-
+			Number of spectrogram pairs to plot. Defaults to ``5``.
+		gap : int or tuple of two ints, optional
+			The vertical and horizontal gap between images, in pixels. Defaults
+			to ``4``.
 		save_filename : str, optional
-			Where to save the plot, relative to self.save_dir. Defaults to
-			'temp.pdf'.
+			Where to save the plot, relative to `self.save_dir`. Defaults to
+			``'temp.pdf'``.
 
 		Returns
 		-------
+		specs : numpy.ndarray
+			Spectgorams from `loader`.
+		rec_specs : numpy.ndarray
+			Corresponding spectrogram reconstructions.
 
 		"""
 		# Collect random indices.
@@ -497,17 +528,18 @@ class VAE(nn.Module):
 		Parameters
 		----------
 		loader : torch.utils.data.Dataloader
-			SyllableDataset Dataloader.
+			ava.models.vae_dataset.SyllableDataset Dataloader.
 
 		Returns
 		-------
 		latent : numpy.ndarray
-			Latent means. Shape: [len(loader.dataset), self.z_dim]
+			Latent means. Shape: ``[len(loader.dataset), self.z_dim]``
 
 		Note
 		----
 		- Make sure your loader is not set to shuffle if you're going to match
 		  these with labels or other fields later.
+
 		"""
 		latent = np.zeros((len(loader.dataset), self.z_dim))
 		i = 0

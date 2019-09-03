@@ -2,12 +2,14 @@
 Remove noise from segmenting files.
 
 TO DO:
-	- refine_segments_post_vae
+	- implement refine_segments_post_vae
 """
 __author__ = "Jack Goffinet"
 __date__ = "August 2019"
 
 
+from itertools import repeat
+from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
 import numpy as np
@@ -21,36 +23,46 @@ from ava.segmenting.utils import get_spec, get_audio_seg_filenames, \
 		get_onsets_offsets_from_file
 
 # https://github.com/lmcinnes/umap/issues/252
-warnings.filterwarnings("ignore", message="NumbaPerformanceWarning")
+warnings.filterwarnings("ignore", message="parallel=True*")
+# warnings.filterwarnings("ignore", message="The keyword argument " + \
+# 		"'parallel=True' was specified but no transformation for parallel " + \
+# 		"execution was possible.")
+# Silence scipy.io.wavfile.read metadata warnings.
+warnings.filterwarnings("ignore", message="Chunk (non-data) not understood*")
 
 
 def refine_segments_pre_vae(seg_dirs, audio_dirs, out_seg_dirs, p, \
-	n_samples=None, num_imgs=2000, verbose=True):
+	n_samples=10000, num_imgs=1000, verbose=True):
 	"""
 	Manually remove noise by selecting regions of UMAP spectrogram projections.
 
 	Parameters
 	----------
-	seg_dirs :
-		...
+	seg_dirs : list of str
+		Directories containing segmenting information
+	audio_dirs : list of str
+		Directories containing audio files
+	out_seg_dirs : list of str
+		Directories to write updated segmenting information to
+	p : dict
+		Segmenting parameters: TO DO: ADD REFERENCE!
+	n_samples : int, optional
+		Number of spectrograms to feed to UMAP. Defaults to ``10000``.
+	num_imgs : int, optional
+		Number of images to embed in the tooltip plot. Defaults to ``1000``.
+	verbose : bool, optional
+		Defaults to ``True``.
 
-	out_seg_dirs :
-		....
-
-	p :
-		...
-
-	n_samples :
-		...
 	"""
 	if verbose:
 		print("\nCleaning segments\n-----------------")
-	specs, max_len, _ = get_specs(audio_dirs, seg_dirs, p, n_samples=n_samples)
+		print("Collecting spectrograms...")
+	specs, max_len, _ = _get_specs(audio_dirs, seg_dirs, p, n_samples=n_samples)
 	specs = np.stack(specs)
 	transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, \
 			metric='euclidean', random_state=42)
 	if verbose:
-		print("Running UMAP:")
+		print("Running UMAP...")
 	embed = transform.fit_transform(specs.reshape(len(specs), -1))
 	if verbose:
 		print("\tDone.")
@@ -60,7 +72,7 @@ def refine_segments_pre_vae(seg_dirs, audio_dirs, out_seg_dirs, p, \
 
 	# Keep drawing boxes around noise.
 	while True:
-		draw_plot(embed, colors)
+		_plot_helper(embed, colors)
 		if first_iteration:
 			if verbose:
 				print("Writing html plot:")
@@ -72,83 +84,72 @@ def refine_segments_pre_vae(seg_dirs, audio_dirs, out_seg_dirs, p, \
 		if input("Press [q] to quit drawing rectangles: ") == 'q':
 			break
 		print("Select a rectangle containing noise:")
-		x1 = get_input("x1: ")
-		x2 = get_input("x2: ")
-		y1 = get_input("y1: ")
-		y2 = get_input("y2: ")
+		x1 = _get_input("x1: ")
+		x2 = _get_input("x2: ")
+		y1 = _get_input("y1: ")
+		y2 = _get_input("y2: ")
 		bounds['x1'].append(x1)
 		bounds['x2'].append(x2)
 		bounds['y1'].append(y1)
 		bounds['y2'].append(y2)
 		# Update scatter colors.
-		colors = update_colors(colors, embed, bounds)
+		colors = _update_colors(colors, embed, bounds)
 
 	# Write files to out_seg_dirs.
-	for seg_dir, audio_dir, out_seg_dir in \
-				zip(seg_dirs, audio_dirs, out_seg_dirs):
-		if verbose:
-			print("Updating segments in:", seg_dir)
-		if not os.path.exists(out_seg_dir):
-			os.makedirs(out_seg_dir)
-		specs, _, all_fns = \
-				get_specs([audio_dir], [seg_dir], p, max_len=max_len)
-		specs = np.stack(specs)
-		embed = transform.transform(specs.reshape(len(specs), -1))
-		out_segs = []
-		prev_fn, prev_segs = None, None
-		for i in range(len(all_fns)):
-			if all_fns[i] != prev_fn:
-				if len(out_segs) > 0:
-					audio_fn = os.path.join(audio_dir, prev_fn)
-					out_seg_fn = os.path.join(out_seg_dir, prev_fn)
-					write_segs(out_segs, out_seg_fn, audio_fn)
-					out_segs = []
-				prev_fn = all_fns[i]
-				prev_segs = np.loadtxt(os.path.join(seg_dir, prev_fn))
-				index = 0 # within-file index
-			if not in_bounds(embed[i], bounds):
-				out_segs.append(prev_segs[index])
-			index += 1
-		if len(out_segs) > 0:
-			audio_fn = os.path.join(audio_dir, prev_fn)
-			out_seg_fn = os.path.join(out_seg_dir, prev_fn)
-			write_segs(out_segs, out_seg_fn, audio_fn)
+	gen = zip(seg_dirs, audio_dirs, out_seg_dirs, repeat(p), repeat(max_len), \
+			repeat(transform), repeat(bounds), repeat(verbose))
+	n_jobs = min(len(seg_dirs), os.cpu_count()-1)
+	Parallel(n_jobs=n_jobs)(delayed(_update_segs_helper)(*args) for args in gen)
 
 
-def refine_segments_post_vae(dc, out_seg_dirs, verbose=True):
+def refine_segments_post_vae(dc, seg_dirs, out_seg_dirs, verbose=True):
 	"""
 	Manually remove noise by selecting regions of UMAP latent mean projections.
 
+	TO DO: finish this!
+
 	Parameters
 	----------
-	dc :
-		...
-
+	dc : ava.data.data_container.DataContainer
+		DataContainer object
 	seg_dirs :
 		...
-
 	out_seg_dirs :
 		....
+	verbose : bool, optional
+		Defaults to ``True``.
 
-	p :
-		...
-
-	n_samples :
-		...
 	"""
 	latent = dc.request('latent_means')
 	# NOTE: TO DO
+	raise NotImplementedError
 
 
-def get_specs(audio_dirs, seg_dirs, p, n_samples=None, max_len=None):
+def _get_specs(audio_dirs, seg_dirs, p, n_samples=None, max_len=None):
 	"""
 	Make a bunch of spectrograms.
 
 	Parameters
 	----------
+	audio_dirs : list of str
+		Directories containing audio files
+	seg_dirs : list of str
+		Directories containing segmenting decisions
+	p : dict
+		Segementing parameters. TO DO: ADD REFERENCE!
+	n_samples : {int, None}, optional
+		...
+	max_len : {int, None}, optional
+		...
 
 	Returns
 	-------
+	specs : ..
+		...
+	max_len : ...
+		...
+	all_fns : ...
+		...
 
 	"""
 	# Get the filenames.
@@ -178,7 +179,7 @@ def get_specs(audio_dirs, seg_dirs, p, n_samples=None, max_len=None):
 	return specs, max_len, all_fns
 
 
-def draw_plot(embed, colors, title=""):
+def _plot_helper(embed, colors, title=""):
 	"""Helper function to plot a UMAP projection with grids."""
 	plt.scatter(embed[:,0], embed[:,1], c=colors, s=0.9, alpha=0.7)
 	delta = 1
@@ -205,27 +206,83 @@ def draw_plot(embed, colors, title=""):
 	plt.close('all')
 
 
-def write_segs(segs, out_fn, header_fn):
+def _update_segs_helper(seg_dir, audio_dir, out_seg_dir, p, max_len, transform,\
+	bounds, verbose):
+	"""
+	Write updated segments.
+
+	This is separate from `refine_segments` so it can be parallelized.
+
+	Parameters
+	----------
+	seg_dir : str
+		...
+	audio_dir : str
+		...
+	out_seg_dir : str
+		...
+	p : dict
+		...
+	max_len : int
+		...
+	transform : ...
+		...
+	bounds : ...
+		...
+	verbose : ...
+		,,,
+
+	"""
+	if verbose:
+		print("Updating segments in:", seg_dir)
+	if not os.path.exists(out_seg_dir):
+		os.makedirs(out_seg_dir)
+	specs, _, all_fns = \
+			_get_specs([audio_dir], [seg_dir], p, max_len=max_len)
+	specs = np.stack(specs)
+	embed = transform.transform(specs.reshape(len(specs), -1))
+	out_segs = []
+	prev_fn, prev_segs = None, None
+	for i in range(len(all_fns)):
+		if all_fns[i] != prev_fn:
+			if len(out_segs) > 0:
+				audio_fn = os.path.join(audio_dir, prev_fn)
+				out_seg_fn = os.path.join(out_seg_dir, prev_fn)
+				_write_segs(out_segs, out_seg_fn, audio_fn)
+				out_segs = []
+			prev_fn = all_fns[i]
+			prev_segs = np.loadtxt(os.path.join(seg_dir, prev_fn))
+			index = 0 # within-file index
+		if not _in_bounds(embed[i], bounds):
+			out_segs.append(prev_segs[index])
+		index += 1
+	if len(out_segs) > 0:
+		audio_fn = os.path.join(audio_dir, prev_fn)
+		out_seg_fn = os.path.join(out_seg_dir, prev_fn)
+		_write_segs(out_segs, out_seg_fn, audio_fn)
+
+
+
+def _write_segs(segs, out_fn, header_fn):
 	"""
 	Write onstes/offsets to a text file.
 
 	Parameters
 	----------
-	segs :
+	segs : list of
+		...
+	out_fn : str
+		...
+	header_fn : str
 		...
 
-	out_fn :
-		...
-
-	header_fn :
-		...
 	"""
 	segs = np.stack([np.array(seg) for seg in segs])
 	header = "Cleaned onsets/offsets for " + header_fn
 	np.savetxt(out_fn, segs, fmt='%.5f', header=header)
 
 
-def get_input(query_str):
+def _get_input(query_str):
 	"""Get float-valued input."""
 	while True:
 		try:
@@ -236,21 +293,22 @@ def get_input(query_str):
 			pass
 
 
-def update_colors(colors, embed, bounds):
+def _update_colors(colors, embed, bounds):
 	"""Color red if embed is in the bounds, blue otherwise."""
 	for i in range(len(colors)):
-		if colors[i] == 'b' and in_bounds(embed[i], bounds):
+		if colors[i] == 'b' and _in_bounds(embed[i], bounds):
 			colors[i] = 'r'
 	return colors
 
 
-def in_bounds(point, bounds):
+def _in_bounds(point, bounds):
 	"""Is the point in the given rectangular bounds?"""
 	for i in range(len(bounds['x1'])):
 		if point[0] > bounds['x1'] and point[0] < bounds['x2'] and \
 				point[1] > bounds['y1'] and point[1] < bounds['y2']:
 			return True
 	return False
+
 
 
 if __name__ == '__main__':

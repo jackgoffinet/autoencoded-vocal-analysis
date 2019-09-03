@@ -236,8 +236,10 @@ def triptych_correlation_plot_DC(dcs, all_fields, colors=None, ax=None, \
 	portion of unused latent feature variance explained by linear combinations
 	of traditional features.
 
-	Paramters
-	---------
+	Parameters
+	----------
+	dcs : ...
+		....
 
 	"""
 	if colors is None:

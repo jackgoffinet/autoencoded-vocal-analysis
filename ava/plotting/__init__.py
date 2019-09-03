@@ -1,5 +1,5 @@
 """
-ava/plotting
+AVA plotting module
 
 """
 # from .cluster_pca_plot import cluster_pca_plot_DC, cluster_pca_feature_plot_DC

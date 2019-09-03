@@ -16,7 +16,7 @@ import os
 from scipy.io import wavfile, loadmat
 import warnings
 
-from ava.preprocessing.utils import get_spec
+from ava.preprocessing.utils import get_spec, _mel, _inv_mel
 
 # Silence numpy.loadtxt when reading empty files.
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -28,23 +28,20 @@ EPSILON = 1e-12
 
 def process_sylls(audio_dir, segment_dir, save_dir, p, verbose=True):
 	"""
-	Extract syllables from <audio_dir> and save to <save_dir>.
+	Extract syllables from `audio_dir` and save to `save_dir`.
 
 	Parameters
 	----------
 	audio_dir : str
-
+		Directory containing audio files.
 	segment_dir : str
-
+		Directory containing segmenting decisions.
 	save_dir : str
-
-	p : str
-
-	Returns
-	-------
-
-	Notes
-	-----
+		Directory to save processed syllables in.
+	p : dict
+		Preprocessing parameters. TO DO: add reference.
+	verbose : bool, optional
+		Defaults to ``True``.
 
 	"""
 	if verbose:
@@ -104,33 +101,34 @@ def process_sylls(audio_dir, segment_dir, save_dir, p, verbose=True):
 
 def get_syll_specs(onsets, offsets, audio_filename, p):
 	"""
-	Return the spectrograms corresponding to <onsets> and <offsets>.
+	Return the spectrograms corresponding to `onsets` and `offsets`.
 
 	Parameters
 	----------
-	onsets :
-
-	offsets :
-
-	audio_filename :
-
-	p : dictionary
+	onsets : list of floats
+		Syllable onsets.
+	offsets : list of floats
+		Syllable offsets.
+	audio_filename : str
+		Audio filename.
+	p : dict
 		A dictionary mapping preprocessing parameters to their values.
 		NOTE: ADD REFERENCE HERE
 
 	Returns
 	-------
-	specs :
-
-	valid_syllables : numpy.ndarray
+	specs : list of {numpy.ndarray, None}
+		Spectrograms
+	valid_syllables : list of int
+		Indices of `specs` containing valid syllables.
 
 	"""
-	fs, audio = get_audio(audio_filename, p)
+	fs, audio = wavfile.read(audio_filename)
 	assert p['nperseg'] % 2 == 0 and p['nperseg'] > 2
 	if p['mel']:
 		target_freqs = np.linspace( \
-				mel(p['min_freq']), mel(p['max_freq']), p['num_freq_bins'])
-		target_freqs = inv_mel(target_freqs)
+				_mel(p['min_freq']), _mel(p['max_freq']), p['num_freq_bins'])
+		target_freqs = _inv_mel(target_freqs)
 	else:
 		target_freqs = np.linspace( \
 				p['min_freq'], p['max_freq'], p['num_freq_bins'])
@@ -144,28 +142,52 @@ def get_syll_specs(onsets, offsets, audio_filename, p):
 	return specs, valid_syllables
 
 
-def get_audio(filename, p, start_index=None, stop_index=None):
-	"""Get a waveform and samplerate given a filename."""
-	# Make sure the samplerate is correct and the audio is mono.
-	if filename[-4:] == '.wav':
-		fs, audio = wavfile.read(filename)
-	elif filename[-4:] == '.mat':
-		d = loadmat(filename)
-		audio = d['spike2Chunk'].reshape(-1)
-		fs = d['fs'][0,0]
-	else:
-		raise NotImplementedError
-	if len(audio.shape) > 1:
-		audio = audio[0,:]
-	if start_index is not None and stop_index is not None:
-		start_index = max(start_index, 0)
-		audio = audio[start_index:stop_index]
-	return fs, audio
+# def get_audio(filename, p, start_index=None, stop_index=None):
+# 	"""
+# 	Get a waveform and samplerate given a filename.
+#
+# 	Note
+# 	----
+# 		- Remove this
+# 	"""
+# 	# Make sure the samplerate is correct and the audio is mono.
+# 	if filename[-4:] == '.wav':
+# 		fs, audio = wavfile.read(filename)
+# 	elif filename[-4:] == '.mat':
+# 		d = loadmat(filename)
+# 		audio = d['spike2Chunk'].reshape(-1)
+# 		fs = d['fs'][0,0]
+# 	else:
+# 		raise NotImplementedError
+# 	if len(audio.shape) > 1:
+# 		audio = audio[0,:]
+# 	if start_index is not None and stop_index is not None:
+# 		start_index = max(start_index, 0)
+# 		audio = audio[start_index:stop_index]
+# 	return fs, audio
 
 
-def tune_preprocessing_params(audio_dirs, seg_dirs, p):
-	"""Flip through spectrograms and tune preprocessing parameters."""
+def tune_syll_preprocessing_params(audio_dirs, seg_dirs, p):
+	"""
+	Flip through spectrograms and tune preprocessing parameters.
+
+	Parameters
+	----------
+	audio_dirs : list of str
+		Audio directories
+	seg_dirs : list of str
+		Segment directories
+	p : dict
+		Preprocessing parameters ADD REFERENCE
+
+	Returns
+	-------
+	p : dict
+		Adjusted preprocessing parameters.
+
+	"""
 	print("Tune preprocessing parameters:")
+
 	# Collect all the relevant filenames.
 	audio_filenames, seg_filenames = [], []
 	for audio_dir, seg_dir in zip(audio_dirs, seg_dirs):
@@ -174,52 +196,43 @@ def tune_preprocessing_params(audio_dirs, seg_dirs, p):
 		seg_filenames += temp_seg
 	audio_filenames = np.array(audio_filenames)
 	seg_filenames = np.array(seg_filenames)
+
 	# Main loop: keep tuning parameters ...
 	while True:
-		for key in p['real_preprocess_params']:
-			temp = 'not (number or empty)'
-			while not is_number_or_empty(temp):
-				temp = input('Set value for '+key+': ['+str(p[key])+ '] ')
-			if temp != '':
-				p[key] = float(temp)
-		for key in p['int_preprocess_params']:
-			temp = 'not (number or empty)'
-			while not is_number_or_empty(temp):
-				temp = input('Set value for '+key+': ['+str(p[key])+ '] ')
-			if temp != '':
-				p[key] = int(temp)
-		for key in p['binary_preprocess_params']:
-			temp = 'not (t or f)'
-			while temp not in ['t', 'T', 'f', 'F', '']:
-				current_value = 'T' if p[key] else 'F'
-				temp = input('Set value for '+key+': ['+current_value+'] ')
-			if temp != '':
-				p[key] = temp in ['t', 'T']
+
+		# Tune parameters.
+		p = _tune_input_helper(p)
+
 		# Keep plotting example spectrograms.
 		temp = 'not (s or r)'
 		while temp != 's' and temp != 'r':
+
 			# Grab a random file.
 			file_index = np.random.randint(len(audio_filenames))
 			audio_filename = audio_filenames[file_index]
 			seg_filename = seg_filenames[file_index]
+
 			# Grab a random syllable from within the file.
 			onsets, offsets = read_onsets_offsets_from_file(seg_filename, p)
 			if len(onsets) == 0:
 				continue
 			syll_index = np.random.randint(len(onsets))
 			onsets, offsets = [onsets[syll_index]], [offsets[syll_index]]
-			# If this is a sliding window, get a random onset & offset.
-			if p['sliding_window']:
-				onsets = [onsets[0] + (offsets[0] - onsets[0]) * \
-						np.random.rand()]
-				offsets = [onsets[0] + p['window_length']]
+
+			# # If this is a sliding window, get a random onset & offset.
+			# if p['sliding_window']:
+			# 	onsets = [onsets[0] + (offsets[0] - onsets[0]) * \
+			# 			np.random.rand()]
+			# 	offsets = [onsets[0] + p['window_length']]
+
 			# Get the preprocessed spectrogram.
 			specs, good_sylls = get_syll_specs(onsets, offsets, \
 					audio_filename, p)
 			specs = [specs[i] for i in good_sylls]
 			if len(specs) == 0:
 				continue
-			spec = specs[0]
+			spec = specs[np.random.randint(len(specs))]
+
 			# Plot.
 			plt.imshow(spec, aspect='equal', origin='lower', vmin=0, vmax=1)
 			plt.axis('off')
@@ -228,6 +241,93 @@ def tune_preprocessing_params(audio_dirs, seg_dirs, p):
 			temp = input('Continue? [y] or [s]top tuning or [r]etune params: ')
 			if temp == 's':
 				return p
+
+
+def tune_window_preprocessing_params(audio_dirs, p):
+	"""
+	Flip through spectrograms and tune preprocessing parameters.
+
+	Parameters
+	----------
+	audio_dirs : list of str
+		Audio directories
+	p : dict
+		Preprocessing parameters ADD REFERENCE
+
+	Returns
+	-------
+	p : dict
+		Adjusted preprocessing parameters.
+
+	"""
+	print("Tune preprocessing parameters:")
+
+	# Collect all the relevant filenames.
+	audio_filenames = []
+	for audio_dir in audio_dirs:
+		audio_filenames += get_audio_filenames(audio_dir)
+	audio_filenames = np.array(audio_filenames)
+
+	# Main loop: keep tuning parameters ...
+	while True:
+
+		# Tune parameters.
+		p = _tune_input_helper(p)
+
+		# Keep plotting example spectrograms.
+		temp = 'not (s or r)'
+		while temp != 's' and temp != 'r':
+
+			# Grab a random file.
+			file_index = np.random.randint(len(audio_filenames))
+			audio_filename = audio_filenames[file_index]
+			fs, audio = wavfile.read(audio_filename)
+			assert fs == p['fs'], "Found fs="+str(fs)+", expected "+str(p['fs'])
+
+			# Get a random onset & offset.
+			duration = len(audio) / fs
+			assert duration > p['window_length']
+			onset = np.random.rand() * (duration - p['window_length'])
+			offset = onset + p['window_length']
+			target_times = np.linspace(onset, offset, p['num_time_bins'])
+
+			# Get the preprocessed spectrogram.
+			spec, flag = p['get_spec'](0.0, duration, audio, p, fs=p['fs'], \
+				max_dur=None, target_times=target_times)
+			assert flag
+
+			# Plot.
+			plt.imshow(spec, aspect='equal', origin='lower', vmin=0, vmax=1)
+			plt.axis('off')
+			plt.savefig('temp.pdf')
+			plt.close('all')
+			temp = input('Continue? [y] or [s]top tuning or [r]etune params: ')
+			if temp == 's':
+				return p
+
+
+def _tune_input_helper(p):
+	"""Get parameter adjustments from the user."""
+	for key in p['real_preprocess_params']:
+		temp = 'not (number or empty)'
+		while not _is_number_or_empty(temp):
+			temp = input('Set value for '+key+': ['+str(p[key])+ '] ')
+		if temp != '':
+			p[key] = float(temp)
+	for key in p['int_preprocess_params']:
+		temp = 'not (number or empty)'
+		while not _is_number_or_empty(temp):
+			temp = input('Set value for '+key+': ['+str(p[key])+ '] ')
+		if temp != '':
+			p[key] = int(temp)
+	for key in p['binary_preprocess_params']:
+		temp = 'not (t or f)'
+		while temp not in ['t', 'T', 'f', 'F', '']:
+			current_value = 'T' if p[key] else 'F'
+			temp = input('Set value for '+key+': ['+current_value+'] ')
+		if temp != '':
+			p[key] = temp in ['t', 'T']
+	return p
 
 
 def get_audio_seg_filenames(audio_dir, segment_dir, p):
@@ -240,8 +340,23 @@ def get_audio_seg_filenames(audio_dir, segment_dir, p):
 	return audio_filenames, seg_filenames
 
 
+def get_audio_filenames(audio_dir):
+	"""Return a list of sorted audio files."""
+	fns = [os.path.join(audio_dir, i) for i in sorted(os.listdir(audio_dir)) \
+			if is_audio_file(i)]
+	return fns
+
+
 def read_onsets_offsets_from_file(txt_filename, p):
-	"""Read a text file to collect onsets and offsets."""
+	"""
+	Read a text file to collect onsets and offsets.
+
+	Note
+	----
+	The text file must have two coulumns separated by whitespace and ``#``
+	prepended to header and footer lines.
+
+	"""
 	# delimiter, skiprows, usecols = p['delimiter'], p['skiprows'], p['usecols']
 	# segs = np.loadtxt(txt_filename, delimiter=delimiter, skiprows=skiprows, \
 	# 	usecols=usecols).reshape(-1,2)
@@ -249,17 +364,7 @@ def read_onsets_offsets_from_file(txt_filename, p):
 	return segs[:,0], segs[:,1]
 
 
-def mel(a):
-	"""https://en.wikipedia.org/wiki/Mel-frequency_cepstrum"""
-	return 1127 * np.log(1 + a / 700)
-
-
-def inv_mel(a):
-	"""https://en.wikipedia.org/wiki/Mel-frequency_cepstrum"""
-	return 700 * (np.exp(a / 1127) - 1)
-
-
-def is_number_or_empty(s):
+def _is_number_or_empty(s):
 	if s == '':
 		return True
 	try:
@@ -269,22 +374,13 @@ def is_number_or_empty(s):
 		return False
 
 
-def is_number(s):
+def _is_number(s):
 	return type(s) == type(4) or type(s) == type(4.0)
 
 
 def is_audio_file(fn):
 	return len(fn) >= 4 and fn[-4:] in ['.wav', '.mat']
 
-
-def get_wav_len(filename):
-	if filename[-4:] == '.wav':
-		_, audio = wavfile.read(filename)
-	elif filename[-4:] == '.mat':
-		audio = loadmat(filename)['spike2Chunk'].reshape(-1)
-	else:
-		raise NotImplementedError
-	return len(audio)
 
 
 

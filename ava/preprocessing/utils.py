@@ -19,25 +19,36 @@ def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None, target_times=None, \
 	"""
 	Norm, scale, threshold, strech, and resize a Short Time Fourier Transform.
 
-	NOTE: <fill_value> necessary?
+	Note
+	----
+	- `fill_value` necessary?
+	- Look at all references and see what can be simplified.
+	- within_syll_normalize could probably go
 
 	Parameters
 	----------
 	t1 : float or None
 		...
-
 	t2 : float or None
 		....
-
 	audio : ...
-
+		...
 	p : ...
-
+		... TO DO: Add reference!
 	fs : ...
-
+		...
 	target_freqs : ....
-
+		...
 	fill_value : ....
+		...
+
+	Returns
+	-------
+	spec : numpy.ndarray
+		Spectrogram
+	flag : bool
+		...
+
 	"""
 	if max_dur is None:
 		max_dur = p['max_dur']
@@ -67,12 +78,12 @@ def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None, target_times=None, \
 	# Define target frequencies.
 	if target_freqs is None:
 		if p['mel']:
-			target_freqs = np.linspace(mel(p['min_freq']), mel(p['max_freq']), \
-				p['num_freq_bins'], endpoint=True)
-			target_freqs = inv_mel(target_freqs)
+			target_freqs = np.linspace(_mel(p['min_freq']), \
+					_mel(p['max_freq']), p['num_freq_bins'])
+			target_freqs = _inv_mel(target_freqs)
 		else:
 			target_freqs = np.linspace(p['min_freq'], p['max_freq'], \
-				p['num_freq_bins'], endpoint=True)
+					p['num_freq_bins'])
 	# Define target times.
 	if target_times is None:
 		duration = t2 - t1
@@ -93,6 +104,16 @@ def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None, target_times=None, \
 		spec[spec<0.0] = 0.0
 		spec /= np.max(spec) + EPSILON
 	return spec, True
+
+
+def _mel(a):
+	"""https://en.wikipedia.org/wiki/Mel-frequency_cepstrum"""
+	return 1127 * np.log(1 + a / 700)
+
+
+def _inv_mel(a):
+	"""https://en.wikipedia.org/wiki/Mel-frequency_cepstrum"""
+	return 700 * (np.exp(a / 1127) - 1)
 
 
 

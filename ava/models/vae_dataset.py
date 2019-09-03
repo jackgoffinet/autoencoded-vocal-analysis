@@ -1,15 +1,10 @@
 """
-Data stuff for animal vocalization syllables.
+Methods for handling syllable data using PyTorch.
 
-Contains
---------
-- function get_syllable_partition
-- function get_syllable_data_loaders
-- class SyllableDataset
+Meant to be used in conjunction with ``ava.models.vae.VAE`` objects.
 """
 __author__ = "Jack Goffinet"
 __date__ = "November 2018 - August 2019"
-
 
 import h5py
 import joblib
@@ -33,18 +28,17 @@ def get_syllable_partition(dirs, split, shuffle=True):
 	----------
 	dirs : list of strings
 		List of directories containing saved syllable hdf5 files.
-
 	split : float
-		Portion of the hdf5 files to use for training, 0 < split <= 1.0
-
+		Portion of the hdf5 files to use for training,
+		:math:`0 < \mathtt{split} \leq 1.0`
 	shuffle : bool, optional
-		Whether to shuffle the hdf5 files. Defaults to True.
+		Whether to shuffle the hdf5 files. Defaults to `True`.
 
 	Returns
 	-------
-	partition : dictionary
-		Contains two keys, 'test' and 'train', that map to lists of .hdf5 files.
-		Defines the random test/train split.
+	partition : dict
+		Contains two keys, ``'test'`` and ``'train'``, that map to lists of hdf5
+		files. Defines the random test/train split.
 	"""
 	assert(split > 0.0 and split <= 1.0)
 	# Collect filenames.
@@ -86,10 +80,11 @@ def get_syllable_data_loaders(partition, batch_size=64, shuffle=(True, False), \
 	Returns
 	-------
 	dataloaders : dictionary
-		Dictionary mapping two keys, 'test' and 'train', to respective
+		Dictionary mapping two keys, ``'test'`` and ``'train'``, to respective
 		torch.utils.data.Dataloader objects.
+		
 	"""
-	sylls_per_file = get_sylls_per_file(partition)
+	sylls_per_file = _get_sylls_per_file(partition)
 	train_dataset = SyllableDataset(filenames=partition['train'], \
 		transform=numpy_to_tensor, sylls_per_file=sylls_per_file)
 	train_dataloader = DataLoader(train_dataset, batch_size=batch_size, \
@@ -161,8 +156,24 @@ class SyllableDataset(Dataset):
 
 
 
-def get_sylls_per_file(partition):
-	"""Open an hdf5 file and see how many syllables it has."""
+def _get_sylls_per_file(partition):
+	"""
+	Open an hdf5 file and see how many syllables it has.
+
+	.. note:: Assumes all hdf5 file referenced by `partition` have the same
+		number of syllables.
+
+	Parameters
+	----------
+	partition : dict
+		Contains two keys, ``'test'`` and ``'train'``, that map to lists of hdf5
+		files. Defines the random test/train split.
+
+	Returns
+	-------
+	sylls_per_file : int
+		How many syllables are in each file.
+	"""
 	key = 'train' if len(partition['train']) > 0 else 'test'
 	assert len(partition[key]) > 0
 	filename = partition[key][0] # Just grab the first file.
@@ -172,7 +183,7 @@ def get_sylls_per_file(partition):
 
 
 def numpy_to_tensor(x):
-	"""Transform a numpy array into a torch.FloatTensor"""
+	"""Transform a numpy array into a torch.FloatTensor."""
 	return torch.from_numpy(x).type(torch.FloatTensor)
 
 
@@ -180,26 +191,26 @@ def get_hdf5s_from_dir(dir):
 	"""
 	Return a sorted list of all hdf5s in a directory.
 
-	Note
-	----
-	plotting.data_container relies on this.
+	.. warning:: ava.data.data_container relies on this.
 	"""
 	return [os.path.join(dir, f) for f in sorted(os.listdir(dir)) if \
-		is_hdf5_file(f)]
+		_is_hdf5_file(f)]
 
 
-def get_wavs_from_dir(dir):
-	return [os.path.join(dir, f) for f in sorted(os.listdir(dir)) if \
-		is_wav_file(f)]
+# def get_wavs_from_dir(dir):
+# 	"""Return a sorted list of all wave files in a directory."""
+# 	return [os.path.join(dir, f) for f in sorted(os.listdir(dir)) if \
+# 		is_wav_file(f)]
 
 
-def is_hdf5_file(filename):
+def _is_hdf5_file(filename):
 	"""Is the given filename an hdf5 file?"""
 	return len(filename) > 5 and filename[-5:] == '.hdf5'
 
 
-def is_wav_file(filename):
-	return len(filename) > 4 and filename[-4:] == '.wav'
+# def is_wav_file(filename):
+# 	"""Is this file a wave file?"""
+# 	return len(filename) > 4 and filename[-4:] == '.wav'
 
 
 

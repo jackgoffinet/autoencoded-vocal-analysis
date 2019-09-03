@@ -3,7 +3,8 @@ DataContainer class for linking directories containing different sorts of data.
 
 This is meant to make plotting and analysis easier.
 
-TO DO:
+TO DO
+=====
 - request random subsets.
 - check for errors
 - throw better errors
@@ -124,103 +125,107 @@ class DataContainer():
 	be handled here in a central location, which can cut down on redundant code
 	and processing steps.
 
+	Attributes
+	----------
+	audio_dirs : {list of str, None}, optional
+		Directories containing audio. Defaults to None.
+	segment_dirs : {list of str, None}, optional
+		Directories containing segmenting decisions.
+	spec_dirs : list of {str, None}, optional
+		Directories containing hdf5 files of spectrograms. These should be
+		files output by ava.preprocessing.preprocessing. Defaults to None.
+	model_filename : {str, None}, optional
+		The VAE checkpoint to load. Written by models.vae.save_state.
+		Defaults to None.
+	projection_dirs : list of {str, None}, optional
+		Directory containing different projections. This is where things
+		like latent means, their projections, and handcrafted features
+		found in feature_dirs are saved. Defaults to None.
+	plots_dir : str, optional
+		Directory to save plots. Defaults to '' (current working directory).
+	feature_dirs : list of {str, None}, optional
+		Directory containing text files with different syllable features.
+		For exmaple, this could contain exported MUPET, DeepSqueak or SAP
+		syllable tables. Defaults to None.
+	template_dir : {str, None}, optional
+		Directory continaing audio files of song templates. Defaults to
+		None.
+
+	Methods
+	-------
+	request(field)
+		Request some type of data.
+
+	Notes
+	-----
+
 	Supported directory structure:
 
-	├──	animal_1
-	│	├──	audio						(raw audio)
-	│	│	├── foo.wav
-	│	│	├── bar.wav
-	│	│	└── baz.wav
-	│	├──	features 					(output of MUPET, DeepSqueak, SAP, ...)
-	│	│	├── foo.csv
-	│	│	├── bar.csv
-	│	│	└── baz.csv
-	│	├──	spectrograms 				(used to train models, written by
-	│	│	├── syllables_000.hdf5		preprocessing.process_sylls)
-	│	│	└──	syllables_001.hdf5
-	│	└──	projections 				(latent means, UMAP, PCA, tSNE
-	│		├── syllables_000.hdf5		projections, copies of features in
-	│		└──	syllables_001.hdf5		experiment_1/features. These are written
-	│									by a DataContainer object.)
-	├──	animal_2
-	│	├──	audio
-	│	│	├── 1.wav
-	│	│	└── 2.wav
-	│	├──	features
-	│	│	├── 1.csv
-	│	│	└── 2.csv
-	│	├──	spectrograms
-	│	│	├── syllables_000.hdf5
-	│	│	└── syllables_001.hdf5
-	│	└──	projections
-	│		├── syllables_000.hdf5
-	│		└──	syllables_001.hdf5
-	.
-	.
-	.
+	::
+
+		├── animal_1
+		│   ├── audio                     (raw audio)
+		│   │   ├── foo.wav
+		│   │   ├── bar.wav
+		│   │   └── baz.wav
+		│   ├── features                 (output of MUPET, DeepSqueak, SAP, ...)
+		│   │   ├── foo.csv
+		│   │   ├── bar.csv
+		│   │   └── baz.csv
+		│   ├── spectrograms             (used to train models, written by
+		│   │   ├── syllables_000.hdf5   preprocessing.process_sylls)
+		│   │   └── syllables_001.hdf5
+		│   └── projections              (latent means, UMAP, PCA, tSNE
+		│      ├── syllables_000.hdf5    projections, copies of features in
+		│      └── syllables_001.hdf5    experiment_1/features. These are
+		│                                written by a DataContainer object.)
+		├── animal_2
+		│   ├── audio
+		│   │   ├── 1.wav
+		│   │   └── 2.wav
+		│   ├── features
+		│   │   ├── 1.csv
+		│   │   └── 2.csv
+		│   ├── spectrograms
+		│   │   ├── syllables_000.hdf5
+		│   │   └── syllables_001.hdf5
+		│   └── projections
+		│       ├── syllables_000.hdf5
+		│       └── syllables_001.hdf5
+		.
+		.
+		.
+
 
 	There should be a 1-to-1 correspondence between, for example, the syllables
-	in animal_1/audio/baz.wav and the features described in
-	animal_1/features/baz.csv. Analogously, the fifth entry in
-	animal_2/spectrograms/syllables_000.hdf5 should describe the same syllable
-	as the fifth entry in animal_2/projections/syllables_000.hdf5. There is no
-	strict relationship, however, between individual files in animal_1/audio and
-	animal_1/spectrograms. The hdf5 files in the spectrograms and projections
-	directories should contain a subset of the syllables in the audio and
-	features directories.
+	in `animal_1/audio/baz.wav` and the features described in
+	`animal_1/features/baz.csv`. Analogously, the fifth entry in
+	`animal_2/spectrograms/syllables_000.hdf5` should describe the same syllable
+	as the fifth entry in `animal_2/projections/syllables_000.hdf5`. There is no
+	strict relationship, however, between individual files in `animal_1/audio`
+	and `animal_1/spectrograms`. The hdf5 files in the spectrograms and
+	projections directories should contain a subset of the syllables in the
+	audio and features directories.
 
 	Then a DataContainer object can be initialized as:
 
+	>>> from ava.data.data_container import DataContainer
 	>>> audio_dirs = ['animal_1/audio', 'animal_2/audio']
 	>>> spec_dirs = ['animal_1/spectrograms', 'animal_2/spectrograms']
 	>>> model_filename = 'checkpoint.tar'
 	>>> dc = DataContainer(audio_dirs=audio_dirs, spec_dirs=spec_dirs, \
-	... 	model_filename=model_filename)
+	model_filename=model_filename)
 	>>> latent_means = dc.request('latent_means')
 
 	It's fine to leave some of the initialization parameters unspecified. If the
 	DataContainer object is asked to do something it can't, it will hopefully
 	complain politely. Or at least informatively.
+
 	"""
 
 	def __init__(self, audio_dirs=None, segment_dirs=None, spec_dirs=None, \
 		feature_dirs=None, projection_dirs=None, plots_dir='', \
 		model_filename=None, template_dir=None, verbose=True):
-		"""
-		Parameters
-		----------
-		audio_dirs : list of str, or None, optional
-			Directories containing audio. Defaults to None.
-
-		segment_dirs : list of str, or None, optional
-			Directories containing segmenting decisions.
-
-		spec_dirs : list of str, or None, optional
-			Directories containing hdf5 files of spectrograms. These should be
-			files output by preprocessing.preprocessing (the files that are then
-			read by the VAE in models.vae_dataset). Defaults to None.
-
-		model_filename : str or None, optional
-			The VAE checkpoint to load. Written by models.vae.save_state.
-			Defaults to None.
-
-		projection_dirs : list of str, or None, optional
-			Directory containing different projections. This is where things
-			like latent means, their projections, and handcrafted features
-			found in feature_dirs are saved. Defaults to None.
-
-		plots_dir : str, optional
-			Directory to save plots. Defaults to '' (current working directory).
-
-		feature_dirs : list of str, or None, optional
-			Directory containing text files with different syllable features.
-			For exmaple, this could contain exported MUPET, DeepSqueak or SAP
-			syllable tables. Defaults to None.
-
-		template_dir : list of str, or None, optional
-			Directory continaing audio files of song templates. Defaults to
-			None.
-		"""
 		self.audio_dirs = audio_dirs
 		self.segment_dirs = segment_dirs
 		self.spec_dirs = spec_dirs
@@ -231,7 +236,7 @@ class DataContainer():
 		self.template_dir = template_dir
 		self.verbose = verbose
 		self.sylls_per_file = None # syllables in each hdf5 file in spec_dirs
-		self.fields = self.check_for_fields()
+		self.fields = self._check_for_fields()
 		if self.plots_dir not in [None, ''] and not os.path.exists(self.plots_dir):
 			os.makedirs(self.plots_dir)
 
@@ -240,38 +245,53 @@ class DataContainer():
 		"""
 		Request some type of data.
 
-		Besides __init__, this should be the only external-facing method.
+		Parameters
+		----------
+		field : str
+			The type of data being requested. Should come from ...
+
+		Raises
+		------
+		`NotImplementedError`
+			when `field` is not recognized.
+
+		Note
+		----
+		Besides `__init__`, this should be the only external-facing method.
+
 		"""
-		assert field in ALL_FIELDS, str(field) + " is not a valid field!"
+		if field not in ALL_FIELDS:
+			print(str(field) + " is not a valid field!")
+			raise NotImplementedError
 		# If it's not here, make it and return it.
 		if field not in self.fields:
 			if self.verbose:
 				print("Making field:", field)
-			data = self.make_field(field)
+			data = self._make_field(field)
 		# Otherwise, read it and return it.
 		else:
 			if self.verbose:
 				print("Reading field:", field)
-			data = self.read_field(field)
+			data = self._read_field(field)
 		if self.verbose:
 			print("\tDone with:", field)
 		return data
 
 
-	def make_field(self, field):
+	def _make_field(self, field):
 		"""Make a field."""
 		if field == 'latent_means':
-			data = self.make_latent_means()
+			data = self._make_latent_means()
 		elif field == 'latent_mean_pca':
-			data = self.make_latent_mean_pca_projection()
+			data = self._make_latent_mean_pca_projection()
 		elif field == 'latent_mean_umap':
-			data = self.make_latent_mean_umap_projection()
+			data = self._make_latent_mean_umap_projection()
 		elif field in MUPET_FIELDS:
-			data = self.make_feature_field(field, kind='mupet')
+			data = self._make_feature_field(field, kind='mupet')
 		elif field in DEEPSQUEAK_FIELDS:
-			data = self.make_feature_field(field, kind='deepsqueak')
+			data = self._make_feature_field(field, kind='deepsqueak')
 		elif field in SAP_FIELDS:
-			data = self.make_feature_field(field, kind='sap')
+			data = self._make_feature_field(field, kind='sap')
 		elif field == 'specs':
 			raise NotImplementedError
 		else:
@@ -283,21 +303,22 @@ class DataContainer():
 		return data
 
 
-	def read_field(self, field):
+	def _read_field(self, field):
 		"""
 		Read a field from memory.
 
-		Paramters
-		---------
+		Parameters
+		----------
 		field : str
 			Field name to read from file.
+
 		"""
 		if field in AUDIO_FIELDS:
 			raise NotImplementedError
 		elif field == 'segments':
-			return self.read_segments()
+			return self._read_segments()
 		elif field == 'segment_audio':
-			return self.read_segment_audio()
+			return self._read_segment_audio()
 		elif field in PROJECTION_FIELDS:
 			load_dirs = self.projection_dirs
 		elif field in SPEC_FIELDS:
@@ -324,18 +345,19 @@ class DataContainer():
 		return np.concatenate(to_return)
 
 
-	def read_segment_audio(self):
+	def _read_segment_audio(self):
 		"""
 		Read all the segmented audio and return it.
 
 		result[audio_dir][audio_filename] = [audio_1, audio_2, ..., audio_n]
+
 		"""
 		self.check_for_dirs(['audio_dirs'], 'audio')
 		segments = self.request('segments')
 		result = {}
 		for audio_dir in self.audio_dirs:
 			dir_result = {}
-			audio_fns = [i for i in os.listdir(audio_dir) if is_wav_file(i) \
+			audio_fns = [i for i in os.listdir(audio_dir) if _is_wav_file(i) \
 				and i in segments[audio_dir]]
 			for audio_fn in audio_fns:
 				fs, audio = wavfile.read(os.path.join(audio_dir, audio_fn))
@@ -349,7 +371,7 @@ class DataContainer():
 		return result
 
 
-	def read_segments(self):
+	def _read_segments(self):
 		"""
 		Return all the segmenting decisions.
 
@@ -358,13 +380,14 @@ class DataContainer():
 		times.
 
 		TO DO: add support for other delimiters, file extstensions, etc.
+
 		"""
 		self.check_for_dirs(['audio_dirs', 'segment_dirs'], 'segments')
 		result = {}
 		for audio_dir, seg_dir in zip(self.audio_dirs, self.segment_dirs):
 			dir_result = {}
 			seg_fns = [os.path.join(seg_dir, i) for i in os.listdir(seg_dir) \
-				if is_seg_file(i)]
+				if _is_seg_file(i)]
 			audio_fns = [os.path.split(i)[1][:-4]+'.wav' for i in seg_fns]
 			for audio_fn, seg_fn in zip(audio_fns, seg_fns):
 				segs = read_columns(seg_fn, delimiter='\t', unpack=False, \
@@ -375,7 +398,7 @@ class DataContainer():
 		return result
 
 
-	def make_latent_means(self):
+	def _make_latent_means(self):
 		"""
 		Write latent means for the syllables in self.spec_dirs.
 
@@ -384,9 +407,10 @@ class DataContainer():
 		latent_means : numpy.ndarray
 			Latent means of shape (max_num_syllables, z_dim)
 
-		NOTE
+		Note
 		----
-		- Duplicated code with <write_projection>?
+		* Duplicated code with <write_projection>?
+
 		"""
 		self.check_for_dirs(['projection_dirs', 'spec_dirs', 'model_filename'],\
 			'latent_means')
@@ -426,7 +450,7 @@ class DataContainer():
 		return np.concatenate(all_latent)
 
 
-	def make_latent_mean_umap_projection(self):
+	def _make_latent_mean_umap_projection(self):
 		"""Project latent means to two dimensions with UMAP."""
 		# Get latent means.
 		latent_means = self.request('latent_means')
@@ -443,7 +467,7 @@ class DataContainer():
 		return embedding
 
 
-	def make_latent_mean_pca_projection(self):
+	def _make_latent_mean_pca_projection(self):
 		"""Project latent means to two dimensions with PCA."""
 		# Get latent means.
 		latent_means = self.request('latent_means')
@@ -459,7 +483,7 @@ class DataContainer():
 		return embedding
 
 
-	def make_feature_field(self, field, kind):
+	def _make_feature_field(self, field, kind):
 		"""
 		Read a feature from a text file and put it in an hdf5 file.
 
@@ -476,6 +500,7 @@ class DataContainer():
 			...
 
 		TO DO: cleaner error handling
+
 		"""
 		self.check_for_dirs( \
 			['spec_dirs', 'feature_dirs', 'projection_dirs'], field)
@@ -554,7 +579,7 @@ class DataContainer():
 		return np.concatenate(to_return)
 
 
-	def write_projection(self, key, data):
+	def _write_projection(self, key, data):
 		"""Write the given projection to self.projection_dirs."""
 		sylls_per_file = self.sylls_per_file
 		# For each directory...
@@ -570,7 +595,7 @@ class DataContainer():
 				k += sylls_per_file
 
 
-	def check_for_fields(self):
+	def _check_for_fields(self):
 		"""Check to see which fields are saved."""
 		fields = {}
 		# If self.spec_dirs is registered, assume everything is there.
@@ -599,7 +624,7 @@ class DataContainer():
 		return fields
 
 
-	def check_for_dirs(self, dir_names, field):
+	def _check_for_dirs(self, dir_names, field):
 		"""Check that the given directories exist."""
 		for dir_name in dir_names:
 			if dir_name == 'audio_dirs':
@@ -621,7 +646,7 @@ class DataContainer():
 
 
 
-def read_columns(filename, columns=(0,1), delimiter=',', skiprows=1, \
+def _read_columns(filename, columns=(0,1), delimiter=',', skiprows=1, \
 	unpack=True):
 	"""
 	A wrapper around numpy.loadtxt to handle empty files.
@@ -635,7 +660,7 @@ def read_columns(filename, columns=(0,1), delimiter=',', skiprows=1, \
 	return data
 
 
-def is_seg_file(filename):
+def _is_seg_file(filename):
 	"""
 	Is this a segmenting file?
 
@@ -644,7 +669,7 @@ def is_seg_file(filename):
 	return len(filename) > 4 and filename[-4:] == '.txt'
 
 
-def is_wav_file(filename):
+def _is_wav_file(filename):
 	"""Is this a wav file?"""
 	return len(filename) > 4 and filename[-4:] == '.wav'
 

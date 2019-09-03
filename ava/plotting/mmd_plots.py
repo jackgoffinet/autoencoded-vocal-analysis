@@ -32,8 +32,10 @@ np.random.shuffle(color_list)
 
 def mmd_matrix_DC(dc, filename='mmd_matrix.pdf'):
 	"""
-	Paramters
-	---------
+	Parameters
+	----------
+	dc : ...
+		...
 
 	"""
 	# Collect

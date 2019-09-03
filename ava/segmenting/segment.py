@@ -5,6 +5,7 @@ TO DO:
 	- Toggle booleans
 	- Plot in kHz, with labels
 	- tune window size
+	- segment could be sped up if it operated file by file.
 
 """
 __author__ = "Jack Goffinet"
@@ -32,12 +33,21 @@ def segment(audio_dir, seg_dir, p, verbose=True):
 
 	Parameters
 	----------
-	...
+	audio_dir : str
+		Directory containing audio files.
+	seg_dir : str
+		Directory containing segmenting decisions.
+	p : dict
+		Segmenting parameters. TO DO: ADD REFERENCE!
+	verbose : bool, optional
+		Defaults to ``False``.
+
 	"""
 	if verbose:
-		print("\nSegmenting audio in", audio_dir+"\n-------------------")
+		print("\nSegmenting audio in", audio_dir+"\n"+'-'*(20+len(audio_dir)))
 	if not os.path.exists(seg_dir):
 		os.makedirs(seg_dir)
+	num_sylls = 0
 	audio_fns, seg_fns = get_audio_seg_filenames(audio_dir, seg_dir, p)
 	for audio_fn, seg_fn in zip(audio_fns, seg_fns):
 		# Collect audio.
@@ -45,9 +55,12 @@ def segment(audio_dir, seg_dir, p, verbose=True):
 		# Segment.
 		onsets, offsets = p['algorithm'](audio, p)
 		combined = np.stack([onsets, offsets]).T
+		num_sylls += len(combined)
 		# Write.
 		header = "Onsets/offsets for " + audio_fn
 		np.savetxt(seg_fn, combined, fmt='%.5f', header=header)
+	if verbose:
+		print("Found", num_sylls, "segments in", audio_dir)
 
 
 def tune_segmenting_params(load_dirs, p):
@@ -58,14 +71,14 @@ def tune_segmenting_params(load_dirs, p):
 	----------
 	load_dirs : list of str
 		Directories containing audio files.
-
 	p : dict
-		Segmenting parameters.
+		Segmenting parameters. TO DO: ADD REFERENCE!
 
 	Returns
 	-------
 	p : dict
 		Adjusted segmenting parameters
+
 	"""
 	print("Tune segmenting parameters\n---------------------------")
 	# Collect filenames.
@@ -133,7 +146,8 @@ def tune_segmenting_params(load_dirs, p):
 			axarr[0].set_title(filename)
 			axarr[0].imshow(spec[:,i1:i2], origin='lower', \
 					aspect='auto', \
-					extent=[t1, t2, f[0], f[-1]])
+					extent=[t1, t2, f[0]/1e3, f[-1]/1e3])
+			axarr[0].set_ylabel('Frequency (kHz)')
 			for j in range(len(onsets)):
 				if onsets[j] >= i1 and onsets[j] < i2:
 					time = onsets[j] * dt
@@ -149,6 +163,7 @@ def tune_segmenting_params(load_dirs, p):
 			xvals = np.linspace(t1, t2, i2-i1)
 			for trace in traces:
 				axarr[1].plot(xvals, trace[i1:i2])
+			axarr[1].set_xlabel('Time (s)')
 			plt.savefig('temp.pdf')
 			plt.close('all')
 
@@ -170,7 +185,7 @@ def get_audio_seg_filenames(audio_dir, segment_dir, p):
 	temp_filenames = [i for i in sorted(os.listdir(audio_dir)) if \
 			is_audio_file(i)]
 	audio_filenames = [os.path.join(audio_dir, i) for i in temp_filenames]
-	temp_filenames = [i[:-4] + p['seg_extension'] for i in temp_filenames]
+	temp_filenames = [i[:-4] + '.txt' for i in temp_filenames]
 	seg_filenames = [os.path.join(segment_dir, i) for i in temp_filenames]
 	return audio_filenames, seg_filenames
 

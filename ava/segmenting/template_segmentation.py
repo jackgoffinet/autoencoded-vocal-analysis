@@ -24,7 +24,7 @@ from time import strptime, mktime
 from tqdm import tqdm
 import umap
 
-from ava.segmentation.interactive_segmentation import make_html_plot
+# from ava.segmentation.interactive_segmentation import make_html_plot
 
 
 MIN_FREQ, MAX_FREQ = 300, 8e3
@@ -135,9 +135,14 @@ def get_template(feature_dir, p):
 
 	Parameters
 	----------
+	feauture_dir : str
+		Directory containing audio files of features.
+	p : dict
+		Parameters.
 
 	Returns
 	-------
+	templates : NOTE: finish this
 
 	"""
 	samplerates = []

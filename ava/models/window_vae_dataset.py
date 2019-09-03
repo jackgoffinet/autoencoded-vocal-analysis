@@ -36,12 +36,16 @@ def get_window_partition(audio_dirs, roi_dirs, split, roi_extension='.txt', \
 	"""
 	Get a train/test split.
 
-	Paramters
-	---------
-
+	Parameters
+	----------
+	audio_dirs : ...
+		...
 
 	Returns
 	-------
+	partition : dict
+		...
+
 	"""
 	assert(split > 0.0 and split <= 1.0)
 	# Collect filenames.
@@ -94,7 +98,39 @@ def get_fixed_window_data_loaders(partition, p, batch_size=64, \
 def get_warped_window_data_loaders(audio_dirs, template_dir, p, batch_size=64, \
 	num_workers=3, load_warp=False):
 	"""
-	Audio files must all be the same duration!
+	Get DataLoaders for training and testing.
+
+	Right now, these are the same data loaders...
+
+	Parameters
+	----------
+	audio_dirs : list of str
+		Audio directories.
+	template_dir : str
+		Directory where templates are saved.
+	p : dict
+		Parameters. ADD REFERENCE!
+	batch_size : int, optional
+		DataLoader batch size. Defaults to ``64``.
+	num_workers : int, optional
+		Number of CPU workers to retrieve data for the model. Defaults to ``3``.
+	load_warp : bool, optional
+		Whether to load a previously saved time warping result. Defaults to
+		``False``.
+
+	Returns
+	-------
+	loaders : dict
+		A dictionary ...
+
+	Warning
+	-------
+	- Audio files must all be the same duration!
+
+	Note
+	----
+	- TO DO: add train/test split.
+
 	"""
 	audio_fns = []
 	for audio_dir in audio_dirs:
@@ -211,9 +247,8 @@ class FixedWindowDataset(Dataset):
 class WarpedWindowDataset(Dataset):
 	"""torch.utils.data.Dataset for chunks of animal vocalization"""
 
-	def __init__(self, audio_filenames, template_dir, p, \
-		transform=None, dataset_length=2000, load_warp=False, start_q=-0.1,\
-		stop_q=1.1):
+	def __init__(self, audio_filenames, template_dir, p, transform=None, \
+		dataset_length=2000, load_warp=False, start_q=-0.1, stop_q=1.1):
 		"""
 		Create a torch.utils.data.Dataset for chunks of animal vocalization.
 
@@ -221,12 +256,10 @@ class WarpedWindowDataset(Dataset):
 		----------
 		audio_filenames : list of strings
 			List of wav files.
-
-		roi_filenames : list of strings
-			List of files containing animal vocalization times. Format: ...
-
-		transform : None or function, optional
-			Transformation to apply to each item. Defaults to None (no
+		template_dir : str
+			...
+		transform : {None, function}, optional
+			Transformation to apply to each item. Defaults to ``None`` (no
 			transformation)
 		"""
 		self.audio_filenames = audio_filenames
@@ -351,8 +384,8 @@ class WarpedWindowDataset(Dataset):
 		# print("specs", specs.shape)
 		self.num_time_bins = specs.shape[1]
 		# print("amp_traces", amp_traces.shape) # 2413, 84, 1
-		model = PiecewiseWarping(n_knots=2, warp_reg_scale=1e-6, \
-			smoothness_reg_scale=20.0)
+		model = PiecewiseWarping(n_knots=self.p['n_knots'], \
+			warp_reg_scale=1e-6, smoothness_reg_scale=20.0)
 		model.fit(specs, iterations=50, warp_iterations=200)
 		np.save('temp_data/x_knots.npy', model.x_knots)
 		np.save('temp_data/y_knots.npy', model.y_knots)

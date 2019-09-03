@@ -60,18 +60,16 @@ def copy_segments_to_standard_format(orig_seg_dirs, new_seg_dirs, p):
 	----------
 	orig_seg_dirs : list of str
 		...
-
 	new_seg_dirs : list of str
 		...
-
 	p : dict
 		...
+		
 	"""
 	delimeter, skiprows, usecols = p['delimiter'], p['skiprows'], p['usecols']
 	for orig_seg_dir, new_seg_dir in zip(orig_seg_dirs, new_seg_dirs):
 		seg_fns = [os.path.join(orig_seg_dir,i) for i in \
-				os.listdir(orig_seg_dir) if len(i) > ext_len and \
-				i[-len(p['seg_extension']):] == p['seg_extension']]
+				os.listdir(orig_seg_dir) if len(i) > 4 and i[-4:] == '.txt']
 		for seg_fn in seg_fns:
 			segs = np.loadtxt(seg_fn, delimiter=delimiter, skiprows=skiprows, \
 					usecols=usecols).reshape(-1,2)
@@ -85,9 +83,9 @@ def get_audio_seg_filenames(audio_dirs, seg_dirs, p):
 	audio_fns, seg_fns = [], []
 	for audio_dir, seg_dir in zip(audio_dirs, seg_dirs):
 		temp_fns = [i for i in sorted(os.listdir(audio_dir)) if \
-				is_audio_file(i)]
+				_is_audio_file(i)]
 		audio_fns += [os.path.join(audio_dir, i) for i in temp_fns]
-		temp_fns = [i[:-4] + p['seg_extension'] for i in temp_fns]
+		temp_fns = [i[:-4] + '.txt' for i in temp_fns]
 		seg_fns += [os.path.join(seg_dir, i) for i in temp_fns]
 	return audio_fns, seg_fns
 
@@ -101,7 +99,7 @@ def get_onsets_offsets_from_file(filename, p):
 	return np.loadtxt(filename, unpack=True)
 
 
-def is_audio_file(filename):
+def _is_audio_file(filename):
 	return len(filename) > 4 and filename[-4:] == '.wav'
 
 
