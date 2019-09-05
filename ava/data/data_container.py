@@ -18,10 +18,12 @@ __date__ = "July-August 2019"
 
 
 import h5py
+from numba.errors import NumbaPerformanceWarning
 import numpy as np
 import os
 from scipy.io import wavfile
 from sklearn.decomposition import PCA
+from time import strptime, mktime
 import torch
 import umap
 import warnings
@@ -30,11 +32,9 @@ from ava.models.vae import VAE
 from ava.models.vae_dataset import get_syllable_partition, \
 	get_syllable_data_loaders, get_hdf5s_from_dir
 
-# https://github.com/lmcinnes/umap/issues/252
-warnings.filterwarnings("ignore", message="NumbaPerformanceWarning")
-
 
 AUDIO_FIELDS = ['audio']
+FILENAME_FIELDS = ['sap_time']
 SEGMENT_FIELDS = ['segments', 'segment_audio']
 PROJECTION_FIELDS = ['latent_means', 'latent_mean_pca', 'latent_mean_umap']
 SPEC_FIELDS = ['specs', 'onsets', 'offsets', 'audio_filenames']
@@ -51,8 +51,9 @@ SAP_FIELDS = ['syllable_duration_sap', 'syllable_start', 'mean_amplitude',
 	'mean_pitch', 'mean_FM', 'mean_AM2', 'mean_entropy', 'mean_pitch_goodness',
 	'mean_mean_freq', 'pitch_variance', 'FM_variance', 'entropy_variance',
 	'pitch_goodness_variance', 'mean_freq_variance', 'AM_variance']
-ALL_FIELDS = AUDIO_FIELDS + SEGMENT_FIELDS + PROJECTION_FIELDS + SPEC_FIELDS + \
-	MUPET_FIELDS + DEEPSQUEAK_FIELDS + SAP_FIELDS
+ALL_FIELDS = AUDIO_FIELDS + FILENAME_FIELDS + SEGMENT_FIELDS + \
+	PROJECTION_FIELDS + SPEC_FIELDS + MUPET_FIELDS + DEEPSQUEAK_FIELDS + \
+	SAP_FIELDS
 MUPET_ONSET_COL = MUPET_FIELDS.index('syllable_start_time')
 DEEPSQUEAK_ONSET_COL = DEEPSQUEAK_FIELDS.index('begin_time')
 SAP_ONSET_COL = SAP_FIELDS.index('syllable_start')
@@ -70,12 +71,12 @@ PRETTY_NAMES = {
 	'syllable_number': 'Syllable Number',
 	'syllable_start_time': 'Onsets (s)',
 	'syllable_duration': 'Duration (ms)',
-	'starting_frequency': 'Starting Frequency (kHz)',
-	'final_frequency': 'Final Frequency (kHz)',
-	'minimum_frequency': 'Minimum Frequency (kHz)',
-	'maximum_frequency': 'Maximum Frequency (kHz)',
-	'mean_frequency': 'Mean Frequency (kHz)',
-	'frequency_bandwidth': 'Frequency Bandwidth (kHz)',
+	'starting_frequency': 'Starting Freq. (kHz)',
+	'final_frequency': 'Final Freq. (kHz)',
+	'minimum_frequency': 'Min Freq. (kHz)',
+	'maximum_frequency': 'Max Freq. (kHz)',
+	'mean_frequency': 'Mean Freq. (kHz)',
+	'frequency_bandwidth': 'Freq. Bandwidth (kHz)',
 	'total_syllable_energy': 'Total Energy (dB)',
 	'peak_syllable_amplitude': 'Peak Amplitude (dB)',
 	'cluster': 'Cluster',
@@ -86,29 +87,30 @@ PRETTY_NAMES = {
 	'begin_time': 'Onsets (s)',
 	'end_time': 'Offsets (s)',
 	'call_length': 'Duration (ms)',
-	'principal_frequency': 'Principal Frequency (kHz)',
-	'low_freq': 'Minimum Frequency (kHz)',
-	'high_freq': 'Maximum Frequency (kHz)',
-	'delta_freq': 'Frequency Bandwidth (kHz)',
-	'frequency_standard_deviation': 'Frequency Standard Deviation (kHz)',
-	'slope': 'Frequency Modulation (kHz/s)',
+	'principal_frequency': 'Principal Freq. (kHz)',
+	'low_freq': 'Minimum Freq. (kHz)',
+	'high_freq': 'Max Freq. (kHz)',
+	'delta_freq': 'Freq. Bandwidth (kHz)',
+	'frequency_standard_deviation': 'Freq Std. Dev. (kHz)',
+	'slope': 'Freq. Mod. (kHz/s)',
 	'sinuosity': 'Sinuosity',
-	'mean_power': 'Mean Power (dB/Hz)',
+	'mean_power': 'Power (dB/Hz)',
 	'tonality': 'Tonality',
+	'syllable_duration_sap': 'Duration (s)',
 	'syllable_start': 'Onset (s)',
-	'mean_amplitude': 'Mean Amplitude',
-	'mean_pitch': 'Mean Pitch',
-	'mean_FM': 'Mean Frequency Modulation',
-	'mean_AM2': 'Mean Amplitude Modulation Squared',
-	'mean_entropy': 'Mean Entropy',
-	'mean_pitch_goodness': 'Mean Goodness of Pitch',
+	'mean_amplitude': 'Amplitude',
+	'mean_pitch': 'Pitch',
+	'mean_FM': 'Freq. Mod.',
+	'mean_AM2': 'Amp. Mod.',
+	'mean_entropy': 'Entropy',
+	'mean_pitch_goodness': 'Goodness of Pitch',
 	'mean_mean_freq': 'Mean Frequency',
 	'pitch_variance': 'Pitch Variance',
-	'FM_variance': 'Frequency Modulation Variance',
-	'entropy_variance': 'Entropy Variance',
-	'pitch_goodness_variance': 'Goodness of Pitch Variance',
-	'mean_freq_variance': 'Frequency Variance',
-	'AM_variance': 'Amplitude Modulation Variance',
+	'FM_variance': 'Freq. Mod. Var.',
+	'entropy_variance': 'Entropy Var.',
+	'pitch_goodness_variance': 'Goodness of Pitch Var.',
+	'mean_freq_variance': 'Freq. Var.',
+	'AM_variance': 'Amp. Mod. Var.',
 }
 PRETTY_NAMES_NO_UNITS = {}
 for k in PRETTY_NAMES:
@@ -292,6 +294,8 @@ class DataContainer():
 			data = self._make_feature_field(field, kind='deepsqueak')
 		elif field in SAP_FIELDS:
 			data = self._make_feature_field(field, kind='sap')
+		elif field in FILENAME_FIELDS:
+			data = self._read_filename_field(field)
 		elif field == 'specs':
 			raise NotImplementedError
 		else:
@@ -352,7 +356,7 @@ class DataContainer():
 		result[audio_dir][audio_filename] = [audio_1, audio_2, ..., audio_n]
 
 		"""
-		self.check_for_dirs(['audio_dirs'], 'audio')
+		self._check_for_dirs(['audio_dirs'], 'audio')
 		segments = self.request('segments')
 		result = {}
 		for audio_dir in self.audio_dirs:
@@ -382,7 +386,7 @@ class DataContainer():
 		TO DO: add support for other delimiters, file extstensions, etc.
 
 		"""
-		self.check_for_dirs(['audio_dirs', 'segment_dirs'], 'segments')
+		self._check_for_dirs(['audio_dirs', 'segment_dirs'], 'segments')
 		result = {}
 		for audio_dir, seg_dir in zip(self.audio_dirs, self.segment_dirs):
 			dir_result = {}
@@ -390,7 +394,7 @@ class DataContainer():
 				if _is_seg_file(i)]
 			audio_fns = [os.path.split(i)[1][:-4]+'.wav' for i in seg_fns]
 			for audio_fn, seg_fn in zip(audio_fns, seg_fns):
-				segs = read_columns(seg_fn, delimiter='\t', unpack=False, \
+				segs = _read_columns(seg_fn, delimiter='\t', unpack=False, \
 					skiprows=0)
 				if len(segs) > 0:
 					dir_result[audio_fn] = segs
@@ -409,10 +413,10 @@ class DataContainer():
 
 		Note
 		----
-		* Duplicated code with <write_projection>?
+		* Duplicated code with ``_write_projection``?
 
 		"""
-		self.check_for_dirs(['projection_dirs', 'spec_dirs', 'model_filename'],\
+		self._check_for_dirs(['projection_dirs', 'spec_dirs', 'model_filename'],\
 			'latent_means')
 		# First, see how many syllables are in each file.
 		hdf5_file = get_hdf5s_from_dir(self.spec_dirs[0])[0]
@@ -450,6 +454,30 @@ class DataContainer():
 		return np.concatenate(all_latent)
 
 
+	def _read_filename_field(self, field):
+		if field == 'sap_time':
+			data = self._make_sap_time()
+		else:
+			raise NotImplementedError
+		return data
+
+
+	def _make_sap_time(self):
+		"""Return time in seconds, following SAP conventions."""
+		onsets = self.request('syllable_start')
+		fns = self.request('audio_filenames')
+		result = np.zeros(lemn(onsets))
+		for i, onset, fn in zip(range(len(onsets)), onsets, fns):
+			# December 29, 1899, 7pm is the SAP anchor time.
+			anchor = mktime(strptime("1899 12 29 19", "%Y %m %d %H"))
+			temp = os.path.split(fn)[-1].split('_')[1].split('.')
+			day = float(temp[0])
+			millisecond = float(temp[1])
+			time = anchor + 24*60*60*day + 1e-3*millisecond
+			result[i] = time + onset
+		return result
+
+
 	def _make_latent_mean_umap_projection(self):
 		"""Project latent means to two dimensions with UMAP."""
 		# Get latent means.
@@ -459,11 +487,14 @@ class DataContainer():
 			metric='euclidean', random_state=42)
 		if self.verbose:
 			print("Running UMAP...")
-		embedding = transform.fit_transform(latent_means)
+		# https://github.com/lmcinnes/umap/issues/252
+		with warnings.catch_warnings():
+			warnings.filterwarnings("ignore", category=NumbaPerformanceWarning)
+			embedding = transform.fit_transform(latent_means)
 		if self.verbose:
 			print("Done.")
 		# Write to files.
-		self.write_projection("latent_mean_umap", embedding)
+		self._write_projection("latent_mean_umap", embedding)
 		return embedding
 
 
@@ -479,7 +510,7 @@ class DataContainer():
 		if self.verbose:
 			print("Done.")
 		# Write to files.
-		self.write_projection("latent_mean_pca", embedding)
+		self._write_projection("latent_mean_pca", embedding)
 		return embedding
 
 
@@ -502,7 +533,7 @@ class DataContainer():
 		TO DO: cleaner error handling
 
 		"""
-		self.check_for_dirs( \
+		self._check_for_dirs( \
 			['spec_dirs', 'feature_dirs', 'projection_dirs'], field)
 		# FInd which column the field is stored in.
 		if kind == 'mupet':
@@ -547,7 +578,7 @@ class DataContainer():
 						feature_fn = os.path.join(feature_dir, feature_fn)
 						# Read the onsets and features.
 						feature_onsets, features = \
-							read_columns(feature_fn, [onset_col, field_col])
+							_read_columns(feature_fn, [onset_col, field_col])
 						if kind == 'sap': # SAP writes onsets in milliseconds.
 							feature_onsets /= 1e3
 						k = 0

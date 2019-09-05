@@ -4,7 +4,7 @@ Plot traces for sliding window analysis.
 TO DO: clean this up!
 """
 __author__ = "Jack Goffinet"
-__date__ = "August 2019"
+__date__ = "August-September 2019"
 
 
 import matplotlib.pyplot as plt
@@ -16,8 +16,8 @@ from scipy.signal import stft
 from sklearn.decomposition import PCA
 import torch
 
-from ava.models.window_vae import X_SHAPE, VAE
-from ava.models.vae_dataset import WarpedWindowDataset, numpy_to_tensor
+from ava.models.vae import X_SHAPE, VAE
+from ava.models.window_vae_dataset import WarpedWindowDataset, numpy_to_tensor
 
 
 
@@ -28,8 +28,18 @@ def trace_plot(traces, audio_filenames, ts, ax=None, save_and_close=True, \
 
 	Parameters
 	----------
-	traces
-	 ...
+	traces : numpy.ndarray
+		...
+	audio_filenames : list of str
+		...
+	ts : numpy.ndarray
+		...
+	ax : ...
+		...
+	save_and_close : bool
+		Defaults to ``True``.
+	filename : str
+		...
 
 	"""
 	transform = PCA(n_components=1, random_state=42)
@@ -65,6 +75,16 @@ def spectrogram_plot(song_filename, ax=None, save_and_close=True, \
 
 	Parameters
 	----------
+	song_filename : str
+		...
+	ax : ...
+		...
+	save_and_close : bool
+		Defaults to ``True``.
+	x_label : bool
+		Defaults to ``True``.
+	filename : str
+		Defaults to ``'spec.pdf'``.
 
 	"""
 	# Get the spectrogram.
@@ -144,7 +164,7 @@ def warped_trace_plot_DC(dc, p, num_points=200, latent_dim=32, ax=None, \
 	"""
 
 	"""
-	d = get_warped_data_from_DC(dc, p, num_points, latent_dim, \
+	d = _get_warped_data_from_DC(dc, p, num_points, latent_dim, \
 			load_warp=load_warp, load_traces=load_traces)
 	trace_plot(d['traces'], d['audio_fns'], d['ts'], ax=ax, \
 			save_and_close=save_and_close, filename=filename)
@@ -157,7 +177,7 @@ def warped_variability_plot_DC(dc, p, num_points=200, latent_dim=32, ax=None, \
 	Parameters
 	----------
 	"""
-	d = get_warped_data_from_DC(dc, p, num_points, latent_dim, \
+	d = _get_warped_data_from_DC(dc, p, num_points, latent_dim, \
 			load_warp=load_warp, load_traces=load_traces)
 	traces = d['traces']
 	audio_fns = d['audio_fns']
@@ -195,10 +215,16 @@ def warped_variability_plot_DC(dc, p, num_points=200, latent_dim=32, ax=None, \
 		plt.close('all')
 
 
-def get_warped_data_from_DC(dc, p, num_points, latent_dim, load_warp=False, \
+def _get_warped_data_from_DC(dc, p, num_points, latent_dim, load_warp=False, \
 	load_traces=False):
 	"""
 	Get traces, filenames, and template duration.
+
+	Parameters
+	----------
+	dc : ava.data.data_container.DataContainer
+		...
+
 	"""
 	if load_traces:
 		try:
@@ -222,8 +248,9 @@ def get_warped_data_from_DC(dc, p, num_points, latent_dim, load_warp=False, \
 	model = VAE()
 	model.load_state(dc.model_filename)
 	# Get traces.
-	quantiles = np.linspace(0,1,num_points)
+	quantiles = np.linspace(0,1,num_points) # NOTE: HERE!
 	traces = np.zeros((len(audio_fns), num_points, latent_dim))
+	print("Making traces...")
 	for i, audio_fn in enumerate(dset.audio_filenames):
 		if i % 100 == 0:
 			print(i)

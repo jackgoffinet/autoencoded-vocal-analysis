@@ -5,7 +5,7 @@ TO DO:
 	- implement refine_segments_post_vae
 """
 __author__ = "Jack Goffinet"
-__date__ = "August 2019"
+__date__ = "August-September 2019"
 
 
 from itertools import repeat

@@ -10,8 +10,7 @@ import matplotlib.gridspec as gridspec
 import os
 
 from ava.data.data_container import DataContainer
-from ava.plotting.feature_correlation_plots import \
-	boxplot_DC, pairwise_correlation_plot_DC, feature_pca_plot_DC
+from ava.plotting.feature_correlation_plots import correlation_bar_chart_DC
 from ava.plotting.latent_projection import latent_projection_plot_DC
 
 
@@ -61,23 +60,22 @@ if __name__ == '__main__':
 	rcParams.update(params)
 	fig = plt.figure()
 
-	gsarr = [gridspec.GridSpec(1,1) for _ in range(11)]
+	gsarr = [gridspec.GridSpec(1,1) for _ in range(10)]
 
-	# 0 1  2
-	# 3 4 5 6
+	# 0 1 2
+	# 3 4 5
 	# Projections
 	gsarr[0].update(left=0.01, right=0.27, top=1.0, bottom=0.55)
 	gsarr[1].update(left=0.27, right=0.53, top=1.0, bottom=0.55)
-	gsarr[2].update(left=0.54, right=0.94, top=0.94, bottom=0.55)
+	gsarr[2].update(left=0.54, right=0.73, top=0.94, bottom=0.13)
 	gsarr[3].update(left=0.01, right=0.27, top=0.49, bottom=0.08)
 	gsarr[4].update(left=0.27, right=0.53, top=0.49, bottom=0.08)
-	gsarr[5].update(left=.54, right=0.74, top=0.5, bottom=0.10)
-	gsarr[6].update(left=.78, right=0.97, top=0.5, bottom=0.10)
+	gsarr[5].update(left=.78, right=0.97, top=0.94, bottom=0.13)
 	# Colorbar axes.
-	gsarr[7].update(left=0.06, right=0.23, top=0.56, bottom=0.54)
-	gsarr[8].update(left=0.31, right=0.48, top=0.56, bottom=0.54)
-	gsarr[9].update(left=0.06, right=0.23, top=0.08, bottom=0.06)
-	gsarr[10].update(left=0.31, right=0.48, top=0.08, bottom=0.06)
+	gsarr[6].update(left=0.06, right=0.23, top=0.56, bottom=0.54)
+	gsarr[7].update(left=0.31, right=0.48, top=0.56, bottom=0.54)
+	gsarr[8].update(left=0.06, right=0.23, top=0.08, bottom=0.06)
+	gsarr[9].update(left=0.31, right=0.48, top=0.08, bottom=0.06)
 
 	axarr = [plt.Subplot(fig, gs[0,0]) for gs in gsarr]
 	for ax in axarr:
@@ -87,7 +85,7 @@ if __name__ == '__main__':
 	inset_fields = ['frequency_bandwidth', 'maximum_frequency', \
 		'total_syllable_energy', 'syllable_duration']
 
-	caxs = [axarr[i] for i in [7,8,9,10]]
+	caxs = [axarr[i] for i in [6,7,8,9]]
 	axs = [axarr[i] for i in [0,1,3,4]]
 	for cax, ax, field in zip(caxs, axs, inset_fields):
 		latent_projection_plot_DC(dc1, color_by=field, colorbar=True, s=0.25, \
@@ -107,13 +105,9 @@ if __name__ == '__main__':
 
 	colors = ['forestgreen', 'magenta', 'firebrick']
 
-	boxplot_DC(colors, ax=axarr[2], save_and_close=False)
-	pairwise_correlation_plot_DC(dc1, mupet_fields, ax=axarr[0], cax=axarr[5], \
-		save_and_close=False)
-
-	feature_pca_plot_DC([dc1, dc2, dc3], [mupet_fields, ds_fields, sap_fields], \
-		colors, ax=axarr[6], save_and_close=False)
-
+	correlation_bar_chart_DC([dc1, dc2, dc3], [mupet_fields, ds_fields, sap_fields], \
+		axs=[axarr[2],axarr[5]], colors=colors, top_n=10, bottom_n=5, \
+		load_data=False, save_and_close=False) # top_n=8, bottom_n=5
 
 	plt.text(0.05,0.94,'a',transform=fig.transFigure, size=14, weight='bold')
 	plt.text(0.29,0.94,'b',transform=fig.transFigure, size=14, weight='bold')

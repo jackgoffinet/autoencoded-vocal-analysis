@@ -20,7 +20,7 @@ from torch.utils.data import Dataset, DataLoader
 EPSILON = 1e-12
 
 
-def get_syllable_partition(dirs, split, shuffle=True):
+def get_syllable_partition(dirs, split, shuffle=True, max_num_files=None):
 	"""
 	Partition the set filenames into a random test/train split.
 
@@ -33,6 +33,9 @@ def get_syllable_partition(dirs, split, shuffle=True):
 		:math:`0 < \mathtt{split} \leq 1.0`
 	shuffle : bool, optional
 		Whether to shuffle the hdf5 files. Defaults to `True`.
+	max_num_files : {int, None}, optional
+		The number of files in the train and test partitions <= `max_num_files`.
+		If ``None``, all files are used. Defaults to ``None``.
 
 	Returns
 	-------
@@ -51,6 +54,8 @@ def get_syllable_partition(dirs, split, shuffle=True):
 		np.random.seed(42)
 		np.random.shuffle(filenames)
 		np.random.seed(None)
+	if max_num_files is not None:
+		filenames = filenames[:max_num_files]
 	# Split.
 	index = int(round(split * len(filenames)))
 	return {'train': filenames[:index], 'test': filenames[index:]}
@@ -82,7 +87,7 @@ def get_syllable_data_loaders(partition, batch_size=64, shuffle=(True, False), \
 	dataloaders : dictionary
 		Dictionary mapping two keys, ``'test'`` and ``'train'``, to respective
 		torch.utils.data.Dataloader objects.
-		
+
 	"""
 	sylls_per_file = _get_sylls_per_file(partition)
 	train_dataset = SyllableDataset(filenames=partition['train'], \

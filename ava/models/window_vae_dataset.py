@@ -11,7 +11,7 @@ Contains
 
 """
 __author__ = "Jack Goffinet"
-__date__ = "August 2019"
+__date__ = "August - September 2019"
 
 
 from affinewarp import PiecewiseWarping

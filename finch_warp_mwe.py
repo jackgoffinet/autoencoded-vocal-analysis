@@ -6,6 +6,7 @@ Minimal working example for time-warped birdsong.
 2) Warp song renditions & train a generative model.
 3) Plot and analyze.
 
+TO DO: figure out best way for window to work with DataContainer
 """
 
 from itertools import repeat
@@ -55,12 +56,13 @@ template_dir = root + 'templates'
 spec_dirs = [root+'h5s']
 proj_dirs = [root+'song_window/proj/']
 # model_filename = root + 'song_window/checkpoint_201.tar'
-model_filename = root + 'checkpoint_040.tar'
+model_filename = root + 'checkpoint_200.tar'
 plots_dir = root + 'song_window/plots/'
 
 
-dc = DataContainer(projection_dirs=proj_dirs, \
-	spec_dirs=spec_dirs, plots_dir=root, model_filename=model_filename)
+dc = DataContainer(projection_dirs=proj_dirs, audio_dirs=audio_dirs, \
+	spec_dirs=spec_dirs, plots_dir=root, model_filename=model_filename, \
+	template_dir=template_dir)
 
 
 # #####################################
@@ -85,9 +87,11 @@ dc = DataContainer(projection_dirs=proj_dirs, \
 ########################
 from ava.plotting.tooltip_plot import tooltip_plot_DC
 from ava.plotting.latent_projection import latent_projection_plot_DC
+from ava.plotting.trace_plot import warped_trace_plot_DC
 
 latent_projection_plot_DC(dc)
-tooltip_plot_DC(dc, num_imgs=2000)
+# tooltip_plot_DC(dc, num_imgs=2000)
+warped_trace_plot_DC(dc, params, load_warp=True)
 
 
 

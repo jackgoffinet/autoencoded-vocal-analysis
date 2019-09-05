@@ -2,7 +2,7 @@
 #### Generative modeling of animal vocalizations
 
 Jack Goffinet
-November 2018 - August 2019
+November 2018 - September 2019
 
 To build:
 ```
@@ -12,8 +12,8 @@ $ python setup.py sdist bdist_wheel
 
 Docs:
 ```
-cd docs
-sphinx-apidoc -f -o docs/source ../ava
-make html
-open build/html/index.html
+$ cd docs
+$ sphinx-apidoc -f -o docs/source ../ava
+$ make html
+$ open build/html/index.html
 ```
