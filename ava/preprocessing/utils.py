@@ -9,6 +9,7 @@ __date__ = "August 2019"
 import numpy as np
 from scipy.signal import stft
 from scipy.interpolate import interp2d
+import warnings
 
 EPSILON = 1e-12
 
@@ -53,15 +54,9 @@ def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None, target_times=None, \
 	if max_dur is None:
 		max_dur = p['max_dur']
 	if t2 - t1 > max_dur + 1e-4:
-		print("caught in spec")
-		print(t1, t2, t2-t1)
-		print(max_dur)
-		return None, False
+		message = "Found segment longer than <max_dur>: "+str(t2-t1)+">"+str(max_dur)
+		warnings.warn(message)
 	s1, s2 = int(round(t1*fs)), int(round(t2*fs))
-	# # Keep things divisible by reasonably large powers of 2.
-	# remainder = (s2 - s1) % (p['nperseg'] - p['noverlap'])
-	# if remainder != 0:
-	# 	s2 += (p['nperseg'] - p['noverlap']) - remainder
 	assert s1 < s2, "s1: " + str(s1) + " s2: " + str(s2) + " t1: " + str(t1) + \
 			" t2: " + str(t2)
 	# Get a spectrogram and define the interpolation object.

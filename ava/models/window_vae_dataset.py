@@ -51,7 +51,7 @@ def get_window_partition(audio_dirs, roi_dirs, split, roi_extension='.txt', \
 	# Collect filenames.
 	audio_filenames, roi_filenames = [], []
 	for audio_dir, roi_dir in zip(audio_dirs, roi_dirs):
-		temp = get_wavs_from_dir(audio_dir)
+		temp = _get_wavs_from_dir(audio_dir)
 		audio_filenames += temp
 		roi_filenames += \
 			[os.path.join(roi_dir, os.path.split(i)[-1][:-4]+roi_extension) \
@@ -96,7 +96,8 @@ def get_fixed_window_data_loaders(partition, p, batch_size=64, \
 
 
 def get_warped_window_data_loaders(audio_dirs, template_dir, p, batch_size=64, \
-	num_workers=3, load_warp=False):
+	num_workers=3, load_warp=False, \
+	warp_fns=['temp_data/x_knots.npy', 'temp_data/y_knots.npy']):
 	"""
 	Get DataLoaders for training and testing.
 
@@ -117,6 +118,9 @@ def get_warped_window_data_loaders(audio_dirs, template_dir, p, batch_size=64, \
 	load_warp : bool, optional
 		Whether to load a previously saved time warping result. Defaults to
 		``False``.
+	warp_fns : list of str, optional
+		Where the x-knots and y-knots should be saved and loaded from. Defaults
+		to ``['temp_data/x_knots.npy', 'temp_data/y_knots.npy']``.
 
 	Returns
 	-------
@@ -137,7 +141,7 @@ def get_warped_window_data_loaders(audio_dirs, template_dir, p, batch_size=64, \
 		audio_fns += [os.path.join(audio_dir, i) for i in \
 			sorted(os.listdir(audio_dir)) if i[-4:] == '.wav']
 	dataset = WarpedWindowDataset(audio_fns, template_dir, p, \
-		transform=numpy_to_tensor, load_warp=load_warp)
+		transform=numpy_to_tensor, load_warp=load_warp, warp_fns=warp_fns)
 	dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, \
 		num_workers=num_workers)
 	return {'train': dataloader, 'test': dataloader}
@@ -148,7 +152,7 @@ class FixedWindowDataset(Dataset):
 	"""torch.utils.data.Dataset for chunks of animal vocalization"""
 
 	def __init__(self, audio_filenames, roi_filenames, p, transform=None,
-		dataset_length=2000):
+		dataset_length=2048):
 		"""
 		Create a torch.utils.data.Dataset for chunks of animal vocalization.
 
@@ -204,12 +208,15 @@ class FixedWindowDataset(Dataset):
 					p=self.roi_weights[file_index])
 				roi = self.rois[file_index][roi_index]
 				# Then choose a chunk of audio uniformly at random.
-				start_t = roi[0] + (roi[1] - roi[0] - self.p['window_length']) \
+				onset = roi[0] + (roi[1] - roi[0] - self.p['window_length']) \
 					* np.random.rand()
-				end_t = start_t + self.p['window_length']
+				offset = onset + self.p['window_length']
+				target_times = np.linspace(onset, offset, \
+						self.p['num_time_bins'])
 				# Then make a spectrogram.
-				spec, flag = self.p['get_spec'](start_t, end_t, \
-					self.audio[file_index], self.p, fs=self.fs)
+				spec, flag = self.p['get_spec'](max(0.0, onset-0.05), \
+						offset+0.05, self.audio[file_index], self.p, \
+						fs=self.fs, target_times=target_times)
 				if not flag:
 					continue
 				if self.transform:
@@ -222,11 +229,11 @@ class FixedWindowDataset(Dataset):
 		return result
 
 
-	def write_hdf5_files(self, save_dir, num_files=300, sylls_per_file=100):
+	def write_hdf5_files(self, save_dir, num_files=500, sylls_per_file=100):
 		"""
 		Write hdf5 files containing spectrograms of random audio chunks.
 
-		NOTE
+		Note
 		----
 	 	This should be consistent with
 		preprocessing.preprocessing.process_sylls.
@@ -248,7 +255,8 @@ class WarpedWindowDataset(Dataset):
 	"""torch.utils.data.Dataset for chunks of animal vocalization"""
 
 	def __init__(self, audio_filenames, template_dir, p, transform=None, \
-		dataset_length=2000, load_warp=False, start_q=-0.1, stop_q=1.1):
+		dataset_length=2048, load_warp=False, start_q=-0.1, stop_q=1.1, \
+		warp_fns=['temp_data/x_knots.npy', 'temp_data/y_knots.npy']):
 		"""
 		Create a torch.utils.data.Dataset for chunks of animal vocalization.
 
@@ -270,6 +278,7 @@ class WarpedWindowDataset(Dataset):
 		self.transform = transform
 		self.start_q = start_q
 		self.stop_q = stop_q
+		self.warp_fns = warp_fns
 		self.compute_warp(template_dir, load_warp=load_warp)
 		self.window_frac = self.p['window_length'] / self.template_dur
 
@@ -366,8 +375,8 @@ class WarpedWindowDataset(Dataset):
 		template = self.get_template(template_dir)
 		if load_warp:
 			try:
-				self.x_knots = np.load('temp_data/x_knots.npy')
-				self.y_knots = np.load('temp_data/y_knots.npy')
+				self.x_knots = np.load(self.warp_fns[0])
+				self.y_knots = np.load(self.warp_fns[1])
 				return
 			except IOError:
 				pass
@@ -387,38 +396,10 @@ class WarpedWindowDataset(Dataset):
 		model = PiecewiseWarping(n_knots=self.p['n_knots'], \
 			warp_reg_scale=1e-6, smoothness_reg_scale=20.0)
 		model.fit(specs, iterations=50, warp_iterations=200)
-		np.save('temp_data/x_knots.npy', model.x_knots)
-		np.save('temp_data/y_knots.npy', model.y_knots)
+		np.save(self.warp_fns[0], model.x_knots)
+		np.save(self.warp_fns[1], model.y_knots)
 		self.x_knots = model.x_knots
 		self.y_knots = model.y_knots
-		# x_knots = np.load('temp_data/x_knots.npy')
-		# y_knots = np.load('temp_data/y_knots.npy')
-		# self.x_knots = x_knots
-		# self.y_knots = y_knots
-
-		# import matplotlib.pyplot as plt
-		# plt.switch_backend('agg')
-		# for i, amp_trace in enumerate(amp_traces):
-		# 	plt.plot(amp_trace.flatten(), lw=0.5, c='b', alpha=0.1)
-		# plt.savefig('temp1.pdf')
-		# plt.close('all')
-		# K = x_knots.shape[0]
-		# T, N = 84, 1
-		# unwarped = densewarp(y_knots, x_knots, amp_traces, np.empty((K, T, N)))
-		# for amp_trace in unwarped:
-		# 	plt.plot(amp_trace.flatten(), lw=0.5, c='b', alpha=0.1)
-		# plt.savefig('temp2.pdf')
-		# plt.close('all')
-		#
-		# q1, q2 = -0.1, 1.1
-		# ts =  np.linspace(q1, q2, 200)
-		# for k in range(specs.shape[0]):
-		# 	unwarped_ts = self.get_unwarped_times(ts, k)
-		# 	unwarped_ts = unwarped_ts * self.template_dur
-		# 	spec = self.get_spec(self.audio[k], target_ts=unwarped_ts)[0].T
-		# 	amp_trace = np.sum(spec, axis=1)
-		# 	plt.plot(amp_trace.flatten(), lw=0.5, c='b', alpha=0.1)
-		# plt.savefig('temp3.pdf')
 
 
 
@@ -549,7 +530,7 @@ def get_hdf5s_from_dir(dir):
 		is_hdf5_file(f)]
 
 
-def get_wavs_from_dir(dir):
+def _get_wavs_from_dir(dir):
 	return [os.path.join(dir, f) for f in sorted(os.listdir(dir)) if \
 		is_wav_file(f)]
 

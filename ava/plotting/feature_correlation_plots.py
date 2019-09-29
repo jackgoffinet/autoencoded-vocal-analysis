@@ -1,5 +1,5 @@
 """
-Get correlations between latent features and traditional features.
+Plot correlations between latent features and traditional features.
 
 
 """
@@ -83,7 +83,7 @@ def correlation_bar_chart_DC(dcs, dc_fields, axs=None, colors=None, top_n=5, \
 			for field in fields:
 				data = zscore(dc.request(field))
 				try:
-					r2 = _get_knn_r2(latent, data)
+					r2 = _get_knn_r2(latent, data, k=5)
 					field_data.append(data)
 					trad_r2s.append(r2)
 					trad_names.append(PRETTY_NAMES_NO_UNITS[field])
@@ -96,7 +96,7 @@ def correlation_bar_chart_DC(dcs, dc_fields, axs=None, colors=None, top_n=5, \
 			field_data = np.stack(field_data).T
 			for latent_pc in range(latent.shape[1]):
 				try:
-					r2 = _get_knn_r2(field_data, latent[:,latent_pc])
+					r2 = _get_knn_r2(field_data, latent[:,latent_pc], k=5)
 					latent_r2s.append(r2)
 					latent_names.append("Latent "+str(latent_pc+1))
 					latent_colors.append(color)
@@ -226,19 +226,21 @@ def pairwise_correlation_plot_DC(dc, fields, ax=None, cax=None, \
 
 	if ax is None:
 		ax = plt.gca()
-	im = ax.imshow(result, vmin=0, vmax=1, cmap='Greys') # , origin='lower'
+	im = ax.imshow(result, vmin=0, vmax=1, cmap='Greys', aspect='equal') # , origin='lower'
 	fig = plt.gcf()
 	if cax is None:
 		cax = fig.add_axes([0.27, 0.8, 0.5, 0.05])
-	cbar = fig.colorbar(im, cax=cax, pad=0.06, fraction=0.046, orientation="horizontal")
+	cbar = fig.colorbar(im, cax=cax, pad=0.06, fraction=0.046, \
+			orientation="horizontal")
 	cbar.solids.set_edgecolor("face")
 	cbar.solids.set_rasterized(True)
-	cbar.set_ticks([0, 0.5, 1])
-	cbar.set_ticklabels([0,0.5,1])
-	ax.set_title("Pairwise Absolute Correlations")
+	cbar.set_ticks([0, 1])
+	cbar.set_ticklabels([0,1])
+	ax.set_title("MUPET Feature\nPairwise Absolute\nCorrelations", fontsize=8)
 	tick_labels = [PRETTY_NAMES_NO_UNITS[field] for field in fields]
-	ax.set_yticks(np.arange(len(fields)), tick_labels)
+	# ax.set_yticks(np.arange(len(fields)), tick_labels)
 	ax.set_xticks([],[])
+	ax.set_yticks([],[])
 	if save_and_close:
 		plt.tight_layout()
 		plt.savefig(os.path.join(dc.plots_dir, filename))
@@ -255,8 +257,8 @@ def feature_pca_plot_DC(dcs, dc_fields, colors, alpha=0.7, lw=2.5, ax=None, \
 		ax = plt.gca()
 	for dc, fields, color in zip(dcs, dc_fields, colors):
 		latent = dc.request('latent_means')
-		# for i in range(latent.shape[1]):
-		# 	latent[:,i] = zscore(latent[:,i])
+		for i in range(latent.shape[1]):
+			latent[:,i] = zscore(latent[:,i])
 		pca = PCA(n_components=latent.shape[1], whiten=False)
 		latent = pca.fit_transform(latent)
 		var = [0] + np.cumsum(pca.explained_variance_ratio_).tolist()
@@ -273,31 +275,39 @@ def feature_pca_plot_DC(dcs, dc_fields, colors, alpha=0.7, lw=2.5, ax=None, \
 		var = [0] + np.cumsum(pca.explained_variance_ratio_).tolist()
 		ax.plot(np.arange(field_data.shape[1]+1), var, ls='--', c=color, alpha=alpha, lw=lw)
 
-	ax.set_title("Cumulative Variance Explained")
-	ax.set_ylabel("Portion of Variance Explained")
-	ax.set_xlabel("Number of Components")
+	ax.set_title("Cumulative Feature Variance\nExplained by Feature Set", fontsize=8)
+	ax.set_ylabel("Portion of Feature\nVariance Explained", fontsize=7)
+	ax.set_xlabel("Number of Principal Components", fontsize=7)
 	# plt.legend(loc='lower right')
 	for y in [0.25,0.5,0.75]:
 		ax.axhline(y=y, c='k', ls='-', lw=0.9, alpha=0.5)
 	ax.set_xticks([0,2,4,6,8,10,12])
-	ax.set_yticks([0,0.25,0.5,0.75,1.0])
+	ax.set_yticks([0.0,1.0])
+	ax.set_yticklabels(['0','1'])
+	# ax.axhline(y=0.95, c='r', lw=0.5, alpha=0.7)
 	ax.set_xlim(0,12)
 	ax.set_ylim(0,1)
+	ax.plot([-1,-1], ls='--', c='k', lw=2, alpha=0.9, label='Traditional Features')
+	ax.plot([-1,-1], ls='-', c='k', lw=2, alpha=0.9, label='Latent Features')
+	ax.legend(loc='lower right', fontsize=7)
+
 	if save_and_close:
 		plt.savefig(os.path.join(dc.plots_dir, filename))
 		plt.close('all')
 
 
-def boxplot_DC(colors, ax=None, save_and_close=True, filename='correlation_boxplot.pdf'):
+def _boxplot_DC(colors, hatch='o', ax=None, save_and_close=True, \
+	filename='correlation_boxplot.pdf'):
 	"""
 	Pairs of boxplots.
 	"""
 	d = np.load('temp_data/bar_chart_data.npy', allow_pickle=True).item()
 	trad_r2s, latent_r2s = d['trad_r2s'], d['latent_r2s']
 	trad_names, latent_names = d['trad_names'], d['latent_names']
+
 	trad_colors, latent_colors = d['trad_colors'], d['latent_colors']
-	trad_colors = np.array([colors.index(str(i)) for i in trad_colors])
-	latent_colors = np.array([colors.index(str(i)) for i in latent_colors])
+	trad_colors = np.array([colors.index(i) for i in trad_colors])
+	latent_colors = np.array([colors.index(i) for i in latent_colors])
 
 	x = 0
 	A = [[] for i in range(2*len(colors))]
@@ -313,19 +323,32 @@ def boxplot_DC(colors, ax=None, save_and_close=True, filename='correlation_boxpl
 
 	if ax is None:
 		ax = plt.gca()
-	props = {'color': to_rgba('k', alpha=0.75), 'linewidth': 2}
+	props = {'color': to_rgba('k', alpha=1.0), 'linewidth': 1.2}
 	bp1 = ax.boxplot([A[0],A[1]], positions=[0,1], patch_artist=True, \
 		widths=0.6, medianprops=props, whiskerprops=props, capprops=props)
-	bp2 = ax.boxplot([A[2],A[3]], positions=[3,4], patch_artist=True, \
+	bp2 = ax.boxplot([A[2],A[3]], positions=[2.5,3.5], patch_artist=True, \
 		widths=0.6, medianprops=props, whiskerprops=props, capprops=props)
-	bp3 = ax.boxplot([A[4],A[5]], positions=[6,7], patch_artist=True, \
+	bp3 = ax.boxplot([A[4],A[5]], positions=[5,6], patch_artist=True, \
 		widths=0.6, medianprops=props, whiskerprops=props, capprops=props)
+	for bp in [bp1, bp2, bp3]:
+		bp['boxes'][1].set_hatch(hatch)
 	for bplot, color in zip((bp1, bp2, bp3), colors):
 		color = to_rgba(color, alpha=0.7)
 		for patch in bplot['boxes']:
 			patch.set_facecolor(color)
-			patch.set_edgecolor(to_rgba('k', alpha=0.75))
-			patch.set_linewidth(2)
+			patch.set_edgecolor(to_rgba('k'))
+			patch.set_linewidth(1.5)
+	for direction in ['top', 'right', 'bottom']:
+		ax.spines[direction].set_visible(False)
+	ax.text(0.505, 0.0, 'MUPET', c=colors[0], ha='center', fontsize=7)
+	ax.text(3.05, 0.0, 'DeepSqueak', c=colors[1], ha='center', fontsize=7)
+	ax.text(5.55, 0.0, 'SAP', c=colors[2], ha='center', fontsize=7)
+	ax.set_title('Latent/Traditional Prediction Asymmetry', fontsize=8)
+	ax.set_ylabel('Portion of Feature\nVariance Explained', fontsize=7)
+	ax.set_yticks([0,0.25,0.5,0.75,1.0])
+	ax.set_yticklabels([0,'','','',1])
+	ax.set_ylim(0,1)
+	ax.set_xticks([])
 	if save_and_close:
 		plt.savefig(filename)
 		plt.close('all')
@@ -413,7 +436,7 @@ def boxplot_DC(colors, ax=None, save_and_close=True, filename='correlation_boxpl
 # 		print("latent", latent.shape)
 # 		for field_num in range(all_field_data.shape[1]):
 # 			field_data = all_field_data[:,field_num]
-# 			var = _get_r2(latent, field_data)
+# 			var = _get_linear_r2(latent, field_data)
 # 			plot_1_vars.append(var)
 # 			plot_1_colors.append(colors[i])
 # 		# CCA
@@ -423,7 +446,7 @@ def boxplot_DC(colors, ax=None, save_and_close=True, filename='correlation_boxpl
 # 		magic_index = np.searchsorted(var_explained, 0.98)
 # 		for latent_dim in range(latent.shape[1]):
 # 			latent_feature = latent[:,latent_dim]
-# 			var = _get_r2(all_field_data, latent_feature)
+# 			var = _get_linear_r2(all_field_data, latent_feature)
 # 			if latent_dim < magic_index:
 # 				plot_2_vars.append(var)
 # 				plot_2_colors.append(colors[i])
@@ -446,8 +469,7 @@ def boxplot_DC(colors, ax=None, save_and_close=True, filename='correlation_boxpl
 # 		plt.close('all')
 
 
-
-def _get_r2(vals_1, vals_2):
+def _get_linear_r2(vals_1, vals_2):
 	"""Get % variance of vals_2 explained by vals_1."""
 	reg = LinearRegression().fit(vals_1, vals_2.reshape(-1,1))
 	return reg.score(vals_1, vals_2.reshape(-1,1))

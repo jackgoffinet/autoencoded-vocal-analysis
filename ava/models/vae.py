@@ -477,7 +477,7 @@ class VAE(nn.Module):
 		self.epoch = checkpoint['epoch']
 
 
-	def visualize(self, loader, num_specs=5, gap=4, \
+	def visualize(self, loader, num_specs=5, gap=(2,6), \
 		save_filename='reconstruction.pdf'):
 		"""
 		Plot spectrograms and their reconstructions.
@@ -492,7 +492,7 @@ class VAE(nn.Module):
 			Number of spectrogram pairs to plot. Defaults to ``5``.
 		gap : int or tuple of two ints, optional
 			The vertical and horizontal gap between images, in pixels. Defaults
-			to ``4``.
+			to ``(2,6)``.
 		save_filename : str, optional
 			Where to save the plot, relative to `self.save_dir`. Defaults to
 			``'temp.pdf'``.
@@ -518,7 +518,7 @@ class VAE(nn.Module):
 		all_specs = np.stack([specs, rec_specs])
 		# Plot.
 		save_filename = os.path.join(self.save_dir, save_filename)
-		grid_plot(all_specs, gap=(3,6), filename=save_filename)
+		grid_plot(all_specs, gap=gap, filename=save_filename)
 		return specs, rec_specs
 
 

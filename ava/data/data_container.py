@@ -345,7 +345,11 @@ class DataContainer():
 				with h5py.File(filename, 'r') as f:
 					assert (field in f), "Can\'t find field \'"+field+"\' in"+\
 						" file \'"+filename+"\'!"
-					to_return.append(np.array(f[field]))
+					if field == 'audio_filenames':
+						data = np.array([k.decode('UTF-8') for k in f[field]])
+						to_return.append(data)
+					else:
+						to_return.append(np.array(f[field]))
 		return np.concatenate(to_return)
 
 
@@ -384,6 +388,11 @@ class DataContainer():
 		times.
 
 		TO DO: add support for other delimiters, file extstensions, etc.
+
+		Returns
+		-------
+		segments : dict
+			Maps audio directories to audio filenames to numpy arrays.
 
 		"""
 		self._check_for_dirs(['audio_dirs', 'segment_dirs'], 'segments')
@@ -486,7 +495,7 @@ class DataContainer():
 		transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, \
 			metric='euclidean', random_state=42)
 		if self.verbose:
-			print("Running UMAP...")
+			print("Running UMAP... (n="+str(len(latent_means))+")")
 		# https://github.com/lmcinnes/umap/issues/252
 		with warnings.catch_warnings():
 			warnings.filterwarnings("ignore", category=NumbaPerformanceWarning)

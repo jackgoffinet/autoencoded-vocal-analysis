@@ -52,13 +52,14 @@ def get_spec(audio, p):
 
 
 def copy_segments_to_standard_format(orig_seg_dirs, new_seg_dirs, seg_ext, \
-	delimiter, usecols, skiprows):
+	delimiter, usecols, skiprows, max_duration=None):
 	"""
 	Copy onsets/offsets from SAP, MUPET, or Deepsqueak into their files.
 
 	Note
 	----
 	- TO DO: rename
+	- TO DO: don't write the syllables that are too long.
 
 	Parameters
 	----------
@@ -66,7 +67,15 @@ def copy_segments_to_standard_format(orig_seg_dirs, new_seg_dirs, seg_ext, \
 		Directories containing original segments.
 	new_seg_dirs : list of str
 		Directories for new segments.
-	p : dict
+	seg_ext : ..
+		....
+	delimiter : ...
+		...
+	usecols : ...
+		...
+	skiprows : ...
+		...
+	max_duration : {None, float}, optional
 		...
 
 	"""
@@ -79,6 +88,16 @@ def copy_segments_to_standard_format(orig_seg_dirs, new_seg_dirs, seg_ext, \
 		for seg_fn in seg_fns:
 			segs = np.loadtxt(seg_fn, delimiter=delimiter, skiprows=skiprows, \
 					usecols=usecols).reshape(-1,2)
+
+			if max_duration is not None:
+				new_segs = []
+				for seg in segs:
+					if seg[1]-seg[0] < max_duration:
+						new_segs.append(seg)
+				if len(new_segs) > 0:
+					segs = np.stack(new_segs)
+				else:
+					segs = np.array([])
 			new_seg_fn = os.path.join(new_seg_dir, os.path.split(seg_fn)[-1])
 			new_seg_fn = new_seg_fn[:-4] + '.txt'
 			header = "Onsets/offsets copied from "+seg_fn

@@ -143,7 +143,7 @@ def tune_segmenting_params(load_dirs, p):
 			i2 = 2 * i1
 			t1, t2 = i1 * dt, i2 * dt
 			_, axarr = plt.subplots(2,1, sharex=True)
-			axarr[0].set_title(filename)
+			axarr[0].set_title(filename, fontsize=7)
 			axarr[0].imshow(spec[:,i1:i2], origin='lower', \
 					aspect='auto', \
 					extent=[t1, t2, f[0]/1e3, f[-1]/1e3])

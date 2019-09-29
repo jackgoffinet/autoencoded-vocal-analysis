@@ -3,15 +3,22 @@ MMD plots.
 
 http://www.jmlr.org/papers/volume13/gretton12a/gretton12a.pdf
 
-TO DO: polish this
 """
 __author__ = "Jack Goffinet"
 __date__ = "August 2019"
 
+
+from itertools import repeat
+from joblib import Parallel, delayed
 import numpy as np
 import os
+from matplotlib.collections import PolyCollection
+from matplotlib.colors import to_rgba
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
+from scipy.cluster.hierarchy import linkage, leaves_list
+from scipy.spatial.distance import squareform
+from sklearn.manifold import TSNE
 
 
 # For MUPET sample recordings
@@ -21,58 +28,140 @@ DBA = [3070, 3074, 3168, 3170, 3171, 3172, 3240, 3241, 3243, 3244, 3245, 3246, \
 	3247, 3248, 3249, 9856, 9857, 9858, 9859, 9863]
 ALL_RECORDINGS = C57 + DBA
 
+BAD_COLORS = ['silver', 'whitesmoke', 'floralwhite', 'aliceblue', \
+	'lightgoldenrodyellow', 'lightgray', 'w', 'seashell', 'ivory', \
+	'lemonchiffon','ghostwhite', 'white', 'beige', 'honeydew', 'azure', \
+	'lavender', 'snow', 'linen', 'antiquewhite', 'papayawhip', 'oldlace', \
+	'cornsilk', 'lightyellow', 'mintcream', 'lightcyan', 'lavenderblush', \
+	'blanchedalmond', 'lightcoral']
 
 from matplotlib.colors import cnames
 color_list = []
 for name, hex in cnames.items():
-	color_list.append(name)
+	if name not in BAD_COLORS:
+		color_list.append(name)
 color_list = np.array(color_list)
+np.random.seed(42)
 np.random.shuffle(color_list)
+np.random.seed(None)
 
 
-def mmd_matrix_DC(dc, filename='mmd_matrix.pdf'):
+def mmd_matrix_DC(dc, condition_from_fn, load_data=False, ax=None, \
+	save_and_close=True, divider=None, cluster=True, alg='linear', max_n=None, \
+	cmap='viridis', filename='mmd_matrix.pdf', divider_color='white', \
+	save_load_fns=['result_mmd_matrix.npy', 'all_conditions.npy']):
 	"""
+	Parameters
+	----------
+	dc : ...
+		...
+	alg : {``'linear'``, ``'quadratic'``}, optional
+		Deafults to ``'linear'``.
+
+	"""
+	loaded = False
+	if load_data:
+		try:
+			result = np.load('temp_data/'+save_load_fns[0])
+			loaded = True
+		except:
+			print("Unable to load data!")
+	if not loaded:
+		result, _ = _calculate_mmd(dc, condition_from_fn, alg=alg, max_n=max_n,\
+				save_fns=save_load_fns)
+	result = np.clip(result, 0, None)
+	if cluster:
+		result = _cluster_matrix(result)
+	if ax is None:
+		ax = plt.gca()
+	ax.imshow(result, cmap=cmap)
+	ax.axis('off')
+	if divider is None:
+		divider = len(result) // 2
+	if divider > 0:
+		ax.axhline(y=divider-0.5, c=divider_color, lw=0.9)
+		ax.axvline(x=divider-0.5, c=divider_color, lw=0.9)
+	if save_and_close:
+		plt.savefig(os.path.join(dc.plots_dir, filename))
+		plt.close('all')
+
+
+def mmd_tsne_DC(dc, condition_from_fn, load_data=False, ax=None, alg='linear',\
+	max_n=None, s=4.0, alpha=0.8, save_and_close=True, filename='mmd_tsne.pdf', \
+	save_load_fns=['result_mmd_tsne.npy', 'all_conditions.npy']):
+	"""
+	Compute and plot a t-SNE layout from an MMD matrix.
+
 	Parameters
 	----------
 	dc : ...
 		...
 
 	"""
-	# Collect
-	latent = dc.request('latent_means')
-	print("read latent")
-	audio_fns = dc.request('audio_filenames')
-	print("read filenames")
-	condition = np.array([condition_from_fn(str(i)) for i in audio_fns], dtype='int')
-	np.save('condition.npy', condition)
-	# Calculate.
-	all_conditions = np.unique(condition) # np.unique sorts things
-	n = len(all_conditions)
-	result = np.zeros((n,n))
-	print("n=", n)
-	sigma_squared = estimate_median_sigma_squared(latent)
-	for i in range(n-1):
-		for j in range(i+1,n):
-			i1 = np.argwhere(condition == all_conditions[i]).flatten()
-			i2 = np.argwhere(condition == all_conditions[j]).flatten()
-			mmd = estimate_mmd2_linear_time(latent, i1, i2, sigma_squared=sigma_squared)
-			result[i,j] = mmd
-			result[j,i] = mmd
-			# np.save('result.npy', result)
-	np.save('result.npy', result)
-	plt.imshow(result)
-	plt.savefig(os.path.join(dc.plots_dir, filename))
-	plt.close('all')
+	loaded = False
+	if load_data:
+		try:
+			result = np.load('temp_data/'+save_load_fns[0])
+			conditions = np.load('temp_data/'+save_load_fns[1])
+			loaded = True
+		except:
+			print("Unable to load data!")
+	if not loaded:
+		result, conditions = _calculate_mmd(dc, condition_from_fn, alg=alg, \
+				max_n=max_n, save_fns=save_load_fns)
+	result = np.clip(result, 0, None)
+	conditions = list(np.unique(conditions)) # np.unique sorts things
+	identities = np.array([c//100 for c in conditions])
+	colors = [color_list[i%len(color_list)] for i in identities]
+	transform = TSNE(n_components=2, random_state=42, metric='precomputed')
+	embed = transform.fit_transform(result)
+
+	if ax is None:
+		ax = plt.gca()
+
+	poly_colors = []
+	poly_vals = []
+	for i in range(len(identities)-1):
+		for j in range(i+1, len(identities)):
+			if identities[i] == identities[j]:
+				color = to_rgba(colors[i], alpha=0.7)
+				ax.plot([embed[i,0],embed[j,0]], [embed[i,1],embed[j,1]], \
+					c=color, lw=0.5)
+				for k in range(j+1, len(identities)):
+					if identities[k] == identities[j]:
+						arr = np.stack([embed[i], embed[j], embed[k]])
+						poly_colors.append(to_rgba(colors[i], alpha=0.2))
+						poly_vals.append(arr)
+	pc = PolyCollection(poly_vals, color=poly_colors)
+	ax.add_collection(pc)
+	ax.scatter(embed[:,0], embed[:,1], color=colors, s=s, alpha=alpha)
+	# added = []
+	# for em, identity in zip(embed, identities):
+	# 	if identity not in added:
+	# 		ax.annotate(str(identity), (em[0], em[1]), fontsize=6)
+	# 		added.append(identity)
+	plt.axis('off')
+	if save_and_close:
+		plt.savefig(os.path.join(dc.plots_dir, filename))
+		plt.close('all')
 
 
-def estimate_mmd2(latent, i1, i2, sigma_squared=None):
+def _estimate_mmd2(latent, i1, i2, sigma_squared=None, max_n=None):
 	"""
 	From Gretton et. al. 2012
 	"""
 	if sigma_squared is None:
-		sigma_squared = estimate_median_sigma_squared(latent)
+		sigma_squared = _estimate_median_sigma_squared(latent)
 	A = -0.5 / sigma_squared
 	m, n = len(i1), len(i2)
+	if max_n is not None:
+		m, n = min(max_n,m), min(max_n,n)
+		if m < len(i1):
+			np.random.shuffle(i1)
+			i1 = i1[:m]
+		if n < len(i2):
+			np.random.shuffle(i2)
+			i2 = i2[:n]
 	term_1 = 0.0
 	for i in range(m):
 		for j in range(m):
@@ -98,12 +187,12 @@ def estimate_mmd2(latent, i1, i2, sigma_squared=None):
 	return term_1 + term_2 - term_3
 
 
-def estimate_mmd2_linear_time(latent, i1, i2, sigma_squared=None):
+def _estimate_mmd2_linear_time(latent, i1, i2, sigma_squared=None):
 	"""
 	From Gretton et. al. 2012
 	"""
 	if sigma_squared is None:
-		sigma_squared = estimate_median_sigma_squared(latent)
+		sigma_squared = _estimate_median_sigma_squared(latent)
 	A = -0.5 / sigma_squared
 	n = min(len(i1), len(i2))
 	m = n // 2
@@ -117,79 +206,106 @@ def estimate_mmd2_linear_time(latent, i1, i2, sigma_squared=None):
 	return term / m
 
 
-def condition_from_fn(fn):
-	"""
-	For Tom's mice.
-	"""
-	fn = os.path.split(fn)[-1]
-	mouse_num = int(fn.split('_')[0][2:])
-	session_num = fn.split('_')[1]
-	if 'day' in session_num:
-		session_num = int(session_num[3:])
-	elif 's' in session_num:
-		session_num = int(session_num[1:])
+def _cluster_matrix(matrix, index=None):
+	"""Order entries by a clustering dendrogram."""
+	if index is None:
+		index = len(matrix) // 2
+	flat_dist1 = squareform(matrix[:index,:index])
+	Z1 = linkage(flat_dist1, optimal_ordering=True)
+	leaves1 = leaves_list(Z1)
+
+	flat_dist2 = squareform(matrix[index:,index:])
+	Z2 = linkage(flat_dist2, optimal_ordering=True)
+	leaves2 = leaves_list(Z2) + index
+
+	leaves = np.concatenate([leaves1, leaves2])
+	print(leaves)
+	new_matrix = np.zeros_like(matrix)
+	for i in range(len(matrix)-1):
+		for j in range(i,len(matrix)):
+			temp = matrix[leaves[i],leaves[j]]
+			new_matrix[i,j] = temp
+			new_matrix[j,i] = temp
+	return new_matrix
+
+
+def _calculate_mmd(dc, condition_from_fn, alg='linear', max_n=None, \
+	save_fns=['result.npy', 'conditions.npy']):
+	# Collect
+	latent = dc.request('latent_means')
+	audio_fns = dc.request('audio_filenames')
+	condition = np.array([condition_from_fn(str(i)) for i in audio_fns], \
+			dtype='int')
+	# Calculate.
+	all_conditions = np.unique(condition) # np.unique sorts things
+	n = len(all_conditions)
+	result = np.zeros((n,n))
+	print("n=", n)
+	sigma_squared = _estimate_median_sigma_squared(latent)
+
+	# NOTE: HERE!
+	i_vals, j_vals = [], []
+	for i in range(n-1):
+		for j in range(i+1,n):
+			i_vals.append(i)
+			j_vals.append(j)
+
+	gen = zip(i_vals, j_vals, repeat(condition), repeat(all_conditions), \
+		repeat(result), repeat(alg), repeat(latent), repeat(sigma_squared), \
+		repeat(max_n), list(range(len(i_vals))))
+	n_jobs = os.cpu_count()
+	Parallel(n_jobs=n_jobs)(delayed(_mmd_helper)(*args) for args in gen)
+
+	np.save('temp_data/'+save_fns[0], result)
+	np.save('temp_data/'+save_fns[1], all_conditions)
+	return result, all_conditions
+
+
+def _mmd_helper(i, j, condition, all_conditions, result, alg, latent, \
+	sigma_squared, max_n, iteration):
+	"""Helper to make this parallelized."""
+	i1 = np.argwhere(condition == all_conditions[i]).flatten()
+	i2 = np.argwhere(condition == all_conditions[j]).flatten()
+	if alg == 'linear':
+		mmd = _estimate_mmd2_linear_time(latent, i1, i2, \
+				sigma_squared=sigma_squared)
 	else:
-		raise NotImplementedError
-	return 100*mouse_num + session_num
+		mmd = _estimate_mmd2(latent, i1, i2, \
+				sigma_squared=sigma_squared, max_n=max_n)
+	print(i, j, mmd, flush=True)
+	result[i,j] = mmd
+	result[j,i] = mmd
 
 
-def estimate_median_sigma_squared(latent, n=2000):
+def _estimate_median_sigma_squared(latent, n=4000):
 	arr = np.zeros(n)
 	for i in range(n):
 		i1, i2 = np.random.randint(len(latent)), np.random.randint(len(latent))
 		arr[i] = np.sum(np.power(latent[i1]-latent[i2],2))
 	return np.median(arr)
 
+
+def _matrix_from_txt(text_fn):
+	"""
+
+	"""
+	i_s, j_s, mmds = np.loadtxt(text_fn, delimiter=' ', unpack=True)
+	n = int(round(max(np.max(i_s), np.max(j_s)))) + 1
+	result = np.zeros((n,n))
+	for i, j, mmd in zip(i_s, j_s, mmds):
+		result[int(i), int(j)] = mmd
+		result[int(j), int(i)] = mmd
+	return result
+
+
 # # For MUPET sample recordings
-# def condition_from_fn(fn):
+# def _condition_from_fn(fn):
 # 	return ALL_RECORDINGS.index(int(fn.split('/')[-1].split('.')[0]))
-#
-# def make_g():
-# 	d = np.load('result.npy')
-# 	plt.imshow(d)
-# 	plt.axvline(x=19.5, c='darkorange', lw=1)
-# 	plt.axhline(y=19.5, c='darkorange', lw=1)
-# 	plt.text(6,-1,'C57BL/6')
-# 	plt.text(26.5,-1,'DBA/2')
-# 	plt.text(-8,10,'C57BL/6')
-# 	plt.text(-6,30,'DBA/2')
-# 	plt.axis('off')
-# 	plt.savefig('temp.pdf')
-# 	plt.close('all')
-#
-#
-def make_g_2():
-	d = np.load('result.npy')
-	d = np.clip(d,0,None)
-	conditions = np.load('condition.npy')
-	conditions = list(np.unique(conditions)) # np.unique sorts things
-	identities = np.array([c//100 for c in conditions])
-	colors = [color_list[i%len(color_list)] for i in identities]
-	from sklearn.manifold import TSNE
-	transform = TSNE(n_components=2, metric='precomputed')
-	embed = transform.fit_transform(d)
-	# c = [color_list[all_conditions.index(i)%len(color_list)] for i in condition]
 
-	for i in range(len(identities)-1):
-		for j in range(i+1, len(identities)):
-			if identities[i] == identities[j]:
-				plt.plot([embed[i,0],embed[j,0]], [embed[i,1],embed[j,1]], \
-					c=colors[i], lw=0.5)
-	plt.scatter(embed[:,0], embed[:,1], color=colors, s=25.0)
-	plt.axis('off')
-	plt.savefig('temp_scatter.pdf')
-	plt.close('all')
-
-
-
-
-# def get_label_from_condition(condition):
-# 	return "M"+str()
 
 
 if __name__ == '__main__':
-	make_g()
-	make_g_2()
+	pass
 
 
 

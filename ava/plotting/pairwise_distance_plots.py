@@ -21,7 +21,7 @@ EPSILON = 1e-12
 
 
 def pairwise_distance_scatter_DC(dc, fields, n=10**4, scaling='mad', \
-	filename='feature_distance.pdf'):
+	ax=None, save_and_close=True, filename='feature_distance.pdf'):
 	"""
 	Plot feature distance vs. latent distance.
 
@@ -55,11 +55,13 @@ def pairwise_distance_scatter_DC(dc, fields, n=10**4, scaling='mad', \
 			euclidean(features[syll_pairs[i,0]], features[syll_pairs[i,1]])
 	# Plot.
 	X, y = latent_distances.reshape(-1,1), feature_distances.reshape(-1,1)
-	pairwise_distance_scatter(X, y, filename=filename)
+	pairwise_distance_scatter(X, y, ax=ax, save_and_close=save_and_close, \
+		filename=filename)
 
 
 
-def pairwise_distance_scatter(X, y, filename='feature_distance.pdf'):
+def pairwise_distance_scatter(X, y, ax=None, save_and_close=True, \
+	filename='feature_distance.pdf'):
 	"""
 	Plot pairwise distances.
 
@@ -71,18 +73,22 @@ def pairwise_distance_scatter(X, y, filename='feature_distance.pdf'):
 	r2 = reg.score(X, y)
 	coeff = reg.coef_.flatten()[0]
 	# Plot.
-	plt.title("Pairwise feature distances")
-	plt.xlabel("Latent feature distance")
-	plt.ylabel("Traditional feature distance")
+	if ax is None:
+		ax = plt.gca()
 	x_val = 0.9 * np.max(X)
-	plt.plot([0,x_val], [0,coeff*x_val], ls='--', c='k', alpha=0.8)
-	plt.scatter(X.flatten(), y.flatten(), s=0.9, alpha=0.6)
-	plt.tight_layout()
-	plt.savefig(filename)
-	plt.close('all')
+	ax.plot([0,x_val], [0,coeff*x_val], ls='--', c='k', alpha=0.8)
+	ax.scatter(X.flatten(), y.flatten(), s=0.9, alpha=0.6)
+	ax.set_title("Pairwise feature distances")
+	ax.set_xlabel("Latent feature distance")
+	ax.set_ylabel("Traditional feature distance")
+	if save_and_close:
+		plt.tight_layout()
+		plt.savefig(filename)
+		plt.close('all')
 
 
-def knn_display_DC(dc, fields, indices=None, n=5, scaling='mad', filename='knn_display.pdf'):
+def knn_display_DC(dc, fields, indices=None, n=5, scaling='z-score', \
+	gap=(2,4), ax=None, save_and_close=True, filename='knn_display.pdf'):
 	"""
 	Plot nearest neighbors in feature space that are distant in latent space.
 
@@ -91,23 +97,29 @@ def knn_display_DC(dc, fields, indices=None, n=5, scaling='mad', filename='knn_d
 
 	Parameters
 	----------
-	dc :
-
-	fields : list of strings
-
-	scaling : str or None, optional
-
+	dc : ...
+		...
+	fields : list of str
+		...
+	indices : list of str
+		...
+	n : int
+		Ignored if indices is not ``None``. Defaults to ``5``.
+	scaling : {str, None}, optional
+		...
 	filename : str, optional
+		Defaults to ``'knn_display.pdf'``.
 
 	"""
 	# Request data.
 	latent = dc.request('latent_means')
 	specs = dc.request('specs')
 	features = get_feature_array(dc, fields, scaling=scaling)
-	# Calculate nearest neighbors.
+	# Calculate nearest neighbors for traditional features.
 	nbrs = NearestNeighbors(n_neighbors=2, metric='euclidean').fit(features)
 	f_distances, f_indices = nbrs.kneighbors(features)
 	f_distances, f_indices = f_distances[:,1], f_indices[:,1] # Remove self-neighbors.
+	# And for latent features.
 	nbrs = NearestNeighbors(n_neighbors=2, metric='euclidean').fit(latent)
 	l_distances, l_indices = nbrs.kneighbors(latent)
 	l_distances, l_indices = l_distances[:,1], l_indices[:,1] # Remove self-neighbors.
@@ -120,22 +132,27 @@ def knn_display_DC(dc, fields, indices=None, n=5, scaling='mad', filename='knn_d
 		f_distances /= np.max(f_distances) + EPSILON
 		# Find neighbors close in feature space, but distant in latent space.
 		objective = f_distances - latent_distances
-		indices = np.argsort(objective)[:n]
+		i = 4
+		indices = np.argsort(objective)[i*10:(i+1)*10]
+	print("indices:", indices)
+	print("l_indices", [l_indices[i] for i in indices])
+	print("f_indices", [f_indices[i] for i in indices])
 	# Plot spectrograms.
 	query_specs = np.array([specs[i] for i in indices])
 	lnn_specs = np.array([specs[l_indices[i]] for i in indices])
 	fnn_specs = np.array([specs[f_indices[i]] for i in indices])
-	plot_specs = np.stack([fnn_specs, lnn_specs, query_specs])
-	grid_plot(plot_specs, os.path.join(dc.plots_dir, filename))
+	plot_specs = np.stack([query_specs, lnn_specs, fnn_specs])
+	grid_plot(plot_specs, gap=gap, ax=ax, save_and_close=save_and_close, \
+		filename=filename)
 
 
-def bridge_plot_DC(dc, from_indices, to_indices, n=8, filename='bridge_plot.pdf'):
+def bridge_plot_DC(dc, from_indices, to_indices, n=5, filename='bridge_plot.pdf'):
 	"""
 	Find smooth paths between example spectrograms.
 
 	Parameters
 	----------
-	dc :
+	dc : ava.data.data_container.DataContainer
 		...
 	from_indices : list of ints
 		...
@@ -158,8 +175,9 @@ def bridge_plot_DC(dc, from_indices, to_indices, n=8, filename='bridge_plot.pdf'
 			print(index)
 		temp_specs.append(specs[to_indices[i]])
 		print()
-		result.append(temp_specs)
-	grid_plot(np.array(result), os.path.join(dc.plots_dir, filename))
+		result.append(np.array(temp_specs))
+	result = np.array(result)
+	grid_plot(result, gap=4, filename=os.path.join(dc.plots_dir, filename))
 
 
 def random_walk_plot(dc, from_indices=None, n=20, filename='spec_walk.pdf'):
@@ -181,8 +199,8 @@ def random_walk_plot(dc, from_indices=None, n=20, filename='spec_walk.pdf'):
 			distances[compiled[:j]] = 1e6 # large number
 			compiled[j] = np.random.choice(np.argsort(distances)[:4])
 		print(compiled)
-		result.append([specs[j] for j in compiled])
-	grid_plot(np.array(result), os.path.join(dc.plots_dir, filename))
+		result.append(np.array([specs[j] for j in compiled]))
+	grid_plot(np.array(result), filename=os.path.join(dc.plots_dir, filename))
 
 
 def indexed_grid_plot(dc, indices, filename='grid.pdf'):
@@ -221,11 +239,12 @@ def get_feature_array(dc, fields, scaling='mad'):
 
 	Parameters
 	----------
-	dc
-
-	fields
-
-	scaling
+	dc: ..
+		...
+	fields: ...
+		...
+	scaling: str, optional
+		...
 
 	Returns
 	-------

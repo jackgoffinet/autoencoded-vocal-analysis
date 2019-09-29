@@ -13,7 +13,7 @@ from scipy.ndimage.filters import gaussian_filter, gaussian_filter1d
 from ava.segmenting.utils import get_spec
 
 
-EPSILON = 1e-12
+EPSILON = 1e-9
 
 
 
@@ -58,12 +58,12 @@ def get_onsets_offsets(audio, p, return_traces=False):
 	# spec[spec<0.0] = 0.0
 	# spec /= mad + EPSILON
 
-	# Automated scaling.
-	quantile = np.quantile(spec, 0.05)
-	spec -= quantile
-	spec[spec<0.0] = 0.0
-	mad = np.median(np.abs(spec)) # Median Absolute Deviation
-	spec /= mad + EPSILON
+	# # Automated scaling.
+	# quantile = np.quantile(spec, 0.05)
+	# spec -= quantile
+	# spec[spec<0.0] = 0.0
+	# mad = np.median(spec) # Median Absolute Deviation
+	# spec /= mad + EPSILON
 
 	# smoothing_time = p['smoothing_timescale'] / dt
 	# smooth = gaussian_filter(spec, [p['freq_smoothing'], smoothing_time])
@@ -75,11 +75,12 @@ def get_onsets_offsets(audio, p, return_traces=False):
 	# Smooth.
 	# if p['smoothing'] ??
 	amps = gaussian_filter(amps, smoothing_time)
-	# Scale by MAD.
-	median = np.min(amps)
-	mad = np.median(np.abs(amps - median)) # Median Absolute Deviation
-	amps -= median
-	amps /= mad + EPSILON
+	
+	# # Scale by MAD.
+	# median = np.min(amps)
+	# mad = np.median(np.abs(amps - median)) # Median Absolute Deviation
+	# amps -= median
+	# amps /= mad + EPSILON
 
 	# Find local maxima greater than th_3.
 	local_maxima = []

@@ -106,7 +106,6 @@ def refine_segments_post_vae(dc, seg_dirs, out_seg_dirs, verbose=True):
 	"""
 	Manually remove noise by selecting regions of UMAP latent mean projections.
 
-	TO DO: finish this!
 
 	Parameters
 	----------
@@ -120,9 +119,43 @@ def refine_segments_post_vae(dc, seg_dirs, out_seg_dirs, verbose=True):
 		Defaults to ``True``.
 
 	"""
-	latent = dc.request('latent_means')
-	# NOTE: TO DO
+	embed = dc.request('latent_mean_umap')
+	bounds = {'x1': [], 'x2': [], 'y1': [], 'y2': []}
+	colors = ['b'] * len(embed)
+	first_iteration = True
 	raise NotImplementedError
+
+	# Keep drawing boxes around noise.
+	while True:
+		_plot_helper(embed, colors)
+		if first_iteration:
+			if verbose:
+				print("Writing html plot:")
+			first_iteration = False
+			title = "Select unwanted sounds:"
+			tooltip_plot(embed, specs, num_imgs=num_imgs, title=title)
+			if verbose:
+				print("\tDone.")
+		if input("Press [q] to quit drawing rectangles: ") == 'q':
+			break
+		print("Select a rectangle containing noise:")
+		x1 = _get_input("x1: ")
+		x2 = _get_input("x2: ")
+		y1 = _get_input("y1: ")
+		y2 = _get_input("y2: ")
+		bounds['x1'].append(x1)
+		bounds['x2'].append(x2)
+		bounds['y1'].append(y1)
+		bounds['y2'].append(y2)
+		# Update scatter colors.
+		colors = _update_colors(colors, embed, bounds)
+
+	# Write files to out_seg_dirs.
+	gen = zip(seg_dirs, audio_dirs, out_seg_dirs, repeat(p), repeat(max_len), \
+			repeat(transform), repeat(bounds), repeat(verbose))
+	n_jobs = min(len(seg_dirs), os.cpu_count()-1)
+	Parallel(n_jobs=n_jobs)(delayed(_update_segs_helper)(*args) for args in gen)
+
 
 
 def _get_specs(audio_dirs, seg_dirs, p, n_samples=None, max_len=None):

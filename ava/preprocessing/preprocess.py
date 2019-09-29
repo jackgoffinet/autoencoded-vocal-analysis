@@ -335,7 +335,7 @@ def get_audio_seg_filenames(audio_dir, segment_dir, p):
 	temp_filenames = [i for i in sorted(os.listdir(audio_dir)) if \
 			is_audio_file(i)]
 	audio_filenames = [os.path.join(audio_dir, i) for i in temp_filenames]
-	temp_filenames = [i[:-4] + p['seg_extension'] for i in temp_filenames]
+	temp_filenames = [i[:-4] + '.txt' for i in temp_filenames]
 	seg_filenames = [os.path.join(segment_dir, i) for i in temp_filenames]
 	return audio_filenames, seg_filenames
 

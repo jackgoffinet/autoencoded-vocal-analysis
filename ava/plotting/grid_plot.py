@@ -13,42 +13,46 @@ import os
 
 
 
-def indexed_grid_plot(dc, indices, ax=None, save_and_close=True, \
-	filename='grid.pdf'):
+def indexed_grid_plot(dc, indices, ax=None, save_and_close=True, gap=3, \
+	sign=1, side_len=128, filename='grid.pdf'):
 	"""
 	TO DO: use this to access grid_plot.
 	"""
 	specs = dc.request('specs')
-	result = []
-	for row in indices:
-		result.append([specs[j] for j in row])
+	a, b, c, d = len(indices), len(indices[0]), side_len, side_len
+	result = np.zeros((a,b,c,d))
+	for i, row in enumerate(indices):
+		for j, col in enumerate(row):
+			result[i,j] = specs[col]
 	filename = os.path.join(dc.plots_dir, filename)
-	grid_plot(np.array(result), ax=ax, save_and_close=save_and_close, \
-			filename=filename)
+	grid_plot(result, gap=gap, ax=ax, sign=sign, \
+			save_and_close=save_and_close, filename=filename)
 
 
-def grid_plot(specs, gap=3, ax=None, save_and_close=True, filename='temp.pdf'):
+def grid_plot(specs, gap=3, ax=None, sign=1, save_and_close=True, \
+	filename='temp.pdf'):
 	"""
 	Parameters
 	----------
 	specs : numpy.ndarray
-		...
-
+		Spectrograms
 	gap : int or tuple of two ints, optional
 		The vertical and horizontal gap between images, in pixels.
-
 	ax : matplotlib.pyplot.axis, optional
 		Axis to plot figure. Defaults to matplotlib.pyplot.gca().
-
 	save_and_close : bool, optional
 		Whether to save and close after plotting. Defaults to True.
-
 	filename : str, optional
 		Save the image here.
 	"""
 	if type(gap) == type(4):
 		gap = (gap,gap)
-	a, b, c, d = specs.shape
+	try:
+		a, b, c, d = specs.shape
+	except:
+		print(specs.shape)
+		print(type(specs), type(specs[0]))
+		quit()
 	dx, dy = d+gap[1], c+gap[0]
 	height = a*c + (a-1)*gap[0]
 	width = b*d + (b-1)*gap[1]
@@ -62,8 +66,9 @@ def grid_plot(specs, gap=3, ax=None, save_and_close=True, filename='temp.pdf'):
 		img[j*dy-gap[0]:j*dy,:] = np.nan
 	if ax is None:
 		ax = plt.gca()
-	ax.imshow(img, aspect='equal', origin='lower', interpolation='none',
-		vmin=0, vmax=1)
+	vmin, vmax = min(sign*1, 0), max(sign*1, 0)
+	ax.imshow(sign*img, aspect='equal', origin='lower', interpolation='none',
+		vmin=vmin, vmax=vmax)
 	ax.axis('off')
 	if save_and_close:
 		plt.tight_layout()

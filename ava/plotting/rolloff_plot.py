@@ -9,6 +9,8 @@ __date__ = "August 2019"
 
 from itertools import product
 import os
+from matplotlib.patches import Patch
+from matplotlib.colors import to_rgba
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
 import numpy as np
@@ -66,7 +68,8 @@ def rolloff_plot(latents, labels, best_of=4, filename='rolloff.pdf'):
 
 
 def clustering_performance_plot_splits(latents, labels, n_components=6, \
-	num_fake_shuffles=10, axarr=None, save_and_close=True, filename='clustering.pdf'):
+	num_fake_shuffles=10, axarr=None, save_and_close=True, load_data=False, \
+	filename='clustering.pdf', colors=['b', 'darkorange']):
 	"""
 	Parameters
 	----------
@@ -78,179 +81,71 @@ def clustering_performance_plot_splits(latents, labels, n_components=6, \
 	latent_nums = range(len(latents))
 	result = {}
 
-	# for latent_num in latent_nums:
-	# 	latent = latents[latent_num]
-	# 	kf = KFold(n_splits=10, shuffle=True)
-	# 	fold = 0
-	# 	for train_index, test_index in kf.split(latent):
-	# 		print(fold)
-	# 		clusterer = GaussianMixture(n_components=n_components, \
-	# 			n_init=5, covariance_type='full').fit(latent[train_index])
-	# 		c_labels = clusterer.predict(latent[test_index])
-	# 		sil_score = metrics.silhouette_score(latent[test_index], c_labels, metric='euclidean')
-	# 		ch_score = metrics.calinski_harabasz_score(latent[test_index], c_labels)
-	# 		db_score = metrics.davies_bouldin_score(latent[test_index], c_labels)
-	# 		result[(labels[latent_num], fold)] = [sil_score, ch_score, db_score]
-	# 		fake_latent_train = make_fake_latent(latent[train_index])
-	# 		fake_latent = make_fake_latent(latent[test_index])
-	# 		clusterer = GaussianMixture(n_components=n_components, \
-	# 			n_init=5, covariance_type='full').fit(fake_latent_train)
-	# 		c_labels = clusterer.predict(fake_latent)
-	# 		sil_score = metrics.silhouette_score(fake_latent, c_labels, metric='euclidean')
-	# 		ch_score = metrics.calinski_harabasz_score(fake_latent, c_labels)
-	# 		db_score = metrics.davies_bouldin_score(fake_latent, c_labels)
-	# 		result[(labels[latent_num]+'_fake', fold)] = [sil_score, ch_score, db_score]
-	# 		fold += 1
-	# np.save('result.npy', result)
+	data_loaded = False
+	if load_data:
+		try:
+			result = np.load('temp_data/clustering_performance.npy', allow_pickle=True).item()
+			data_loaded = True
+		except:
+			print("Unable to load data!")
 
-	result = np.load('result.npy', allow_pickle=True).item()
+	if not data_loaded:
+		for latent_num in latent_nums:
+			latent = latents[latent_num]
+			kf = KFold(n_splits=10, shuffle=True)
+			fold = 0
+			for train_index, test_index in kf.split(latent):
+				print(fold)
+				clusterer = GaussianMixture(n_components=n_components, \
+					n_init=5, covariance_type='full').fit(latent[train_index])
+				c_labels = clusterer.predict(latent[test_index])
+				sil_score = metrics.silhouette_score(latent[test_index], c_labels, metric='euclidean')
+				ch_score = metrics.calinski_harabasz_score(latent[test_index], c_labels)
+				db_score = metrics.davies_bouldin_score(latent[test_index], c_labels)
+				result[(labels[latent_num], fold)] = [sil_score, ch_score, db_score]
+				fake_latent_train = make_fake_latent(latent[train_index])
+				fake_latent = make_fake_latent(latent[test_index])
+				clusterer = GaussianMixture(n_components=n_components, \
+					n_init=5, covariance_type='full').fit(fake_latent_train)
+				c_labels = clusterer.predict(fake_latent)
+				sil_score = metrics.silhouette_score(fake_latent, c_labels, metric='euclidean')
+				ch_score = metrics.calinski_harabasz_score(fake_latent, c_labels)
+				db_score = metrics.davies_bouldin_score(fake_latent, c_labels)
+				result[(labels[latent_num]+'_fake', fold)] = [sil_score, ch_score, db_score]
+				fold += 1
+		np.save('temp_data/clustering_performance.npy', result)
+
 	if axarr is None:
 		_, axarr = plt.subplots(1, 3)
 	np.random.seed(42)
-	for j in range(3):
+	for j in range(len(axarr)):
 		for i, label in enumerate(labels):
-			x_vals = [0.6*i + jitter*np.random.rand() for _ in range(10)]
+			x_vals = [0.0*i + jitter*np.random.rand() for _ in range(10)]
 			y_vals = np.array([result[(label,k)][j] for k in range(10)])
 			y_vals -= np.array([result[(label+'_fake',k)][j] for k in range(10)])
 			if j == 2:
 				y_vals = -y_vals
 			axarr[j].axhline(y=0, c='k', ls='--', lw=0.8)
-			axarr[j].scatter(x_vals, y_vals, alpha=0.8)
+			axarr[j].scatter(x_vals, y_vals, c=colors[i], alpha=0.8)
 			axarr[j].set_xticks([], [])
 	np.random.seed(None)
-	axarr[0].set_ylabel(r'$\Delta$ Silhouette Coefficient')
-	axarr[1].set_ylabel(r'$\Delta$ Calinski-Harabasz Index')
-	axarr[2].set_ylabel(r'$-\Delta$ Davies-Bouldin Index')
+	# axarr[0].set_ylabel(r'$\Delta$ Silhouette Coefficient')
+	axarr[0].set_ylabel("Goodness of Clustering\n"+r"($\Delta$ Silhouette Coefficient)", \
+		labelpad=2)
+	if len(axarr) > 1:
+		axarr[1].set_ylabel(r'$\Delta$ Calinski-Harabasz Index')
+		if len(axarr) > 2:
+			axarr[2].set_ylabel(r'$-\Delta$ Davies-Bouldin Index')
+	if labels is not None:
+		edgecolor = to_rgba('k', alpha=0.0)
+		patches = [Patch(color=colors[0], label=labels[0]), \
+			Patch(color=colors[1], label=labels[1])]
+		axarr[0].legend(handles=patches, edgecolor=edgecolor, framealpha=0.0, \
+			loc='center right', ncol=1)
 	sns.despine(bottom=True)
 	if save_and_close:
 		plt.savefig(filename)
 		plt.close('all')
-
-
-def clustering_performance_plot_zscore(latents, labels, n_components=6, \
-	num_fake_shuffles=10, filename='clustering.pdf'):
-	"""
-	Parameters
-	----------
-	latents : ...
-		...
-
-	"""
-	jitter = 0.25
-	latent_nums = range(len(latents))
-	result = {}
-
-	# for latent_num in latent_nums:
-	# 	latent = latents[latent_num]
-	# 	kf = KFold(n_splits=5)
-	# 	fold = 0
-	# 	for train_index, test_index in kf.split(latent):
-	# 		print(fold)
-	# 		clusterer = GaussianMixture(n_components=n_components, \
-	# 			n_init=5, covariance_type='full').fit(latent[train_index])
-	# 		c_labels = clusterer.predict(latent[test_index])
-	# 		sil_score = metrics.silhouette_score(latent[test_index], c_labels, metric='euclidean')
-	# 		ch_score = metrics.calinski_harabasz_score(latent[test_index], c_labels)
-	# 		db_score = metrics.davies_bouldin_score(latent[test_index], c_labels)
-	# 		result[(labels[latent_num], fold)] = [sil_score, ch_score, db_score]
-	# 		# fake_latent = make_fake_latent(latent[train_index])
-	# 		fold += 1
-	# 	fold = 0
-	# 	for i in range(num_fake_shuffles):
-	# 		print(i)
-	# 		fake_latent = make_fake_latent(latent)
-	# 		kf = KFold(n_splits=5)
-	# 		for train_index, test_index in kf.split(fake_latent):
-	# 			clusterer = GaussianMixture(n_components=n_components, \
-	# 				n_init=5, covariance_type='full').fit(fake_latent[train_index])
-	# 			c_labels = clusterer.predict(fake_latent[test_index])
-	# 			sil_score = metrics.silhouette_score(fake_latent[test_index], c_labels, metric='euclidean')
-	# 			ch_score = metrics.calinski_harabasz_score(fake_latent[test_index], c_labels)
-	# 			db_score = metrics.davies_bouldin_score(fake_latent[test_index], c_labels)
-	# 			result[(labels[latent_num]+'_fake', fold)] = [sil_score, ch_score, db_score]
-	# 			break
-	# 		fold += 1
-	# np.save('result.npy', result)
-	# quit()
-	result = np.load('result.npy', allow_pickle=True).item()
-	f, axarr = plt.subplots(1, 3)
-	for j in range(3):
-		for i, label in enumerate(labels):
-			y_vals_1 = np.array([result[(label,k)][j] for k in range(5)])
-			x_vals_1 = [i + jitter*(np.random.rand()-0.5) for _ in y_vals_1]
-			y_vals_2 = np.array([result[(label+'_fake',k)][j] for k in range(num_fake_shuffles)])
-			mean = np.mean(y_vals_2)
-			std = np.std(y_vals_2, ddof=1)
-			if j == 2:
-				std = -std
-			y_vals_1 -= mean
-			y_vals_1 /= std
-			axarr[j].scatter(x_vals_1, y_vals_1)
-			axarr[j].axhline(y=0)
-	plt.savefig(filename)
-	plt.close('all')
-
-
-def clustering_performance_plot(latents, labels, n_components=6, \
-	filename='clustering.pdf'):
-	"""
-	Parameters
-	----------
-	latents : ...
-		...
-
-	"""
-	jitter = 0.25
-	latent_nums = range(len(latents))
-	result = {}
-
-	for latent_num in latent_nums:
-		latent = latents[latent_num]
-		kf = KFold(n_splits=5)
-		fold = 0
-		for train_index, test_index in kf.split(latent):
-			print(fold)
-			clusterer = GaussianMixture(n_components=n_components, \
-				n_init=5, covariance_type='full').fit(latent[train_index])
-			c_labels = clusterer.predict(latent[test_index])
-			sil_score = metrics.silhouette_score(latent[test_index], c_labels, metric='euclidean')
-			ch_score = metrics.calinski_harabasz_score(latent[test_index], c_labels)
-			db_score = metrics.davies_bouldin_score(latent[test_index], c_labels)
-			result[(labels[latent_num], fold)] = [sil_score, ch_score, db_score]
-			# fake_latent = make_fake_latent(latent[train_index])
-			fold += 1
-		fold = 0
-		for i in range(10):
-			print(i)
-			fake_latent = make_fake_latent(latent)
-			kf = KFold(n_splits=5)
-			for train_index, test_index in kf.split(fake_latent):
-				clusterer = GaussianMixture(n_components=n_components, \
-					n_init=5, covariance_type='full').fit(fake_latent[train_index])
-				c_labels = clusterer.predict(fake_latent[test_index])
-				sil_score = metrics.silhouette_score(fake_latent[test_index], c_labels, metric='euclidean')
-				ch_score = metrics.calinski_harabasz_score(fake_latent[test_index], c_labels)
-				db_score = metrics.davies_bouldin_score(fake_latent[test_index], c_labels)
-				result[(labels[latent_num]+'_fake', fold)] = [sil_score, ch_score, db_score]
-				break
-			fold += 1
-	np.save('result.npy', result)
-	# quit()
-	result = np.load('result.npy', allow_pickle=True).item()
-	f, axarr = plt.subplots(1, 3)
-	for j in range(3):
-		for i, label in enumerate(labels):
-			y_vals_1 = [result[(label,k)][j] for k in range(5)]
-			x_vals_1 = [2*i + jitter*(np.random.rand()-0.5) for _ in y_vals_1]
-			axarr[j].scatter(x_vals_1, y_vals_1)
-			y_vals_2 = [result[(label+'_fake',k)][j] for k in range(5)]
-			x_vals_2 = [2*i+1 + jitter*(np.random.rand()-0.5) for _ in y_vals_2]
-			axarr[j].scatter(x_vals_2, y_vals_2)
-			for k in range(5):
-				plt.plot([x_vals_1[k], x_vals_2[k]], [y_vals_1[k], y_vals_2[k]])
-	plt.savefig(filename)
-	plt.close('all')
-
 
 
 def make_fake_latent(latent, seed=None):
@@ -261,6 +156,7 @@ def make_fake_latent(latent, seed=None):
 	result = np.random.multivariate_normal(loc, cov, size=len(latent))
 	np.random.seed(None)
 	return result
+
 
 def get_noise(d=3.0, n=3000, ndim=2, seed=42):
 	np.random.seed(42)
