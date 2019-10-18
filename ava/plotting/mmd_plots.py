@@ -49,7 +49,8 @@ np.random.seed(None)
 def mmd_matrix_DC(dc, condition_from_fn, load_data=False, ax=None, \
 	save_and_close=True, divider=None, cluster=True, alg='linear', max_n=None, \
 	cmap='viridis', filename='mmd_matrix.pdf', divider_color='white', \
-	save_load_fns=['result_mmd_matrix.npy', 'all_conditions.npy']):
+	save_load_fns=['result_mmd_matrix.npy', 'all_conditions.npy'], \
+	colorbar=True, cax=None):
 	"""
 	Parameters
 	----------
@@ -74,13 +75,23 @@ def mmd_matrix_DC(dc, condition_from_fn, load_data=False, ax=None, \
 		result = _cluster_matrix(result)
 	if ax is None:
 		ax = plt.gca()
-	ax.imshow(result, cmap=cmap)
+	im = ax.imshow(result, cmap=cmap)
 	ax.axis('off')
 	if divider is None:
 		divider = len(result) // 2
 	if divider > 0:
 		ax.axhline(y=divider-0.5, c=divider_color, lw=0.9)
 		ax.axvline(x=divider-0.5, c=divider_color, lw=0.9)
+	if colorbar:
+		min_val, max_val = 0, np.max(result)
+		print("min/max", np.min(result), np.max(result))
+		ticks = [min_val, max_val]
+		fig = plt.gcf()
+		cbar = fig.colorbar(im, cax=cax, fraction=0.046, \
+			orientation="horizontal", ticks=[0,0.3])
+		cbar.solids.set_edgecolor("face")
+		cbar.solids.set_rasterized(True)
+		cbar.ax.set_xticklabels(['0.0', '0.3'])
 	if save_and_close:
 		plt.savefig(os.path.join(dc.plots_dir, filename))
 		plt.close('all')
@@ -135,11 +146,6 @@ def mmd_tsne_DC(dc, condition_from_fn, load_data=False, ax=None, alg='linear',\
 	pc = PolyCollection(poly_vals, color=poly_colors)
 	ax.add_collection(pc)
 	ax.scatter(embed[:,0], embed[:,1], color=colors, s=s, alpha=alpha)
-	# added = []
-	# for em, identity in zip(embed, identities):
-	# 	if identity not in added:
-	# 		ax.annotate(str(identity), (em[0], em[1]), fontsize=6)
-	# 		added.append(identity)
 	plt.axis('off')
 	if save_and_close:
 		plt.savefig(os.path.join(dc.plots_dir, filename))

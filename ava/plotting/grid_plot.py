@@ -50,6 +50,7 @@ def grid_plot(specs, gap=3, ax=None, sign=1, save_and_close=True, \
 	try:
 		a, b, c, d = specs.shape
 	except:
+		print("Invalid shape:")
 		print(specs.shape)
 		print(type(specs), type(specs[0]))
 		quit()

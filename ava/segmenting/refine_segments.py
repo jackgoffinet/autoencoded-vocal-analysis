@@ -13,6 +13,7 @@ from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
 import numpy as np
+from numba.errors import NumbaPerformanceWarning
 import os
 from scipy.io import wavfile
 import umap
@@ -20,7 +21,7 @@ import warnings
 
 from ava.plotting.tooltip_plot import tooltip_plot
 from ava.segmenting.utils import get_spec, get_audio_seg_filenames, \
-		get_onsets_offsets_from_file
+		_read_onsets_offsets
 
 # https://github.com/lmcinnes/umap/issues/252
 warnings.filterwarnings("ignore", message="parallel=True*")
@@ -32,7 +33,7 @@ warnings.filterwarnings("ignore", message="Chunk (non-data) not understood*")
 
 
 def refine_segments_pre_vae(seg_dirs, audio_dirs, out_seg_dirs, p, \
-	n_samples=10000, num_imgs=1000, verbose=True):
+	n_samples=8000, num_imgs=1000, verbose=True):
 	"""
 	Manually remove noise by selecting regions of UMAP spectrogram projections.
 
@@ -59,11 +60,13 @@ def refine_segments_pre_vae(seg_dirs, audio_dirs, out_seg_dirs, p, \
 		print("Collecting spectrograms...")
 	specs, max_len, _ = _get_specs(audio_dirs, seg_dirs, p, n_samples=n_samples)
 	specs = np.stack(specs)
-	transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, \
-			metric='euclidean', random_state=42)
 	if verbose:
 		print("Running UMAP...")
-	embed = transform.fit_transform(specs.reshape(len(specs), -1))
+	transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, \
+			metric='euclidean', random_state=42)
+	with warnings.catch_warnings():
+		warnings.filterwarnings("ignore", category=NumbaPerformanceWarning)
+		embed = transform.fit_transform(specs.reshape(len(specs), -1))
 	if verbose:
 		print("\tDone.")
 	bounds = {'x1': [], 'x2': [], 'y1': [], 'y2': []}
@@ -186,20 +189,28 @@ def _get_specs(audio_dirs, seg_dirs, p, n_samples=None, max_len=None):
 
 	"""
 	# Get the filenames.
-	audio_fns, seg_fns = get_audio_seg_filenames(audio_dirs, seg_dirs, p)
+	audio_fns, seg_fns = get_audio_seg_filenames(audio_dirs, seg_dirs)
+	# Reproducibly shuffle.
+	audio_fns, seg_fns = np.array(audio_fns), np.array(seg_fns)
+	np.random.seed(42)
+	perm = np.random.permutation(len(audio_fns))
+	np.random.seed(None)
+	audio_fns, seg_fns = audio_fns[perm], seg_fns[perm]
 	# Collect spectrograms.
 	specs, all_fns = [], []
 	for audio_fn, seg_fn in zip(audio_fns, seg_fns):
-		onsets, offsets = get_onsets_offsets_from_file(seg_fn, p)
+		onsets, offsets = _read_onsets_offsets(seg_fn)
 		fs, audio = wavfile.read(audio_fn)
 		for onset, offset in zip(onsets, offsets):
 			i1, i2 = int(onset * fs), int(offset * fs)
-			assert i1 >= 0 and i2 <= len(audio), audio_fn + ", " + seg_fn
+			assert i1 >= 0, audio_fn + ", " + seg_fn
 			spec, _, _ = get_spec(audio[i1:i2], p)
 			specs.append(spec)
 			all_fns.append(os.path.split(seg_fn)[-1])
-			if len(specs) == n_samples:
+			if len(specs) >= n_samples:
 				break
+		if len(specs) >= n_samples:
+			break
 	# Zero-pad.
 	assert len(specs) > 0, "Found no spectrograms!"
 	n_freq_bins = specs[0].shape[0]
@@ -244,8 +255,6 @@ def _update_segs_helper(seg_dir, audio_dir, out_seg_dir, p, max_len, transform,\
 	"""
 	Write updated segments.
 
-	This is separate from `refine_segments` so it can be parallelized.
-
 	Parameters
 	----------
 	seg_dir : str
@@ -263,7 +272,7 @@ def _update_segs_helper(seg_dir, audio_dir, out_seg_dir, p, max_len, transform,\
 	bounds : ...
 		...
 	verbose : ...
-		,,,
+		...
 
 	"""
 	if verbose:
@@ -293,7 +302,6 @@ def _update_segs_helper(seg_dir, audio_dir, out_seg_dir, p, max_len, transform,\
 		audio_fn = os.path.join(audio_dir, prev_fn)
 		out_seg_fn = os.path.join(out_seg_dir, prev_fn)
 		_write_segs(out_segs, out_seg_fn, audio_fn)
-
 
 
 def _write_segs(segs, out_fn, header_fn):

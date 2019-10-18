@@ -120,17 +120,16 @@ if __name__ == '__main__':
 
 	caxs = [axarr[i] for i in [7,8,9]]
 	axs = [axarr[i] for i in [0,1,2]]
-	# for cax, ax, field in zip(caxs, axs, inset_fields):
-	# 	latent_projection_plot_DC(dc1, color_by=field, colorbar=True, s=0.25, \
-	# 		alpha=0.3, ax=ax, cax=cax, save_and_close=False)
+	for cax, ax, field in zip(caxs, axs, inset_fields):
+		latent_projection_plot_DC(dc1, color_by=field, colorbar=True, s=0.25, \
+			alpha=0.3, ax=ax, cax=cax, save_and_close=False)
 
 
-	# pairwise_correlation_plot_DC(dc1, mupet_fields, ax=axarr[4], cax=axarr[6], \
-	# 	save_and_close=False)
+	pairwise_correlation_plot_DC(dc1, mupet_fields, ax=axarr[4], cax=axarr[6], \
+		save_and_close=False)
 
-	# correlation_bar_chart_DC([dc1, dc2, dc3], [mupet_fields, ds_fields, sap_fields],
-	# 	colors=colors)
-	# quit()
+	correlation_bar_chart_DC([dc1, dc2, dc3], [mupet_fields, ds_fields, sap_fields],
+		colors=colors)
 
 	# # _boxplot_DC loads data that's written by correlation_bar_chart_DC
 	# _boxplot_DC(colors, hatch='oo', ax=axarr[3], save_and_close=False)

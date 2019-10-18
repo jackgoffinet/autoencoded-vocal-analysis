@@ -106,36 +106,36 @@ mouse_params = {
 # feature_dirs = 	[root+'C57_deepsqueak',	root+'DBA_deepsqueak']
 
 
-# BM030
-params = mouse_params
-params['preprocess']['spec_min_val'] = -6.5
-params['preprocess']['spec_max_val'] = -2.5
-root = '/media/jackg/Jacks_Animal_Sounds/mice/BM030/'
-model_filename = root + 'checkpoint_050.tar'
-audio_dirs = 	[root+'audio']
-seg_dirs = 		[root+'segs']
-proj_dirs = 	[root+'proj']
-spec_dirs = 	[root+'specs']
-feature_dirs = 	[root+'mupet']
+# # BM030
+# params = mouse_params
+# params['preprocess']['spec_min_val'] = -6.5
+# params['preprocess']['spec_max_val'] = -2.5
+# root = '/media/jackg/Jacks_Animal_Sounds/mice/BM030/'
+# model_filename = root + 'checkpoint_050.tar'
+# audio_dirs = 	[root+'audio']
+# seg_dirs = 		[root+'segs']
+# proj_dirs = 	[root+'proj']
+# spec_dirs = 	[root+'specs']
+# feature_dirs = 	[root+'mupet']
 
 
 # # Tom control
-# params = mouse_params
-# params['preprocess']['fs'] = 303030
-# params['preprocess']['spec_min_val'] = -6.5
-# params['preprocess']['spec_max_val'] = -2.5
-#
-# animals = list(range(3,11)) + list(range(12,24)) + list(range(26,31)) + \
-# 	list(range(44,51)) + list(range(52,53)) + list(range(54,57))
-# animal_names = ['BM'+str(animal).zfill(3) for animal in animals]
-#
-# root = '/media/jackg/Jacks_Animal_Sounds/mice/Tom_control/'
-# audio_dirs = [root+i+'/audio/' for i in animal_names]
-# seg_dirs = [root+i+'/segs/' for i in animal_names]
-# proj_dirs = [root+i+'/projections/' for i in animal_names]
-# spec_dirs = [root+i+'/specs/' for i in animal_names]
-# feature_dirs = [root+i+'/mupet/' for i in animal_names]
-# model_filename = root + 'checkpoint_060.tar'
+params = mouse_params
+params['preprocess']['fs'] = 303030
+params['preprocess']['spec_min_val'] = -6.5
+params['preprocess']['spec_max_val'] = -2.5
+
+animals = list(range(3,11)) + list(range(12,24)) + list(range(26,31)) + \
+	list(range(44,51)) + list(range(52,53)) + list(range(54,57))
+animal_names = ['BM'+str(animal).zfill(3) for animal in animals]
+
+root = '/media/jackg/Jacks_Animal_Sounds/mice/Tom_control/'
+audio_dirs = [root+i+'/audio/' for i in animal_names]
+seg_dirs = [root+i+'/segs/' for i in animal_names]
+proj_dirs = [root+i+'/projections/' for i in animal_names]
+spec_dirs = [root+i+'/specs/' for i in animal_names]
+feature_dirs = [root+i+'/mupet/' for i in animal_names]
+model_filename = root + 'checkpoint_060.tar'
 
 
 # from ava.segmenting.utils import copy_segments_to_standard_format
@@ -145,7 +145,9 @@ feature_dirs = 	[root+'mupet']
 
 dc = DataContainer(projection_dirs=proj_dirs, feature_dirs=feature_dirs,
 	spec_dirs=spec_dirs, plots_dir=root, model_filename=model_filename)
-
+latent = dc.request('latent_means')
+print(latent.shape)
+quit()
 
 # ##################################
 # # 1) Tune segmenting parameters. #
@@ -185,16 +187,16 @@ dc = DataContainer(projection_dirs=proj_dirs, feature_dirs=feature_dirs,
 # Parallel(n_jobs=n_jobs)(delayed(process_sylls)(*args) for args in gen)
 
 
-# ###################################################
-# # 5) Train a generative model on these syllables. #
-# ###################################################
-# model = VAE(save_dir=root)
-# # model.load_state(root+'ds_checkpoint_100.tar')
-# partition = get_syllable_partition(spec_dirs, split=1, max_num_files=2500)
-# num_workers = os.cpu_count()-1
-# loaders = get_syllable_data_loaders(partition, num_workers=num_workers)
-# loaders['test'] = loaders['train']
-# model.train_loop(loaders, epochs=151, test_freq=None)
+###################################################
+# 5) Train a generative model on these syllables. #
+###################################################
+model = VAE(save_dir=root)
+# model.load_state(root+'ds_checkpoint_100.tar')
+partition = get_syllable_partition(spec_dirs, split=1, max_num_files=2500)
+num_workers = os.cpu_count()-1
+loaders = get_syllable_data_loaders(partition, num_workers=num_workers)
+loaders['test'] = loaders['train']
+model.train_loop(loaders, epochs=151, test_freq=None)
 
 
 ########################

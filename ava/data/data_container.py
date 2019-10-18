@@ -428,7 +428,9 @@ class DataContainer():
 		self._check_for_dirs(['projection_dirs', 'spec_dirs', 'model_filename'],\
 			'latent_means')
 		# First, see how many syllables are in each file.
-		hdf5_file = get_hdf5s_from_dir(self.spec_dirs[0])[0]
+		temp = get_hdf5s_from_dir(self.spec_dirs[0])
+		assert len(temp) > 0, "Found no specs in" + self.spec_dirs[0]
+		hdf5_file = temp[0]
 		with h5py.File(hdf5_file, 'r') as f:
 			self.sylls_per_file = len(f['specs'])
 		spf = self.sylls_per_file
@@ -445,21 +447,24 @@ class DataContainer():
 				os.makedirs(proj_dir)
 			# Make a DataLoader for the syllables.
 			partition = get_syllable_partition([spec_dir], 1, shuffle=False)
-			loader = get_syllable_data_loaders(partition, \
-				shuffle=(False,False))['train']
-			# Get the latent means from the model.
-			latent_means = model.get_latent(loader)
-			all_latent.append(latent_means)
-			# Write them to the corresponding projection directory.
-			hdf5s = get_hdf5s_from_dir(spec_dir)
-			assert len(latent_means) // len(hdf5s) == spf, "Inconsistent number\
-				of syllables per file ("+str(len(latent_means) // len(hdf5s))+\
-				") in directory "+spec_dir+". Expected "+str(spf)+"."
-			for j in range(len(hdf5s)):
-				filename = os.path.join(proj_dir, os.path.split(hdf5s[j])[-1])
-				data = latent_means[j*spf:(j+1)*spf]
-				with h5py.File(filename, 'a') as f:
-					f.create_dataset('latent_means', data=data)
+			try:
+				loader = get_syllable_data_loaders(partition, \
+					shuffle=(False,False))['train']
+				# Get the latent means from the model.
+				latent_means = model.get_latent(loader)
+				all_latent.append(latent_means)
+				# Write them to the corresponding projection directory.
+				hdf5s = get_hdf5s_from_dir(spec_dir)
+				assert len(latent_means) // len(hdf5s) == spf, "Inconsistent number\
+					of syllables per file ("+str(len(latent_means) // len(hdf5s))+\
+					") in directory "+spec_dir+". Expected "+str(spf)+"."
+				for j in range(len(hdf5s)):
+					filename = os.path.join(proj_dir, os.path.split(hdf5s[j])[-1])
+					data = latent_means[j*spf:(j+1)*spf]
+					with h5py.File(filename, 'a') as f:
+						f.create_dataset('latent_means', data=data)
+			except AssertionError: # No specs in this directory
+				pass
 		return np.concatenate(all_latent)
 
 
@@ -656,11 +661,12 @@ class DataContainer():
 				hdf5s = get_hdf5s_from_dir(self.projection_dirs[0])
 				if len(hdf5s) > 0:
 					hdf5 = hdf5s[0]
-					with h5py.File(hdf5, 'r') as f:
-						for key in f.keys():
-							if key in ALL_FIELDS:
-								fields[key] = 1
-								self.sylls_per_file = len(f[key])
+					if os.path.exists(hdf5):
+						with h5py.File(hdf5, 'r') as f:
+							for key in f.keys():
+								if key in ALL_FIELDS:
+									fields[key] = 1
+									self.sylls_per_file = len(f[key])
 		return fields
 
 
@@ -684,6 +690,14 @@ class DataContainer():
 			assert temp is not None, dir_name + " must be specified before " + \
 				field + " is made!"
 
+	def clean_projections(self):
+		"""Remove all projections."""
+		for proj_dir in self.projection_dirs:
+			fns = [os.path.join(proj_dir, i) for i in os.listdir(proj_dir)]
+			fns = [i for i in fns if i[-5:] == '.hdf5']
+			for fn in fns:
+				os.remove(fn)
+		self.fields = self._check_for_fields()
 
 
 def _read_columns(filename, columns=(0,1), delimiter=',', skiprows=1, \

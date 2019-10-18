@@ -9,6 +9,7 @@ __date__ = "August 2019"
 
 from itertools import product
 import os
+import joblib
 from matplotlib.patches import Patch
 from matplotlib.colors import to_rgba
 import matplotlib.pyplot as plt
@@ -51,10 +52,7 @@ def rolloff_plot(latents, labels, best_of=4, filename='rolloff.pdf'):
 			temp_temp_errors = []
 			for i in range(best_of):
 				clusterer = GaussianMixture(n_components=num_c, init_params='random').fit(latent)
-
 				temp_temp_errors.append(clusterer.score(latent))
-				# y_pred = KMeans(n_clusters=num_c).fit_predict(latent)
-				# temp_temp_errors.append(mean_within_cluster_error(y_pred, latent))
 			temp_errors.append(max(temp_temp_errors))
 		errors[label] = temp_errors
 	np.save('errors.npy', errors)
@@ -67,29 +65,44 @@ def rolloff_plot(latents, labels, best_of=4, filename='rolloff.pdf'):
 	plt.close('all')
 
 
-def clustering_performance_plot_splits(latents, labels, n_components=6, \
+def clustering_performance_plot_splits(dcs, labels, n_components=6, \
 	num_fake_shuffles=10, axarr=None, save_and_close=True, load_data=False, \
-	filename='clustering.pdf', colors=['b', 'darkorange']):
+	filename='clustering.pdf', colors=['b', 'darkorange'], \
+	noise_boxes=[None,None], embedding_type='latent_mean_umap', \
+	data_fn='temp_data/clustering_performance.npy', axis_labels=True, \
+	legend=True, gmm_prefix='temp_data/gmm_'):
 	"""
 	Parameters
 	----------
 
-	latents_1 :
 
 	"""
 	jitter = 0.25
-	latent_nums = range(len(latents))
+	latent_nums = range(len(dcs))
 	result = {}
 
 	data_loaded = False
 	if load_data:
 		try:
-			result = np.load('temp_data/clustering_performance.npy', allow_pickle=True).item()
+			result = np.load(data_fn, allow_pickle=True).item()
 			data_loaded = True
 		except:
 			print("Unable to load data!")
 
 	if not data_loaded:
+		latents = [dc.request('latent_means') for dc in dcs]
+		for i in range(len(latents)):
+			if noise_boxes[i] is not None:
+				embedding = dcs[i].request(embedding_type)
+				indices = []
+				x1, x2, y1, y2 = noise_boxes[i]
+				for j in range(len(embedding)):
+					if embedding[j,0] < x1 or embedding[j,0] > x2 or \
+							embedding[j,1] < y1 or embedding[j,1] > y2:
+						indices.append(j)
+				indices = np.array(indices, dtype='int')
+				latents[i] = latents[i][indices]
+		gmms = {}
 		for latent_num in latent_nums:
 			latent = latents[latent_num]
 			kf = KFold(n_splits=10, shuffle=True)
@@ -98,6 +111,8 @@ def clustering_performance_plot_splits(latents, labels, n_components=6, \
 				print(fold)
 				clusterer = GaussianMixture(n_components=n_components, \
 					n_init=5, covariance_type='full').fit(latent[train_index])
+				if fold == 0:
+					gmms[labels[latent_num]] = clusterer
 				c_labels = clusterer.predict(latent[test_index])
 				sil_score = metrics.silhouette_score(latent[test_index], c_labels, metric='euclidean')
 				ch_score = metrics.calinski_harabasz_score(latent[test_index], c_labels)
@@ -113,7 +128,9 @@ def clustering_performance_plot_splits(latents, labels, n_components=6, \
 				db_score = metrics.davies_bouldin_score(fake_latent, c_labels)
 				result[(labels[latent_num]+'_fake', fold)] = [sil_score, ch_score, db_score]
 				fold += 1
-		np.save('temp_data/clustering_performance.npy', result)
+		gmm_fn = gmm_prefix + str(n_components)+'.gz'
+		joblib.dump(gmms, gmm_fn)
+		np.save(data_fn, result)
 
 	if axarr is None:
 		_, axarr = plt.subplots(1, 3)
@@ -130,13 +147,14 @@ def clustering_performance_plot_splits(latents, labels, n_components=6, \
 			axarr[j].set_xticks([], [])
 	np.random.seed(None)
 	# axarr[0].set_ylabel(r'$\Delta$ Silhouette Coefficient')
-	axarr[0].set_ylabel("Goodness of Clustering\n"+r"($\Delta$ Silhouette Coefficient)", \
-		labelpad=2)
-	if len(axarr) > 1:
-		axarr[1].set_ylabel(r'$\Delta$ Calinski-Harabasz Index')
-		if len(axarr) > 2:
-			axarr[2].set_ylabel(r'$-\Delta$ Davies-Bouldin Index')
-	if labels is not None:
+	if axis_labels:
+		axarr[0].set_ylabel("Goodness of Clustering\n"+r"($\Delta$ Silhouette Coefficient)", \
+			labelpad=2)
+		if len(axarr) > 1:
+			axarr[1].set_ylabel(r'$\Delta$ Calinski-Harabasz Index')
+			if len(axarr) > 2:
+				axarr[2].set_ylabel(r'$-\Delta$ Davies-Bouldin Index')
+	if labels is not None and legend:
 		edgecolor = to_rgba('k', alpha=0.0)
 		patches = [Patch(color=colors[0], label=labels[0]), \
 			Patch(color=colors[1], label=labels[1])]
@@ -164,15 +182,6 @@ def get_noise(d=3.0, n=3000, ndim=2, seed=42):
 	noise[:,0] *= d
 	np.random.seed(None)
 	return noise
-
-
-def mean_within_cluster_error(labels, points):
-	error = 0.0
-	for label in np.unique(labels):
-		indices = np.argwhere(labels == label).flatten()
-		mean = np.mean(points[indices], axis=0)
-		error += np.sum(np.power(points[indices] - mean, 2))
-	return error / len(labels)
 
 
 def make_fake_latent(latent, seed=None):

@@ -16,7 +16,7 @@ from sklearn.decomposition import PCA
 
 
 def cluster_pca_latent_plot_DC(dc, bounds, colors=('b', 'darkorange'), \
-	s=0.9, alpha=0.9, ax=None, save_and_close=True, filename='cluster_pca.pdf'):
+	s=0.9, alpha=None, ax=None, save_and_close=True, filename='cluster_pca.pdf'):
 	"""
 	Plot the first two latent PCs of a given cluster.
 
@@ -42,15 +42,21 @@ def cluster_pca_latent_plot_DC(dc, bounds, colors=('b', 'darkorange'), \
 	c = c[perm]
 	if ax is None:
 		ax = plt.gca()
-	ax.scatter(embed[:,0], embed[:,1], c=c, s=s, alpha=alpha)
-	ax.axis('off')
+	if alpha is not None:
+		c = [to_rgba(i, alpha=alpha) for i in c]
+	ax.scatter(embed[:,0], embed[:,1], c=c, s=s)
+	for direction in ['top', 'bottom', 'right', 'left']:
+		ax.spines[direction].set_visible(False)
+	ax.set_yticks([])
+	ax.set_xticks([])
+	ax.set_aspect('equal')
 	if save_and_close:
 		plt.savefig(os.path.join(dc.plots_dir, filename))
 		plt.close('all')
 
 
 def cluster_pca_feature_plot_DC(dc, bounds, fields, colors=('b','darkorange'), \
-	s=0.9, alpha=0.7, ax=None, save_and_close=True,filename='cluster_pca.pdf'):
+	s=0.9, alpha=None, ax=None, save_and_close=True,filename='cluster_pca.pdf'):
 	"""
 	Plot the first two traditional feature PCs of a given cluster.
 
@@ -83,8 +89,14 @@ def cluster_pca_feature_plot_DC(dc, bounds, fields, colors=('b','darkorange'), \
 	c = c[perm]
 	if ax is None:
 		ax = plt.gca()
-	ax.scatter(embed[:,0], embed[:,1], c=c, s=s, alpha=alpha)
-	ax.axis('off')
+	if alpha is not None:
+		c = [to_rgba(i, alpha=alpha) for i in c]
+	ax.scatter(embed[:,0], embed[:,1], c=c, s=s)
+	for direction in ['top', 'bottom', 'right', 'left']:
+		ax.spines[direction].set_visible(False)
+	ax.set_yticks([])
+	ax.set_xticks([])
+	ax.set_aspect('equal')
 	if save_and_close:
 		plt.savefig(os.path.join(dc.plots_dir, filename))
 		plt.close('all')
@@ -142,9 +154,10 @@ def relative_variability_plot_DC(dc, bounds_list, fields, load_data=False, \
 	for y in [0.25,0.5,0.75,1.0]:
 		ax.axhline(y=y, c='k', ls='--', lw=0.8, alpha=0.4, zorder=2)
 	ax.bar(x_vals, bar_heights, color=colors*(len(x_vals)//2), zorder=3)
-	ax.set_ylabel('Relative Variability Index', fontsize=7, labelpad=3)
-	ax.set_xlabel('Syllable', fontsize=7, labelpad=2)
-	ax.set_title('Variability Reduction of Directed Song', fontsize=8)
+	print(x_vals, bar_heights)
+	ax.set_ylabel('Relative Variability', fontsize=7, labelpad=2)
+	# ax.set_xlabel('Syllable', fontsize=7, labelpad=2)
+	# ax.set_title('Variability Reduction of Directed Song', fontsize=8)
 	ax.set_ylim(0,None)
 	ax.set_yticks([0.0,0.5,1.0])
 	ax.set_xticks([0.5 + 2.5*i for i in range(6)])

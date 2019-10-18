@@ -8,7 +8,7 @@ __date__ = "August 2019"
 
 from matplotlib import rcParams
 from matplotlib.colors import to_rgba
-from matplotlib.patches import FancyArrowPatch
+from matplotlib.patches import Patch
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
 import matplotlib.gridspec as gridspec
@@ -119,37 +119,36 @@ if __name__ == '__main__':
 	ax4 = fig.add_subplot(gs2[1], sharex=ax3)
 	ax5 = fig.add_subplot(gs2[2], sharex=ax3)
 
-	# axarr = [ax0, ax1, ax3, ax4, ax5]
-	# for ax in axarr:
-	for ax in [ax3, ax4, ax5]:
+	axarr = [ax0, ax1, ax3, ax4, ax5]
+	for ax in axarr:
 		fig.add_subplot(ax)
 
 
-	# # Scatter.
-	# print("scatter 1")
-	# latent_projection_plot_DC(mouse_window_dc, default_color=to_rgba(MOUSE_COLOR), \
-	# 		s=0.04, alpha=0.1, ax=ax0, save_and_close=False)
-	# ax0.annotate('silence', (9,-2.5), fontsize=7)
-	# ax0.annotate('shorter\nsyllables', (-2,-9.5), fontsize=7, ha='center')
-	# ax0.annotate('longer\nsyllables', (-9,4), fontsize=7, ha='center')
-	# ax0.set_ylim(-9.5,None)
-	# # ax0.annotate('D', (1,7), fontsize=7)
-	# # ax0.annotate('E', (5,3), fontsize=7)
+	# Scatter.
+	print("scatter 1")
+	latent_projection_plot_DC(mouse_window_dc, default_color=to_rgba(MOUSE_COLOR), \
+			s=0.04, alpha=0.1, ax=ax0, save_and_close=False)
+	ax0.annotate('silence', (9,-2.5), fontsize=7)
+	ax0.annotate('shorter\nsyllables', (-2,-9.5), fontsize=7, ha='center')
+	ax0.annotate('longer\nsyllables', (-9,4), fontsize=7, ha='center')
+	ax0.set_ylim(-9.5,None)
+	# ax0.annotate('D', (1,7), fontsize=7)
+	# ax0.annotate('E', (5,3), fontsize=7)
 
-	# print("scatter 2")
-	# latent_projection_plot_DC(finch_window_dc, default_color=to_rgba(FINCH_COLOR), \
-	# 		s=0.04, alpha=0.1, ax=ax1, save_and_close=False)
-	#
-	# ax1.annotate('A', (0,-14.5), fontsize=7)
-	# ax1.annotate('B', (12.5,-13), fontsize=7)
-	# ax1.annotate('C', (13,-1.5), fontsize=7)
-	# ax1.annotate('D', (14,7.5), fontsize=7)
-	# ax1.annotate('E', (5.8,17.5), fontsize=7)
-	# ax1.annotate('F', (-2,9.5), fontsize=7)
-	# ax1.annotate('silence', (-13,12.5), fontsize=7)
-	# ax1.annotate('linking\nnote', (-19,4), fontsize=7, ha='center')
-	# ax1.annotate('introductory\nnotes', (-8,-16.5), fontsize=7, ha='center')
-	# ax1.set_xlim(-19, None)
+	print("scatter 2")
+	latent_projection_plot_DC(finch_window_dc, default_color=to_rgba(FINCH_COLOR), \
+			s=0.04, alpha=0.1, ax=ax1, save_and_close=False)
+
+	ax1.annotate('A', (0,-14.5), fontsize=7)
+	ax1.annotate('B', (12.5,-13), fontsize=7)
+	ax1.annotate('C', (13,-1.5), fontsize=7)
+	ax1.annotate('D', (14,7.5), fontsize=7)
+	ax1.annotate('E', (5.8,17.5), fontsize=7)
+	ax1.annotate('F', (-2,9.5), fontsize=7)
+	ax1.annotate('silence', (-13,12.5), fontsize=7)
+	ax1.annotate('linking\nnote', (-19,4), fontsize=7, ha='center')
+	ax1.annotate('introductory\nnotes', (-8,-16.5), fontsize=7, ha='center')
+	ax1.set_xlim(-19, None)
 
 
 
@@ -203,14 +202,20 @@ if __name__ == '__main__':
 	ax4.set_ylabel("Principal Component 1", bbox=box)
 	ax5.set_ylabel("Variability Index", bbox=box)
 
-	plt.savefig('temp.pdf')
-	quit()
+	edgecolor = to_rgba('k', alpha=0.0)
+	patches = [Patch(color=colors[0], label="Undirected"), \
+			Patch(color=colors[1], label='Directed')]
+	ax5.legend(handles=patches, bbox_to_anchor=(0.2,-0.05), \
+			loc='lower left', ncol=2, fontsize=7,
+			edgecolor=edgecolor, framealpha=0.0)
 
 	plt.text(0.02,0.96,'a',transform=fig.transFigure, size=14, weight='bold')
 	plt.text(0.02,0.45,'b',transform=fig.transFigure, size=14, weight='bold')
 	plt.text(0.43,0.96,'c',transform=fig.transFigure, size=14, weight='bold')
 	plt.text(0.43,0.67,'d',transform=fig.transFigure, size=14, weight='bold')
 	plt.text(0.43,0.35,'e',transform=fig.transFigure, size=14, weight='bold')
+
+
 
 	fig.align_ylabels([ax3,ax4,ax5])
 	plt.subplots_adjust(bottom=0.15, top=0.85)

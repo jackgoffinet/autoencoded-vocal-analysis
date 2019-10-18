@@ -3,15 +3,17 @@ Plot a latent mean projection.
 
 """
 __author__ = "Jack Goffinet"
-__date__ = "July-August 2019"
+__date__ = "July-October 2019"
 
 
 from numba.errors import NumbaPerformanceWarning
+import matplotlib
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
 import os
 import numpy as np
+import joblib
 import umap
 import warnings
 
@@ -42,9 +44,9 @@ def latent_projection_plot_DC(dc, embedding_type='latent_mean_umap', \
 	if dc.plots_dir is not None:
 		filename = os.path.join(dc.plots_dir, filename)
 	projection_plot(embedding, color=color, title=title, \
-		save_filename=filename, colorbar=colorbar, colormap=colormap, shuffle=shuffle, \
-		alpha=alpha, s=s, ax=ax, cax=cax, save_and_close=save_and_close, \
-		show_axis=show_axis)
+		save_filename=filename, colorbar=colorbar, colormap=colormap, \
+		shuffle=shuffle, alpha=alpha, s=s, ax=ax, cax=cax, \
+		save_and_close=save_and_close, show_axis=show_axis)
 
 
 def latent_projection_plot_with_noise_DC(dc, embedding_type='latent_mean_umap', \
@@ -61,6 +63,10 @@ def latent_projection_plot_with_noise_DC(dc, embedding_type='latent_mean_umap', 
 				embedding[i,1] < y1 or embedding[i,1] > y2:
 			indices.append(i)
 	indices = np.array(indices, dtype='int')
+	try:
+		default_color = np.array(default_color)[indices]
+	except:
+		pass
 	latent = dc.request('latent_means')[indices]
 	transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, \
 		metric='euclidean', random_state=42)
@@ -71,10 +77,10 @@ def latent_projection_plot_with_noise_DC(dc, embedding_type='latent_mean_umap', 
 		color = default_color
 	elif color_by == 'filename_lambda':
 		assert condition_func is not None
-		fns = dc.request('audio_filenames')
+		fns = dc.request('audio_filenames')[indices]
 		color = [condition_func(fn) for fn in fns]
 	else:
-		color = dc.request(color_by)
+		color = dc.request(color_by)[indices]
 	if title is None and color_by not in [None, 'filename_lambda']:
 		title = PRETTY_NAMES[color_by]
 	if dc.plots_dir is not None:
@@ -125,11 +131,13 @@ def projection_plot(embedding, color='b', title="",
 		ax.grid(True)
 	if colorbar:
 		min_val, max_val = np.min(color), np.max(color)
-		ticks = [int(round(i)) for i in [0.8*min_val+0.2*max_val, 0.5*(min_val+max_val), 0.8*max_val+0.2*min_val]]
+		ticks = [int(round(i)) for i in [0.8*min_val+0.2*max_val, \
+			0.5*(min_val+max_val), 0.8*max_val+0.2*min_val]]
 		fig = plt.gcf()
 		if cax is None:
 			cax = fig.add_axes([0.27, 0.8, 0.5, 0.05])
-		cbar = fig.colorbar(im, cax=cax, fraction=0.046, orientation="horizontal", ticks=ticks) # was fig.colorbar
+		cbar = fig.colorbar(im, cax=cax, fraction=0.046, \
+			orientation="horizontal", ticks=ticks)
 		cbar.solids.set_edgecolor("face")
 		cbar.solids.set_rasterized(True)
 		cbar.ax.set_xticklabels([str(int(round(t))) for t in ticks])
@@ -140,6 +148,24 @@ def projection_plot(embedding, color='b', title="",
 		plt.tight_layout()
 		plt.savefig(save_filename)
 		plt.close('all')
+
+
+def _clustered_latent_projection_DC(dc, data_fn, label, ax=None, noise_box=None):
+	"""
+
+
+	"""
+	clusterer = joblib.load(data_fn)[label]
+	latent = dc.request('latent_means')
+	labels = clusterer.predict(latent)
+	cmap = matplotlib.cm.get_cmap('tab10')
+	colors = cmap(labels)
+	if noise_box is None:
+		latent_projection_plot_DC(dc, color_by=None, alpha=0.5, s=0.9, ax=ax,
+			save_and_close=False, default_color=colors)
+	else:
+		latent_projection_plot_with_noise_DC(dc, color_by=None, alpha=0.5, s=0.9, ax=ax,
+			save_and_close=False, default_color=colors, noise_box=noise_box)
 
 
 

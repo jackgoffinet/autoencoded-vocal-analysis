@@ -6,9 +6,12 @@ __author__ = "Jack Goffinet"
 __date__ = "August 2019"
 
 
+import matplotlib.pyplot as plt
+plt.switch_backend('agg')
 import numpy as np
 import os
 from scipy.signal import stft
+from scipy.io import wavfile
 
 
 EPSILON = 1e-12
@@ -51,6 +54,70 @@ def get_spec(audio, p):
 	return spec, t[1]-t[0], f
 
 
+def clean_segments_by_hand(audio_dirs, orig_seg_dirs, new_seg_dirs, p, \
+	shoulder=0.1):
+	"""
+	Plot spectrograms and ask for accept/reject input.
+
+	Parameters
+	----------
+	audio_dirs : ...
+		...
+	orig_seg_dirs : ...
+		...
+	new_seg_dirs : ...
+		...
+	p : ...
+		...
+	shoulder : ...
+		...
+	"""
+	audio_fns, orig_seg_fns = get_audio_seg_filenames(audio_dirs, orig_seg_dirs)
+	temp_dict = dict(zip(orig_seg_dirs, new_seg_dirs))
+	new_seg_fns = []
+	for orig_seg_fn in orig_seg_fns:
+		a,b = os.path.split(orig_seg_fn)
+		new_seg_fns.append(os.path.join(temp_dict[a], b))
+	gen = zip(audio_fns, orig_seg_fns, new_seg_fns)
+	for audio_fn, orig_seg_fn, new_seg_fn in gen:
+		print("orig_seg_fn", orig_seg_fn)
+		header = "Onsets/offsets cleaned by hand from "+orig_seg_fn
+		# Get onsets and offsets.
+		onsets, offsets = _read_onsets_offsets(orig_seg_fn)
+		if len(onsets) == 0:
+			np.savetxt(new_seg_fn, np.array([]), header=header)
+			continue
+		# Get spectrogram.
+		fs, audio = wavfile.read(audio_fn)
+		assert fs == p['fs'], "Found fs="+str(fs)+", expected fs="+str(p['fs'])
+		spec, dt, f = get_spec(audio, p)
+		# Collect user input.
+		good_indices = []
+		for i, (onset, offset) in enumerate(zip(onsets, offsets)):
+			i1 = max(0, int((onset - shoulder) / dt))
+			i2 = min(spec.shape[1], int((offset + shoulder) / dt))
+			t1 = max(0, onset-shoulder)
+			t2 = min(len(audio)/fs, offset+shoulder)
+			print("t1,t2", t1,t2)
+			plt.imshow(spec[:,i1:i2], origin='lower', aspect='auto', \
+					extent=[t1, t2, f[0]/1e3, f[-1]/1e3])
+			plt.ylabel('Frequency (kHz)')
+			plt.xlabel('Time (s)')
+			plt.axvline(x=onset, c='r')
+			plt.axvline(x=offset, c='r')
+			plt.savefig('temp.pdf')
+			plt.close('all')
+
+			response = input("[Good]? or 'x': ")
+			if response != 'x':
+				good_indices.append(i)
+		good_indices = np.array(good_indices, dtype='int')
+		onsets, offsets = onsets[good_indices], offsets[good_indices]
+		combined = np.stack([onsets, offsets]).T
+		np.savetxt(new_seg_fn, combined, fmt='%.5f', header=header)
+
+
+
 def copy_segments_to_standard_format(orig_seg_dirs, new_seg_dirs, seg_ext, \
 	delimiter, usecols, skiprows, max_duration=None):
 	"""
@@ -59,7 +126,6 @@ def copy_segments_to_standard_format(orig_seg_dirs, new_seg_dirs, seg_ext, \
 	Note
 	----
 	- TO DO: rename
-	- TO DO: don't write the syllables that are too long.
 
 	Parameters
 	----------
@@ -104,7 +170,7 @@ def copy_segments_to_standard_format(orig_seg_dirs, new_seg_dirs, seg_ext, \
 			np.savetxt(new_seg_fn, segs, fmt='%.5f', header=header)
 
 
-def get_audio_seg_filenames(audio_dirs, seg_dirs, p):
+def get_audio_seg_filenames(audio_dirs, seg_dirs):
 	"""Return lists of sorted filenames."""
 	audio_fns, seg_fns = [], []
 	for audio_dir, seg_dir in zip(audio_dirs, seg_dirs):
@@ -116,13 +182,20 @@ def get_audio_seg_filenames(audio_dirs, seg_dirs, p):
 	return audio_fns, seg_fns
 
 
-def get_onsets_offsets_from_file(filename, p):
+def _read_onsets_offsets(filename):
 	"""
 	A wrapper around numpy.loadtxt for reading onsets & offsets.
 
-	TO DO: finish this!
+	Parameters
+	----------
+	filename : str
+		Filename of a text file containing one header line and two columns.
 	"""
-	return np.loadtxt(filename, unpack=True)
+	arr = np.loadtxt(filename, skiprows=1)
+	if len(arr) == 0:
+		return [], []
+	assert arr.shape[1] == 2, "Found invalid shape: "+str(arr.shape)
+	return arr[:,0], arr[:,1]
 
 
 def _is_audio_file(filename):

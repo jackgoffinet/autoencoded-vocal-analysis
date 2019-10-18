@@ -17,6 +17,7 @@ from ava.plotting.latent_projection import latent_projection_plot_DC
 from ava.plotting.mmd_plots import mmd_matrix_DC, mmd_tsne_DC
 from ava.plotting.cluster_pca_plot import cluster_pca_latent_plot_DC, \
 	cluster_pca_feature_plot_DC, relative_variability_plot_DC
+from ava.plotting.trace_plot import spectrogram_plot
 
 
 MOUSE_COLOR = (154/256,155/256,77/256)
@@ -26,7 +27,7 @@ MOUSE_HIGHLIGHT = (105/256,140/256,224/256)
 FINCH_COLOR = (163/256,86/256,141/256)
 FINCH_1 = (180/256,80/256,147/256)
 FINCH_2 = (112/256,99/256,186/256)
-FINCH_HIGHLIGHT = (159/256,180/256,95/256)
+FINCH_HIGHLIGHT = (101/256,228/256,203/256)
 
 
 if __name__ == '__main__':
@@ -41,6 +42,10 @@ if __name__ == '__main__':
 	dc1 = DataContainer(projection_dirs=proj_dirs, \
 		feature_dirs=mupet_feature_dirs, spec_dirs=spec_dirs, \
 		model_filename=model_fn)
+
+	from ava.plotting.tooltip_plot import tooltip_plot_DC
+	tooltip_plot_DC(dc1, num_imgs=2000)
+	quit()
 
 	root = '/media/jackg/Jacks_Animal_Sounds/birds/jonna/blu285/syll/'
 	proj_dirs = [root+'DIR_proj', root+'UNDIR_proj']
@@ -86,67 +91,76 @@ if __name__ == '__main__':
 	rcParams.update(params)
 	fig = plt.figure()
 
-	gsarr = [gridspec.GridSpec(1,1) for _ in range(6)]
+	gsarr = [gridspec.GridSpec(1,1) for _ in range(8)]
 
 	# 0 1 2
 	# 3 4 5
 	# Projections
-	gsarr[0].update(left=0.03, right=0.30, top=0.92, bottom=0.59)
-	gsarr[1].update(left=0.31, right=0.60, top=0.92, bottom=0.59)
-	gsarr[2].update(left=0.65, right=0.97, top=0.92, bottom=0.62)
+	gsarr[0].update(left=0.04, right=0.29, top=0.91, bottom=0.60)
+	gsarr[1].update(left=0.33, right=0.59, top=0.91, bottom=0.62)
+	gsarr[6].update(left=0.65, right=0.97, top=0.94, bottom=0.84)
+	gsarr[2].update(left=0.65, right=0.97, top=0.82, bottom=0.59)
 	gsarr[3].update(left=0.02, right=0.31, top=0.51, bottom=0.08)
-	gsarr[4].update(left=0.37, right=0.59, top=0.45, bottom=0.06)
-	gsarr[5].update(left=0.64, right=0.98, top=0.51, bottom=0.06)
+	gsarr[4].update(left=0.37, right=0.59, top=0.47, bottom=0.08)
+	gsarr[7].update(left=0.39, right=0.57, top=0.079, bottom=0.06)
+	gsarr[5].update(left=0.65, right=0.98, top=0.49, bottom=0.06)
+	# gsarr[5].update(left=0.75, right=0.88, top=0.39, bottom=0.16)
+
+
 
 	axarr = [plt.Subplot(fig, gs[0,0]) for gs in gsarr]
-	# for ax in axarr:
-	for ax in [axarr[5]]:
+	for ax in axarr:
 		fig.add_subplot(ax)
 
-	# bounds = [-15,-5,-5,5]
-	# colors = [FINCH_COLOR, FINCH_HIGHLIGHT]
-	# cluster_pca_feature_plot_DC(dc2, bounds, sap_fields, colors=colors, s=1.2, \
-	# 	alpha=0.5, ax=axarr[0], save_and_close=False)
-	# plt.text(0.1,0.94,'SAP Features', \
-	# 	transform=fig.transFigure, size=8)
-	#
-	# cluster_pca_latent_plot_DC(dc2, bounds, colors=colors, s=0.9, alpha=0.5, \
-	# 	ax=axarr[1], save_and_close=False)
-	# plt.text(0.38,0.94,'Latent Features', \
-	# 	transform=fig.transFigure, size=8)
-	#
-	# edgecolor = to_rgba('k', alpha=0.0)
-	# patches = [Patch(color=colors[0], label="Undirected"), \
-	# 		Patch(color=colors[1], label='Directed')]
-	# axarr[0].legend(handles=patches, bbox_to_anchor=(1.0,-0.17), \
-	# 		loc='lower center', ncol=2, title='Social Context:', fontsize=7,
-	# 		edgecolor=edgecolor, framealpha=0.0)
-	#
-	# # from ava.plotting.tooltip_plot import tooltip_plot_DC
-	# # tooltip_plot_DC(dc2)
-	# # quit()
-	# # plt.close('all')
-	# # latent_projection_plot_DC(dc2, filename='temp.pdf', show_axis=True)
-	# # quit()
-	#
-	# all_bounds = [ \
-	# 	[-15,-5,-5,5],\
-	# 	[-10,-2,6,15],\
-	# 	[-3,5,0,7],\
-	# 	[-5,1,-10,3],\
-	# 	[1,10,-15,-5],\
-	# 	[5,15,0,10],\
-	# ]
-	#
-	# colors = [FINCH_1+(1.0,), FINCH_2+(1.0,)]
-	# edgecolor = to_rgba('k', alpha=0.0)
-	# relative_variability_plot_DC(dc2, all_bounds, sap_fields, ax=axarr[2], \
-	# 		colors=colors, load_data=True, save_and_close=False)
+	bounds = [-15,-5,-5,5]
+	colors = [to_rgba(FINCH_COLOR,alpha=0.3), to_rgba(FINCH_HIGHLIGHT,alpha=0.6)]
+	cluster_pca_feature_plot_DC(dc2, bounds, sap_fields, colors=colors, s=1.2, \
+		ax=axarr[0], save_and_close=False)
+	plt.text(0.1,0.94,'SAP Features', \
+		transform=fig.transFigure, size=8)
 
-	# patches = [Patch(color=colors[0], label="SAP Features"), \
-	# 		Patch(color=colors[1], label='Latent Features')]
-	# axarr[3].legend(handles=patches, bbox_to_anchor=(0.5,-0.05), \
-	# 		loc='lower center', fontsize=7, edgecolor=edgecolor)
+	cluster_pca_latent_plot_DC(dc2, bounds, colors=colors, s=0.9, \
+		ax=axarr[1], save_and_close=False)
+	plt.text(0.39,0.94,'Latent Features', \
+		transform=fig.transFigure, size=8)
+
+	colors = [FINCH_COLOR, FINCH_HIGHLIGHT]
+	edgecolor = to_rgba('k', alpha=0.0)
+	patches = [Patch(color=colors[0], label="Undirected"), \
+			Patch(color=colors[1], label='Directed')]
+	axarr[0].legend(handles=patches, bbox_to_anchor=(1.1,-0.32), \
+			loc='lower center', ncol=2, title='Social Context:', fontsize=7,
+			edgecolor=edgecolor, framealpha=0.0)
+
+
+	root = '/media/jackg/Jacks_Animal_Sounds/birds/jonna/blu285/'
+	song_filename = root + 'songs/UNDIR/0000.wav'
+	spectrogram_plot(song_filename, ax=axarr[6], save_and_close=False, x_label=False)
+	#axarr[6].set_yticks([2,10])
+	#axarr[6].set_xlabel('Time (ms)')
+	axarr[6].axis('off')
+	plt.text(0.075,1.04,'A',transform=axarr[6].transAxes, fontsize=8)
+	plt.text(0.21,1.04,'B',transform=axarr[6].transAxes, fontsize=8)
+	plt.text(0.37,1.04,'C',transform=axarr[6].transAxes, fontsize=8)
+	plt.text(0.535,1.04,'D',transform=axarr[6].transAxes, fontsize=8)
+	plt.text(0.66,1.04,'E',transform=axarr[6].transAxes, fontsize=8)
+	plt.text(0.825,1.04,'F',transform=axarr[6].transAxes, fontsize=8)
+
+
+	all_bounds = [ \
+		[-5,1,-10,3],\
+		[-15,-5,-5,5],\
+		[1,10,-15,-5],\
+		[-3,5,0,7],\
+		[5,15,0,10],\
+		[-10,-2,6,15],\
+	]
+
+	colors = [FINCH_1+(1.0,), FINCH_2+(1.0,)]
+	edgecolor = to_rgba('k', alpha=0.0)
+	relative_variability_plot_DC(dc2, all_bounds, sap_fields, ax=axarr[2], \
+	 		colors=colors, load_data=True, save_and_close=False)
+
 
 	def fn_func(fn):
 		if 'C57' in fn:
@@ -157,33 +171,19 @@ if __name__ == '__main__':
 
 
 
-	# from ava.plotting.mmd_plots import ALL_RECORDINGS
-	# def fn_func(fn):
-	# 	return ALL_RECORDINGS.index(int(fn.split('/')[-1].split('.')[0]))
+	#from ava.plotting.mmd_plots import ALL_RECORDINGS
+	#def fn_func(fn):
+	#	return ALL_RECORDINGS.index(int(fn.split('/')[-1].split('.')[0]))
 
-	# latent_projection_plot_DC(dc1, color_by='filename_lambda', ax=axarr[3], \
-	# 		save_and_close=False, s=0.1, alpha=0.25, condition_func=fn_func)
-	#
-	# edgecolor = to_rgba('k', alpha=0.0)
-	# colors = [MOUSE_1, MOUSE_2]
-	# patches = [Patch(color=colors[0], label="C57"), Patch(color=colors[1], label='DBA')]
-	# axarr[3].legend(handles=patches, bbox_to_anchor=(0.5,-0.25), \
-	# 		loc='lower center', ncol=2, title='Mouse Strain:', \
-	# 		edgecolor=edgecolor, framealpha=0.0, fontsize=7) # font sixe?
-	#
-	# fns = ['mupet_mmd_matrix.npy', 'mupet_mmd_conditions.npy']
-	# from ava.plotting.mmd_plots import _calculate_mmd
-	# # _calculate_mmd(dc1, fn_func, alg='quadratic', max_n=1000, save_fns=fns)
-	# mmd_matrix_DC(dc1, fn_func, load_data=True, ax=axarr[4], cmap='Greys', \
-	# 		save_and_close=False, save_load_fns=fns, \
-	# 		divider_color=to_rgba(MOUSE_1))
-	# labels = ['C57', 'DBA']
-	# axarr[4].text(0.15, 1.02, labels[0], transform=axarr[4].transAxes)
-	# axarr[4].text(0.65, 1.02, labels[1], transform=axarr[4].transAxes)
-	# axarr[4].text(-0.09, 0.66, labels[0], transform=axarr[4].transAxes, \
-	# 		rotation=90)
-	# axarr[4].text(-0.09, 0.16, labels[1], transform=axarr[4].transAxes, \
-	# 		rotation=90)
+	latent_projection_plot_DC(dc1, color_by='filename_lambda', ax=axarr[3], \
+			save_and_close=False, s=0.1, alpha=0.25, condition_func=fn_func)
+
+	edgecolor = to_rgba('k', alpha=0.0)
+	colors = [MOUSE_1, MOUSE_2]
+	patches = [Patch(color=colors[0], label="C57"), Patch(color=colors[1], label='DBA')]
+	axarr[3].legend(handles=patches, bbox_to_anchor=(0.5,-0.25), \
+			loc='lower center', ncol=2, title='Mouse Strain:', \
+			edgecolor=edgecolor, framealpha=0.0, fontsize=7)
 
 	def fn_func(fn):
 		"""
@@ -200,14 +200,30 @@ if __name__ == '__main__':
 			raise NotImplementedError
 		return 100*mouse_num + session_num
 
-	C57_BACKGROUND = []
-	VGAT_BACGROUND = []
-
 	fns = ['tom_mmd_matrix.npy', 'tom_mmd_conditions.npy']
 	mmd_tsne_DC(dc_3, fn_func, alg='quadratic', max_n=300, \
 		load_data=True, ax=axarr[5], save_and_close=False, save_load_fns=fns)
-	plt.savefig('temp.pdf')
-	quit()
+	axarr[5].axis('off')
+
+	fns = ['mupet_mmd_matrix.npy', 'mupet_mmd_conditions.npy']
+	from ava.plotting.mmd_plots import _calculate_mmd
+	# _calculate_mmd(dc1, fn_func, alg='quadratic', max_n=1000, save_fns=fns)
+
+	mmd_matrix_DC(dc1, fn_func, load_data=True, ax=axarr[4], cmap='Greys', \
+			save_and_close=False, save_load_fns=fns, \
+			divider_color=to_rgba(MOUSE_1), cax=axarr[7])
+	x2, y2 = 16.5, 16.5
+	axarr[4].hlines(y2, 16.5, 19.5, colors=to_rgba(MOUSE_1), lw=0.9)
+	axarr[4].vlines(x2, 16.47, 19.5, colors=to_rgba(MOUSE_1), lw=0.9)
+
+	labels = ['C57', 'DBA']
+	axarr[4].text(0.15, 1.02, labels[0], transform=axarr[4].transAxes)
+	axarr[4].text(0.65, 1.02, labels[1], transform=axarr[4].transAxes)
+	axarr[4].text(-0.095, 0.66, labels[0], transform=axarr[4].transAxes, \
+			rotation=90)
+	axarr[4].text(-0.095, 0.16, labels[1], transform=axarr[4].transAxes, \
+			rotation=90)
+
 
 	plt.text(0.02,0.95,'a',transform=fig.transFigure, size=14, weight='bold')
 	plt.text(0.33,0.95,'b',transform=fig.transFigure, size=14, weight='bold')
@@ -216,9 +232,6 @@ if __name__ == '__main__':
 	plt.text(0.33,0.47,'e',transform=fig.transFigure, size=14, weight='bold')
 	plt.text(0.63,0.47,'f',transform=fig.transFigure, size=14, weight='bold')
 
-	# l1 = matplotlib.lines.Line2D([0.05, 0.95], [0.53, 0.53], \
-	# 	transform=fig.transFigure, figure=fig, c=(0.75,0.75,0.75,1.0), lw=0.5)
-	# fig.lines.extend([l1])
 
 	plt.savefig('plot_3.pdf')
 	plt.close('all')

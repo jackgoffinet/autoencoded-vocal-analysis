@@ -36,11 +36,13 @@ if __name__ == '__main__':
 	root = '/media/jackg/Jacks_Animal_Sounds/mice/BM030/'
 	proj_dirs = [root+'proj']
 	spec_dirs = [root+'specs']
+	feature_dirs = [root+'mupet']
 	model_fn = root + 'checkpoint_040.tar'
 
 	dc_single_mouse = DataContainer(projection_dirs=proj_dirs, \
-		spec_dirs=spec_dirs, model_filename=model_fn)
+		spec_dirs=spec_dirs, model_filename=model_fn, feature_dirs=feature_dirs)
 
+	# latent = dc_single_mouse.request('latent_means')
 	# latent_projection_plot_DC(dc_single_mouse, show_axis=True)
 	# quit()
 
@@ -92,7 +94,6 @@ if __name__ == '__main__':
 		feature_dirs=feature_dirs, spec_dirs=spec_dirs, \
 		model_filename=model_fn)
 
-	latents = [dc_finch.request('latent_means'), dc_mouse.request('latent_means')]
 
 	# Plot.
 	params = {
@@ -111,49 +112,40 @@ if __name__ == '__main__':
 
 	gsarr[0].update(left=0.02, right=0.33, top=0.95, bottom=0.53)
 	gsarr[1].update(left=0.35, right=0.65, top=0.95, bottom=0.53)
-	gsarr[2].update(left=0.66, right=0.95, top=0.95, bottom=0.50)
+	gsarr[2].update(left=0.67, right=0.96, top=0.95, bottom=0.50)
 	gsarr[3].update(left=0.12, right=0.29, top=0.48, bottom=0.05)
 	gsarr[4].update(left=0.35, right=0.95, top=0.48, bottom=0.04)
 
 	axarr = [plt.Subplot(fig, gs[0,0]) for gs in gsarr]
 
 	subplot_labels = ['a', 'b', 'c', 'd', 'e', 'f', 'g']
-	for ax in [axarr[3]]:
-		fig.add_subplot(ax)
-	# for l, ax in zip(subplot_labels, axarr):
+	# for ax in [axarr[3]]:
 		# fig.add_subplot(ax)
-		# if l not in ['d', 'e', 'f']:
-			# ax.axis('off')
+	for l, ax in zip(subplot_labels, axarr):
+		fig.add_subplot(ax)
+		if l not in ['d', 'e', 'f']:
+			ax.axis('off')
 
-	colors = [to_rgba(i) for i in [MOUSE_COLOR, FINCH_COLOR]]
+	colors = [to_rgba(i) for i in [FINCH_COLOR, MOUSE_COLOR]]
 
-	# latent_projection_plot_with_noise_DC(dc_single_mouse, alpha=0.15, s=0.3, ax=axarr[0], \
-	# 	save_and_close=False, default_color=colors[0], noise_box=[-9,-4.5,-4,2])
-	#
-	# latent_projection_plot_DC(dc_finch, alpha=0.08, s=0.2, ax=axarr[1], \
-	# 	save_and_close=False, default_color=colors[1])
+	latent_projection_plot_with_noise_DC(dc_single_mouse, alpha=0.15, s=0.3, ax=axarr[1], \
+		save_and_close=False, default_color=colors[1], noise_box=[-9,-4.5,-4,2])
 
+	latent_projection_plot_DC(dc_finch, alpha=0.08, s=0.2, ax=axarr[0], \
+		save_and_close=False, default_color=colors[0])
 
-	# latent_projection_plot_DC(dc_mouse, alpha=0.25, s=0.1, color_by='cluster', \
-	# 	ax=axarr[2], colormap='tab10', save_and_close=False)
-
+	latent_projection_plot_with_noise_DC(dc_single_mouse, alpha=0.25, s=0.3, color_by='cluster', \
+		ax=axarr[2], colormap='tab10', save_and_close=False, noise_box=[-9,-4.5,-4,2])
 
 
 	temp_axarr = [axarr[3]]
-	labels = ["Mouse", "Zebra Finch"]
-
-	clustering_performance_plot_splits(latents, labels, axarr=temp_axarr, \
-		load_data=True, save_and_close=False, colors=colors)
+	labels = ["Zebra Finch", "Mouse"]
+	noise_boxes = [None, [-9,-4.5,-4,2]]
+	clustering_performance_plot_splits([dc_finch, dc_single_mouse], labels, axarr=temp_axarr, \
+		load_data=True, save_and_close=False, colors=colors, noise_boxes=noise_boxes)
 	axarr[3].set_yticks([0.0,0.1,0.2,0.3])
 
-	plt.savefig('temp.pdf')
-	quit()
 
-	# path = [\
-	# 	[4821,4815,4826,6927,3161,6464,3706,16665,16211], \
-	# 	[4821,5226,25449,26994,17912,17068,17724,18971,19138], \
-	# 	[5569,22696,17911,17988,16957,17104,19994,20163,18309], \
-	# ]
 	indexed_grid_plot(dc_mouse, path, ax=axarr[4], gap=(8,4), \
 		save_and_close=False)
 

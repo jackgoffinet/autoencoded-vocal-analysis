@@ -132,7 +132,7 @@ def knn_display_DC(dc, fields, indices=None, n=5, scaling='z-score', \
 		f_distances /= np.max(f_distances) + EPSILON
 		# Find neighbors close in feature space, but distant in latent space.
 		objective = f_distances - latent_distances
-		i = 4
+		i = 2
 		indices = np.argsort(objective)[i*10:(i+1)*10]
 	print("indices:", indices)
 	print("l_indices", [l_indices[i] for i in indices])
@@ -146,7 +146,43 @@ def knn_display_DC(dc, fields, indices=None, n=5, scaling='z-score', \
 		filename=filename)
 
 
-def bridge_plot_DC(dc, from_indices, to_indices, n=5, filename='bridge_plot.pdf'):
+def representative_nn_plot_DC(dc, fields, ax=None, n=20, seed=42):
+	"""
+
+
+	"""
+	latent = dc.request('latent_means')
+	print("latent", latent.shape)
+	specs = dc.request('specs')
+	features = get_feature_array(dc, fields, scaling='z-score')
+	nbrs = NearestNeighbors(n_neighbors=2, metric='euclidean').fit(features)
+	f_distances, f_indices = nbrs.kneighbors(features)
+	f_distances, f_indices = f_distances[:,1], f_indices[:,1] # Remove self-neighbors.
+	# And for latent features.
+	nbrs = NearestNeighbors(n_neighbors=2, metric='euclidean').fit(latent)
+	l_distances, l_indices = nbrs.kneighbors(latent)
+	l_distances, l_indices = l_distances[:,1], l_indices[:,1] # Remove self-neighbors.
+	np.random.seed(seed)
+	indices = np.random.permutation(len(latent))
+	np.random.seed(None)
+	result = [[], [], []]
+	collected = 0
+	i = 0
+	while collected < n:
+		if l_indices[indices[i]] != f_indices[indices[i]]:
+			result[0].append(specs[indices[i]])
+			result[1].append(specs[l_indices[indices[i]]])
+			result[2].append(specs[f_indices[indices[i]]])
+			collected += 1
+		i += 1
+	if ax is None:
+		ax = plt.gca()
+	grid_plot(np.stack(result), ax=ax, gap=(8,4), save_and_close=False)
+
+
+
+def bridge_plot_DC(dc, from_indices=None, to_indices=None, size=5, n=20, ax=None, save_and_close=True, \
+	gap=(8,4), filename='bridge_plot.pdf'):
 	"""
 	Find smooth paths between example spectrograms.
 
@@ -162,8 +198,10 @@ def bridge_plot_DC(dc, from_indices, to_indices, n=5, filename='bridge_plot.pdf'
 	latent = dc.request('latent_means')
 	specs = dc.request('specs')
 	result = []
-	print(from_indices)
-	print(to_indices)
+	if from_indices is None:
+		from_indices = np.random.randint(len(latent), size=size)
+		to_indices = np.random.randint(len(latent), size=size)
+
 	for i in range(len(from_indices)):
 		latent_1 = latent[from_indices[i]]
 		latent_2 = latent[to_indices[i]]
@@ -177,17 +215,22 @@ def bridge_plot_DC(dc, from_indices, to_indices, n=5, filename='bridge_plot.pdf'
 		print()
 		result.append(np.array(temp_specs))
 	result = np.array(result)
-	grid_plot(result, gap=4, filename=os.path.join(dc.plots_dir, filename))
+	if ax is None:
+		ax=plt.gca()
+	grid_plot(result, gap=gap, ax=ax, save_and_close=save_and_close, filename=os.path.join(dc.plots_dir, filename))
 
 
-def random_walk_plot(dc, from_indices=None, n=20, filename='spec_walk.pdf'):
+def random_walk_plot(dc, from_indices=None, size=5, k=5, n=20, ax=None, save_and_close=True, \
+	gap=4, filename='spec_walk.pdf'):
 	"""
 	Plot spectrograms along a random walk in a latent nearest neighbors graph.
 	"""
 	latent = dc.request('latent_means')
 	specs = dc.request('specs')
 	if from_indices is None:
-		from_indices = np.random.randint(len(latent), size=8)
+		np.random.seed(42)
+		from_indices = np.random.randint(len(latent), size=size)
+		np.random.seed(None)
 	result = []
 	print(from_indices)
 	for i in range(len(from_indices)):
@@ -197,10 +240,13 @@ def random_walk_plot(dc, from_indices=None, n=20, filename='spec_walk.pdf'):
 			target = latent[compiled[j-1]]
 			distances = np.array([euclidean(target, l) for l in latent])
 			distances[compiled[:j]] = 1e6 # large number
-			compiled[j] = np.random.choice(np.argsort(distances)[:4])
+			compiled[j] = np.random.choice(np.argsort(distances)[:k])
 		print(compiled)
 		result.append(np.array([specs[j] for j in compiled]))
-	grid_plot(np.array(result), filename=os.path.join(dc.plots_dir, filename))
+	if ax is None:
+		ax = plt.gca()
+	grid_plot(np.array(result), ax=ax, save_and_close=save_and_close, \
+		gap=gap, filename=os.path.join(dc.plots_dir, filename))
 
 
 def indexed_grid_plot(dc, indices, filename='grid.pdf'):

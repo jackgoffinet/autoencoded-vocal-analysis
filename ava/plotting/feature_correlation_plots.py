@@ -4,7 +4,7 @@ Plot correlations between latent features and traditional features.
 
 """
 __author__ = "Jack Goffinet"
-__date__ = "July-September 2019"
+__date__ = "July-October 2019"
 
 
 from matplotlib.colors import to_rgba
@@ -27,9 +27,8 @@ from ava.data.data_container import PRETTY_NAMES_NO_UNITS
 
 
 
-def correlation_bar_chart_DC(dcs, dc_fields, axs=None, colors=None, top_n=5, \
-	bottom_n=5, save_and_close=True, load_data=False, \
-	filename='correlation_bar_chart.pdf'):
+def correlation_bar_chart_DC(dcs, dc_fields, axs=None, colors=None, \
+	save_and_close=True, load_data=False, filename='correlation_bar_chart.pdf'):
 	"""
 	Two-panel horizontal bar chart.
 
@@ -43,10 +42,6 @@ def correlation_bar_chart_DC(dcs, dc_fields, axs=None, colors=None, top_n=5, \
 		Axes to plot on. Defaults to ``None``.
 	colors : {None, list of str}
 		Colors corresponding to `dcs`. Defaults to ``None``.
-	top_n : int, optional
-		...
-	bottom_n : int, optional
-		...
 	save_and_close : bool, optional
 		Defaults to ``True``.
 	filename : str
@@ -128,13 +123,16 @@ def correlation_bar_chart_DC(dcs, dc_fields, axs=None, colors=None, top_n=5, \
 	latent_names = np.array(latent_names)[perm]
 	latent_colors = np.array(latent_colors)[perm]
 
+	print("trad_r2s", trad_r2s)
+	print("latent_r2s", latent_r2s)
+
 	# Plot.
 	if axs is None:
 		_, axs = plt.subplots(1,2)
 
 	for ax in axs:
 		ax.set_xticks([0,0.25,0.5,0.75,1.0])
-		ax.set_xticklabels([0.0,'',0.5,'',1.0])
+		ax.set_xticklabels([0,'',50,'',100])
 		ax.set_yticks([])
 		ax.set_xlim(0,1.0)
 		for x in [0.25,0.75]:
@@ -145,55 +143,86 @@ def correlation_bar_chart_DC(dcs, dc_fields, axs=None, colors=None, top_n=5, \
 			ax.spines[direction].set_visible(False)
 		ax.xaxis.set_ticks_position('bottom')
 
-	# Create axis breaks.
-	delta = 1.0 / (bottom_n + top_n + 1)
-	y_top = (bottom_n + 0.8) * delta
-	y_bottom = (bottom_n + 0.35) * delta
-	rect1 = Rectangle((-0.05,y_top), 0.1, y_bottom-y_top, \
-		edgecolor='white', facecolor='white', zorder=10, \
-		transform=axs[0].transAxes, clip_on=False, linewidth=0.3)
-	axs[0].add_patch(rect1)
-	rect2 = Rectangle((-0.05,y_top), 0.1, y_bottom-y_top, \
-		edgecolor='white', facecolor='white', zorder=10, \
-		transform=axs[1].transAxes, clip_on=False, linewidth=0.3)
-	axs[1].add_patch(rect2)
-	for ax in axs:
-		kwargs = dict(transform=ax.transAxes, color='k', clip_on=False, \
-			zorder=11, lw=1.0)
-		ax.plot([-0.04,0.04], [y_top+0.01, y_top-0.01], **kwargs)
-		ax.plot([-0.04,0.04], [y_bottom+0.01, y_bottom-0.01], **kwargs)
+	# # Create axis breaks.
+	# delta = 1.0 / (bottom_n + top_n + 1)
+	# y_top = (bottom_n + 0.8) * delta
+	# y_bottom = (bottom_n + 0.35) * delta
+	# rect1 = Rectangle((-0.05,y_top), 0.1, y_bottom-y_top, \
+	# 	edgecolor='white', facecolor='white', zorder=10, \
+	# 	transform=axs[0].transAxes, clip_on=False, linewidth=0.3)
+	# axs[0].add_patch(rect1)
+	# rect2 = Rectangle((-0.05,y_top), 0.1, y_bottom-y_top, \
+	# 	edgecolor='white', facecolor='white', zorder=10, \
+	# 	transform=axs[1].transAxes, clip_on=False, linewidth=0.3)
+	# axs[1].add_patch(rect2)
+	# for ax in axs:
+	# 	kwargs = dict(transform=ax.transAxes, color='k', clip_on=False, \
+	# 		zorder=11, lw=1.0)
+	# 	ax.plot([-0.04,0.04], [y_top+0.01, y_top-0.01], **kwargs)
+	# 	ax.plot([-0.04,0.04], [y_bottom+0.01, y_bottom-0.01], **kwargs)
 
 
-	Y = np.arange(top_n + bottom_n + 1)
-	axs[0].barh(Y[:bottom_n], trad_r2s[:bottom_n], color=trad_colors[:bottom_n], zorder=2)
-	axs[0].barh(Y[-top_n:], trad_r2s[-top_n:], color=trad_colors[-top_n:], zorder=2)
-	axs[0].set_xlabel("% Variance Explained\nby Latent Features")
+	Y = np.arange(len(trad_r2s))
+	axs[0].barh(Y, trad_r2s, color=trad_colors, zorder=2)
+	# axs[0].barh(Y[-top_n:], trad_r2s[-top_n:], color=trad_colors[-top_n:], zorder=2)
+	axs[0].set_xlabel("% Traditional Feature Variance\nExplained by Latent Features")
 
-	for i in range(bottom_n):
-		axs[0].text(trad_r2s[i]+0.04, Y[i]-0.105, trad_names[i], fontsize=7, \
-			color='k', bbox=dict(facecolor='w', edgecolor='w', alpha=0.7))
-	for i in range(1,top_n+1):
-		axs[0].text(0.015, Y[-i]-0.1, trad_names[-i], fontsize=7, color='w')
 
-	Y = np.arange(top_n + bottom_n + 1)
-	axs[1].barh(Y[:bottom_n], latent_r2s[:bottom_n], color=latent_colors[:bottom_n], zorder=2)
-	axs[1].barh(Y[-top_n:], latent_r2s[-top_n:], color=latent_colors[-top_n:], zorder=2)
-	axs[1].set_xlabel("% Variance Explained\nby Traditional Features")
+	for i in Y:
+		if trad_r2s[i] < 0.5:
+			axs[0].text(trad_r2s[i]+0.12, Y[i]-0.105, trad_names[i], fontsize=7, \
+				color='k', bbox=dict(facecolor='w', edgecolor='w', alpha=0.7))
+		else:
+			axs[0].text(0.015, Y[i]-0.1, trad_names[i], fontsize=7, color='w')
 
-	for i in range(bottom_n):
-		axs[1].text(latent_r2s[i]+0.04, Y[i]-0.105, latent_names[i], fontsize=7, \
-			color='k', bbox=dict(facecolor='w', edgecolor='w', alpha=0.7))
-	for i in range(1,top_n+1):
-		axs[1].text(0.015, Y[-i]-0.1, latent_names[-i], fontsize=7, color='w')
+	Y = np.arange(len(latent_r2s))
+	axs[1].barh(Y, latent_r2s, color=latent_colors, zorder=2)
+	# axs[1].barh(Y[-top_n:], latent_r2s[-top_n:], color=latent_colors[-top_n:], zorder=2)
+	axs[1].set_xlabel("% Latent Feature Variance\nExplained by Traditional Features")
+
+	for i in Y:
+		if latent_r2s[i] < 0.5:
+			axs[1].text(latent_r2s[i]+0.04, Y[i]-0.105, latent_names[i], fontsize=7, \
+				color='k', bbox=dict(facecolor='w', edgecolor='w', alpha=0.7))
+		else:
+			axs[1].text(0.015, Y[i]-0.1, latent_names[i], fontsize=7, color='w')
 
 	if save_and_close:
-		plt.savefig(os.path.join(dc.plots_dir, filename))
+		plt.savefig(filename)
 		plt.close('all')
 
 
+def pairwise_latent_feature_correlation_plot_DC(dc, title=None, ax=None):
+	"""
 
-def pairwise_correlation_plot_DC(dc, fields, ax=None, cax=None, \
-	save_and_close=True,filename='pairwise.pdf'):
+
+	"""
+	latent = dc.request('latent_means')
+	pca = PCA(n_components=latent.shape[1], whiten=False)
+	latent = pca.fit_transform(latent)
+	latent = latent[:,np.argwhere(pca.explained_variance_ratio_ > 0.01).flatten()]
+	n = latent.shape[1]
+	for i in range(n):
+		latent[:,i] -= np.mean(latent[:,i])
+		latent[:,i] /= np.std(latent[:,i], ddof=1)
+	result = np.ones((n,n))
+	for i in range(n-1):
+		for j in range(i+1,n):
+			corr = np.dot(latent[:,i], latent[:,j]) / (len(latent)-1)
+			result[i,j] = abs(corr)
+			result[j,i] = abs(corr)
+	if ax is None:
+		ax = plt.gca()
+	ax.imshow(result, vmin=0, vmax=1, cmap='Greys', aspect='equal')
+	if title is not None:
+		ax.set_title(title, fontsize=8)
+	ax.set_xticks([],[])
+	ax.set_yticks([],[])
+
+
+
+def pairwise_correlation_plot_DC(dc, fields, ax=None, cax=None, make_cbar=True, \
+	title=None, save_and_close=True,filename='pairwise.pdf'):
 	"""
 	Note:
 	- add axes, etc...
@@ -213,6 +242,7 @@ def pairwise_correlation_plot_DC(dc, fields, ax=None, cax=None, \
 			temp = np.dot(d1, d2) / (len(d1)-1)
 			result[i,j] = abs(temp)
 			result[j,i] = abs(temp)
+
 	# # Sort.
 	# tsne = TSNE(n_components=1, metric='precomputed', random_state=42)
 	# flat_result = tsne.fit_transform(1.0 - result).flatten()
@@ -228,15 +258,17 @@ def pairwise_correlation_plot_DC(dc, fields, ax=None, cax=None, \
 		ax = plt.gca()
 	im = ax.imshow(result, vmin=0, vmax=1, cmap='Greys', aspect='equal') # , origin='lower'
 	fig = plt.gcf()
-	if cax is None:
-		cax = fig.add_axes([0.27, 0.8, 0.5, 0.05])
-	cbar = fig.colorbar(im, cax=cax, pad=0.06, fraction=0.046, \
-			orientation="horizontal")
-	cbar.solids.set_edgecolor("face")
-	cbar.solids.set_rasterized(True)
-	cbar.set_ticks([0, 1])
-	cbar.set_ticklabels([0,1])
-	ax.set_title("MUPET Feature\nPairwise Absolute\nCorrelations", fontsize=8)
+	if make_cbar:
+		if cax is None:
+			cax = fig.add_axes([0.27, 0.8, 0.5, 0.05])
+		cbar = fig.colorbar(im, cax=cax, pad=0.06, fraction=0.046, \
+				orientation="horizontal")
+		cbar.solids.set_edgecolor("face")
+		cbar.solids.set_rasterized(True)
+		cbar.set_ticks([0, 1])
+		cbar.set_ticklabels([0,1])
+	if title is not None:
+		ax.set_title(title, fontsize=8)
 	tick_labels = [PRETTY_NAMES_NO_UNITS[field] for field in fields]
 	# ax.set_yticks(np.arange(len(fields)), tick_labels)
 	ax.set_xticks([],[])
@@ -245,6 +277,26 @@ def pairwise_correlation_plot_DC(dc, fields, ax=None, cax=None, \
 		plt.tight_layout()
 		plt.savefig(os.path.join(dc.plots_dir, filename))
 		plt.close('all')
+
+
+def latent_pc_variances_plot_DC(dc, ax=None, color='b'):
+	"""
+
+	"""
+	latent = dc.request('latent_means')
+	pca = PCA(n_components=latent.shape[1], whiten=False)
+	latent = pca.fit_transform(latent)
+	i = np.min(np.argwhere(pca.explained_variance_ratio_ < 0.01).flatten())
+	latent = latent[:,:i+2]
+	n = latent.shape[1]
+	variances = []
+	for i in range(n):
+		variances.append(np.var(latent[:,i]))
+	if ax is None:
+		ax = plt.gca()
+	ax.plot(np.arange(n), variances, marker='s', c=color, lw=0.8)
+	ax.axhline(y=0, c='k', alpha=0.7, ls='--')
+
 
 
 def feature_pca_plot_DC(dcs, dc_fields, colors, alpha=0.7, lw=2.5, ax=None, \
