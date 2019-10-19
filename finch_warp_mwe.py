@@ -6,7 +6,6 @@ Minimal working example for time-warped birdsong.
 2) Warp song renditions & train a generative model.
 3) Plot and analyze.
 
-TO DO: figure out best way for window to work with DataContainer
 """
 
 from itertools import repeat
@@ -49,15 +48,14 @@ zebra_finch_params_warped_window = {
 }
 
 
-root = '/media/jackg/Jacks_Animal_Sounds/birds/jonna/blu285/'
+root = '/path/to/directory/'
 params = zebra_finch_params_warped_window
 audio_dirs = [os.path.join(root, i) for i in ['songs/DIR', 'songs/UNDIR']]
-template_dir = root + 'templates'
-spec_dirs = [root+'h5s']
-proj_dirs = [root+'song_window/proj/']
-# model_filename = root + 'song_window/checkpoint_201.tar'
-model_filename = root + 'methods_checkpoint_200.tar'
-plots_dir = root + 'song_window/plots/'
+template_dir = os.path.join(root, 'templates')
+spec_dirs = [os.path.join(root, 'h5s')]
+proj_dirs = [os.path.join(root+'projections')]
+model_filename = os.path.join(root, 'methods_checkpoint_200.tar')
+plots_dir = root
 
 
 dc = DataContainer(projection_dirs=proj_dirs, audio_dirs=audio_dirs, \
@@ -65,10 +63,10 @@ dc = DataContainer(projection_dirs=proj_dirs, audio_dirs=audio_dirs, \
 	template_dir=template_dir)
 
 
-# #####################################
-# # 1) Tune preprocessing parameters. #
-# #####################################
-# params = tune_window_preprocessing_params(audio_dirs, params)
+#####################################
+# 1) Tune preprocessing parameters. #
+#####################################
+params = tune_window_preprocessing_params(audio_dirs, params)
 
 
 ###################################################
@@ -89,8 +87,8 @@ from ava.plotting.tooltip_plot import tooltip_plot_DC
 from ava.plotting.latent_projection import latent_projection_plot_DC
 from ava.plotting.trace_plot import warped_trace_plot_DC
 
-# latent_projection_plot_DC(dc)
-# tooltip_plot_DC(dc, num_imgs=2000)
+latent_projection_plot_DC(dc)
+tooltip_plot_DC(dc, num_imgs=2000)
 warped_trace_plot_DC(dc, params, load_warp=False)
 
 

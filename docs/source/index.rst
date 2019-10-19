@@ -5,6 +5,8 @@ AVA is a Python package for inferring latent descriptions of animal
 vocalizations using variational autoencoders (VAEs). You can find the code
 `on github <https://github.com/jackgoffinet/autoencoded-vocal-analysis>`_.
 
+This documentation is a work in progress.
+
 Installation
 ------------
 

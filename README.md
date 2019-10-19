@@ -1,8 +1,6 @@
 ## Autoencoded Vocal Analysis
 #### Generative modeling of animal vocalizations
-
-Jack Goffinet
-November 2018 - September 2019
+November 2018 - October 2019
 
 To build:
 ```
@@ -12,7 +10,7 @@ $ python setup.py sdist bdist_wheel
 
 Docs:
 ```
-$ cd docs
+$ cd path/to/ava/docs
 $ sphinx-apidoc -f -o docs/source ../ava
 $ make html
 $ open build/html/index.html

@@ -1,5 +1,6 @@
 dist/
 build/
+assets/
 dist/
 plots/
 __pycache__/
@@ -7,7 +8,7 @@ ava/__pycache__/
 ava/models/__pycache__/
 ava/plotting/__pycache__/
 ava/preprocessing/__pycache__/
-ava/data/__pycache__/
+ava/data/
 ava/segmenting/__pycache__/
 ava/docs/build/
 ava/docs/source/_static/
