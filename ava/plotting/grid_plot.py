@@ -13,7 +13,7 @@ import os
 
 
 
-def indexed_grid_plot(dc, indices, ax=None, save_and_close=True, gap=3, \
+def indexed_grid_plot_DC(dc, indices, ax=None, save_and_close=True, gap=3, \
 	sign=1, side_len=128, filename='grid.pdf'):
 	"""
 	TO DO: use this to access grid_plot.

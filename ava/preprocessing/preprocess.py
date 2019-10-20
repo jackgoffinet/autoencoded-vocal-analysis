@@ -142,31 +142,6 @@ def get_syll_specs(onsets, offsets, audio_filename, p):
 	return specs, valid_syllables
 
 
-# def get_audio(filename, p, start_index=None, stop_index=None):
-# 	"""
-# 	Get a waveform and samplerate given a filename.
-#
-# 	Note
-# 	----
-# 		- Remove this
-# 	"""
-# 	# Make sure the samplerate is correct and the audio is mono.
-# 	if filename[-4:] == '.wav':
-# 		fs, audio = wavfile.read(filename)
-# 	elif filename[-4:] == '.mat':
-# 		d = loadmat(filename)
-# 		audio = d['spike2Chunk'].reshape(-1)
-# 		fs = d['fs'][0,0]
-# 	else:
-# 		raise NotImplementedError
-# 	if len(audio.shape) > 1:
-# 		audio = audio[0,:]
-# 	if start_index is not None and stop_index is not None:
-# 		start_index = max(start_index, 0)
-# 		audio = audio[start_index:stop_index]
-# 	return fs, audio
-
-
 def tune_syll_preprocessing_params(audio_dirs, seg_dirs, p):
 	"""
 	Flip through spectrograms and tune preprocessing parameters.
@@ -218,12 +193,6 @@ def tune_syll_preprocessing_params(audio_dirs, seg_dirs, p):
 				continue
 			syll_index = np.random.randint(len(onsets))
 			onsets, offsets = [onsets[syll_index]], [offsets[syll_index]]
-
-			# # If this is a sliding window, get a random onset & offset.
-			# if p['sliding_window']:
-			# 	onsets = [onsets[0] + (offsets[0] - onsets[0]) * \
-			# 			np.random.rand()]
-			# 	offsets = [onsets[0] + p['window_length']]
 
 			# Get the preprocessed spectrogram.
 			specs, good_sylls = get_syll_specs(onsets, offsets, \
@@ -357,9 +326,6 @@ def read_onsets_offsets_from_file(txt_filename, p):
 	prepended to header and footer lines.
 
 	"""
-	# delimiter, skiprows, usecols = p['delimiter'], p['skiprows'], p['usecols']
-	# segs = np.loadtxt(txt_filename, delimiter=delimiter, skiprows=skiprows, \
-	# 	usecols=usecols).reshape(-1,2)
 	segs = np.loadtxt(txt_filename).reshape(-1,2)
 	return segs[:,0], segs[:,1]
 
@@ -380,7 +346,6 @@ def _is_number(s):
 
 def is_audio_file(fn):
 	return len(fn) >= 4 and fn[-4:] in ['.wav', '.mat']
-
 
 
 

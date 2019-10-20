@@ -461,8 +461,6 @@ class WarpedWindowDataset(Dataset):
 		return result
 
 
-
-
 	def get_specific_item(self, query_filename, quantile):
 		"""
 		Return a specific window of birdsong as a numpy array.

@@ -55,7 +55,7 @@ def get_onsets_offsets(audio, p, return_traces=False):
 	# smooth = gaussian_filter(spec, [p['freq_smoothing'], smoothing_time])
 
 	if p['softmax']:
-		amps = softmax(spec, t=p['temperature'])
+		amps = _softmax(spec, t=p['temperature'])
 	else:
 		amps = np.sum(spec, axis=0)
 	# Smooth.
@@ -115,8 +115,7 @@ def get_onsets_offsets(audio, p, return_traces=False):
 	return new_onsets, new_offsets
 
 
-
-def softmax(arr, t=0.5):
+def _softmax(arr, t=0.5):
 	temp = np.exp(arr/t)
 	temp /= np.sum(temp, axis=0) + EPSILON
 	return np.sum(np.multiply(arr, temp), axis=0)

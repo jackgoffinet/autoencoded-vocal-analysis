@@ -150,23 +150,6 @@ def projection_plot(embedding, color='b', title="",
 		plt.close('all')
 
 
-def _clustered_latent_projection_DC(dc, data_fn, label, ax=None, noise_box=None):
-	"""
-
-
-	"""
-	clusterer = joblib.load(data_fn)[label]
-	latent = dc.request('latent_means')
-	labels = clusterer.predict(latent)
-	cmap = matplotlib.cm.get_cmap('tab10')
-	colors = cmap(labels)
-	if noise_box is None:
-		latent_projection_plot_DC(dc, color_by=None, alpha=0.5, s=0.9, ax=ax,
-			save_and_close=False, default_color=colors)
-	else:
-		latent_projection_plot_with_noise_DC(dc, color_by=None, alpha=0.5, s=0.9, ax=ax,
-			save_and_close=False, default_color=colors, noise_box=noise_box)
-
 
 
 if __name__ == '__main__':

@@ -202,20 +202,9 @@ def get_hdf5s_from_dir(dir):
 		_is_hdf5_file(f)]
 
 
-# def get_wavs_from_dir(dir):
-# 	"""Return a sorted list of all wave files in a directory."""
-# 	return [os.path.join(dir, f) for f in sorted(os.listdir(dir)) if \
-# 		is_wav_file(f)]
-
-
 def _is_hdf5_file(filename):
 	"""Is the given filename an hdf5 file?"""
 	return len(filename) > 5 and filename[-5:] == '.hdf5'
-
-
-# def is_wav_file(filename):
-# 	"""Is this file a wave file?"""
-# 	return len(filename) > 4 and filename[-4:] == '.wav'
 
 
 
