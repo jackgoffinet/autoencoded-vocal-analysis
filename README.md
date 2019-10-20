@@ -2,8 +2,6 @@
 #### Generative modeling of animal vocalizations
 November 2018 - October 2019
 
-[zebra_finch](https://raw.githubusercontent.com/jackgoffinet/autoencoded-vocal-analysis/master/zebra_finch.png)
-
 See our preprint on bioRxiv (coming soon) for details. See `mouse_sylls_mwe.py` for usage.
 
 To build package:
