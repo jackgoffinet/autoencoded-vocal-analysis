@@ -2,7 +2,6 @@
 Useful functions for preprocessing.
 
 """
-__author__ = "Jack Goffinet"
 __date__ = "August 2019"
 
 

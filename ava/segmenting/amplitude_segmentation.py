@@ -2,8 +2,7 @@
 Amplitude-based syllable segmentation.
 
 """
-__author__ ="Jack Goffinet"
-__date__ = "December 2018 - August 2019"
+__date__ = "December 2018 - October 2019"
 
 
 import numpy as np
@@ -23,25 +22,21 @@ def get_onsets_offsets(audio, p, return_traces=False):
 
 	Parameters
 	----------
-	audio :
-		...
-
-	p :
-		...
-
+	audio : numpy.ndarray
+		Raw audio samples.
+	p : dict
+		Parameters.
 	return_traces : bool, optional
-
+		Whether to return traces. Defaults to `False`.
 	Returns
 	-------
 	onsets : numpy array
 		Onset times, in seconds
-
 	offsets : numpy array
 		Offset times, in seconds
-
 	traces : list of a single numpy array
 		The amplitude trace used in segmenting decisions. Returned if
-		return_traces is True.
+		return_traces is `True`.
 	"""
 	spec, dt, _ = get_spec(audio, p)
 	min_syll_len = int(np.floor(p['min_dur'] / dt))
@@ -50,9 +45,6 @@ def get_onsets_offsets(audio, p, return_traces=False):
 	smoothing_time = p['smoothing_timescale'] / dt
 	onsets, offsets = [], []
 	too_short, too_long = 0, 0
-
-	# smoothing_time = p['smoothing_timescale'] / dt
-	# smooth = gaussian_filter(spec, [p['freq_smoothing'], smoothing_time])
 
 	if p['softmax']:
 		amps = _softmax(spec, t=p['temperature'])

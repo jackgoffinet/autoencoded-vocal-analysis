@@ -13,8 +13,7 @@ TO DO
 - make sure input directories are iterable
 - add features to existing files.
 """
-__author__ = "Jack Goffinet"
-__date__ = "July-August 2019"
+__date__ = "July-October 2019"
 
 
 import h5py

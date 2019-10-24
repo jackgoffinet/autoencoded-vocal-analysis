@@ -15,7 +15,6 @@ VAE References
 
 	`<https://arxiv.org/abs/1401.4082>`_
 """
-__author__ = "Jack Goffinet"
 __date__ = "November 2018 - July 2019"
 
 

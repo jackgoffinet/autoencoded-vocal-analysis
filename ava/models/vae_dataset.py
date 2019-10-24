@@ -3,7 +3,6 @@ Methods for handling syllable data using PyTorch.
 
 Meant to be used in conjunction with ``ava.models.vae.VAE`` objects.
 """
-__author__ = "Jack Goffinet"
 __date__ = "November 2018 - August 2019"
 
 import h5py

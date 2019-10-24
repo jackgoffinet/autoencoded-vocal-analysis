@@ -1,5 +1,5 @@
 """
-Minimal working example for time-warped birdsong.
+Minimal working example for shotgun VAE using time-warped birdsong.
 
 0) Define directories and parameters.
 1) Tune preprocessing parameters.
@@ -85,11 +85,9 @@ model.train_loop(loaders, epochs=201, save_freq=50, test_freq=None)
 ########################
 from ava.plotting.tooltip_plot import tooltip_plot_DC
 from ava.plotting.latent_projection import latent_projection_plot_DC
-from ava.plotting.trace_plot import warped_trace_plot_DC
 
 latent_projection_plot_DC(dc)
 tooltip_plot_DC(dc, num_imgs=2000)
-warped_trace_plot_DC(dc, params, load_warp=False)
 
 
 

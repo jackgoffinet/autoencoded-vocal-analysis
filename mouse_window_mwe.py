@@ -1,5 +1,5 @@
 """
-Minimal working example for time-warped birdsong.
+Minimal working example for shotgun VAE using mouse USVs.
 
 0) Define directories and parameters.
 1) Tune preprocessing parameters.
@@ -75,7 +75,6 @@ loaders = get_fixed_window_data_loaders(partition, params, \
 	num_workers=num_workers, batch_size=128)
 loaders['test'] = loaders['train']
 model = VAE(save_dir=root)
-# model.load_state(dc.model_filename)
 model.train_loop(loaders, epochs=101, save_freq=20, test_freq=None)
 
 
@@ -84,7 +83,6 @@ model.train_loop(loaders, epochs=101, save_freq=20, test_freq=None)
 ########################
 from ava.plotting.tooltip_plot import tooltip_plot_DC
 from ava.plotting.latent_projection import latent_projection_plot_DC
-from ava.plotting.trace_plot import warped_trace_plot_DC
 
 loaders['test'].dataset.write_hdf5_files(spec_dirs[0], num_files=1000)
 latent_projection_plot_DC(dc, alpha=0.25, s=0.5)

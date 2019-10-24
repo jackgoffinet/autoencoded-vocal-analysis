@@ -5,7 +5,6 @@ Plot a syllable projection with spectrograms appearing as tooltips.
 TO DO:
 - Stop reading and writing the embedding.
 """
-__author__ = "Jack Goffinet"
 __date__ = "March 2019 - July 2019"
 
 from bokeh.plotting import figure, output_file, show, ColumnDataSource

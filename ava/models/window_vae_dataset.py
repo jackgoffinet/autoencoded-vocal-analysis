@@ -10,7 +10,6 @@ Contains
 - class WarpedWindowDataset
 
 """
-__author__ = "Jack Goffinet"
 __date__ = "August - September 2019"
 
 

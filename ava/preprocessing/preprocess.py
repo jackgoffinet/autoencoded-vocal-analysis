@@ -4,7 +4,6 @@ Compute and process syllable spectrograms.
 TO DO:
 	- support sliding/warped window for tune_preprocessing_params
 """
-__author__ = "Jack Goffinet"
 __date__ = "December 2018 - July 2019"
 
 

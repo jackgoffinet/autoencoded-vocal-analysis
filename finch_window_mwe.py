@@ -1,5 +1,5 @@
 """
-Minimal working example for time-warped birdsong.
+Minimal working example for shotgun VAE using unwarped birdsong.
 
 0) Define directories and parameters.
 1) Tune preprocessing parameters.

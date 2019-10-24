@@ -8,7 +8,6 @@ TO DO:
 	- segment could be sped up if it operated file by file.
 
 """
-__author__ = "Jack Goffinet"
 __date__ = "December 2018 - August 2019"
 
 

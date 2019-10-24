@@ -5,7 +5,6 @@ Segment song bouts using linear acoustic feature templates.
 TO DO:
 	- Align the examplar spectrograms?
 """
-__author__ = "Jack Goffinet"
 __date__ = "April-August 2019"
 
 

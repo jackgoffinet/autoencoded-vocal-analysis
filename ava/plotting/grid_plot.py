@@ -2,7 +2,6 @@
 Plot a grid of images.
 
 """
-__author__ = "Jack Goffinet"
 __date__ = "July-August 2019"
 
 
@@ -14,9 +13,26 @@ import os
 
 
 def indexed_grid_plot_DC(dc, indices, ax=None, save_and_close=True, gap=3, \
-	sign=1, side_len=128, filename='grid.pdf'):
+	side_len=128, filename='grid.pdf'):
 	"""
-	TO DO: use this to access grid_plot.
+	Plot a bunch of spectrograms in a grid.
+
+	Parameters
+	----------
+	dc : ava.data.data_container.DataContainer
+		Data container object.
+	indices : list of lists of ints
+		Spectrogram indices.
+	ax : matplotlib.axes._subplots.AxesSubplot or None
+		Plotting axis. Defaults to `None`.
+	save_and_close : bool
+		Save and close the plot. Defaults to `True`.
+	gap : int
+		Number of pixels between spectrograms. Defaults to `3`.
+	side_len : int
+		Spectrogram height and width, in pixels. Defaults to `128`.
+	filename : str
+		Save the image here. Defaults to `'grid.pdf'`.
 	"""
 	specs = dc.request('specs')
 	a, b, c, d = len(indices), len(indices[0]), side_len, side_len
@@ -25,11 +41,11 @@ def indexed_grid_plot_DC(dc, indices, ax=None, save_and_close=True, gap=3, \
 		for j, col in enumerate(row):
 			result[i,j] = specs[col]
 	filename = os.path.join(dc.plots_dir, filename)
-	grid_plot(result, gap=gap, ax=ax, sign=sign, \
+	grid_plot(result, gap=gap, ax=ax, \
 			save_and_close=save_and_close, filename=filename)
 
 
-def grid_plot(specs, gap=3, ax=None, sign=1, save_and_close=True, \
+def grid_plot(specs, gap=3, ax=None, save_and_close=True, \
 	filename='temp.pdf'):
 	"""
 	Parameters
@@ -37,7 +53,8 @@ def grid_plot(specs, gap=3, ax=None, sign=1, save_and_close=True, \
 	specs : numpy.ndarray
 		Spectrograms
 	gap : int or tuple of two ints, optional
-		The vertical and horizontal gap between images, in pixels.
+		The vertical and horizontal gap between images, in pixels. Defaults to
+		`3`.
 	ax : matplotlib.pyplot.axis, optional
 		Axis to plot figure. Defaults to matplotlib.pyplot.gca().
 	save_and_close : bool, optional
@@ -67,9 +84,8 @@ def grid_plot(specs, gap=3, ax=None, sign=1, save_and_close=True, \
 		img[j*dy-gap[0]:j*dy,:] = np.nan
 	if ax is None:
 		ax = plt.gca()
-	vmin, vmax = min(sign*1, 0), max(sign*1, 0)
-	ax.imshow(sign*img, aspect='equal', origin='lower', interpolation='none',
-		vmin=vmin, vmax=vmax)
+	ax.imshow(img, aspect='equal', origin='lower', interpolation='none',
+		vmin=0, vmax=1)
 	ax.axis('off')
 	if save_and_close:
 		plt.tight_layout()

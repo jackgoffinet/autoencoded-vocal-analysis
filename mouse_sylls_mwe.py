@@ -1,10 +1,10 @@
 """
-Minimal working example.
+Minimal working example for mouse syllables.
 
 0) Define directories and parameters.
 1) Tune segmenting parameters.
 2) Segment.
-	2.5) Clean segmenting decisions.
+	2.5) Clean segmenting decisions. (optional)
 3) Tune preprocessing parameters.
 4) Preprocess.
 5) Train a generative model on these syllables.
@@ -27,7 +27,7 @@ from ava.preprocessing.preprocess import process_sylls, \
 from ava.preprocessing.utils import get_spec
 from ava.segmenting.refine_segments import refine_segments_pre_vae
 from ava.segmenting.segment import tune_segmenting_params, segment
-from ava.segmenting.amplitude_segmentation_v2 import get_onsets_offsets
+from ava.segmenting.amplitude_segmentation import get_onsets_offsets
 
 
 #########################################
@@ -86,7 +86,7 @@ audio_dirs = [os.path.join(root, 'audio')]
 seg_dirs = [os.path.join(root, 'segs')]
 proj_dirs = [os.path.join(root, 'projections')]
 spec_dirs = [os.path.join(root, 'specs')]
-model_filename = os.path.join(root, 'checkpoint_060.tar')
+model_filename = os.path.join(root, 'checkpoint_150.tar')
 plots_dir = root
 dc = DataContainer(projection_dirs=proj_dirs, feature_dirs=feature_dirs,
 	spec_dirs=spec_dirs, plots_dir=plots_dir, model_filename=model_filename)

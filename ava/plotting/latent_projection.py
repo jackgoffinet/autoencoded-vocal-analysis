@@ -2,7 +2,6 @@
 Plot a latent mean projection.
 
 """
-__author__ = "Jack Goffinet"
 __date__ = "July-October 2019"
 
 
