@@ -4,7 +4,7 @@ Current version: 0.2.1
 
 See our [preprint](https://doi.org/10.1101/811661) on bioRxiv for details.
 
-See `mouse_sylls_mwe.py` and the other `*_mwe.py` files for usage.
+See `examples/` for usage.
 
 To build package:
 ```
@@ -26,5 +26,6 @@ Dependencies:
 * [UMAP](https://umap-learn.readthedocs.io/)
 * [affinewarp](https://github.com/ahwillia/affinewarp)
 * [Bokeh](https://docs.bokeh.org/en/latest/)
+* [Sphinx read-the-docs theme](https://sphinx-rtd-theme.readthedocs.io/en/stable/)
 
 Issues and/or pull requests are appreciated!
