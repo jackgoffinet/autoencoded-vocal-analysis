@@ -15,7 +15,6 @@ $ python setup.py sdist bdist_wheel
 To build docs:
 ```
 $ cd path/to/autoencoded-vocal-analysis/docs
-$ sphinx-apidoc -f -o docs/source ../ava
 $ make html
 $ open build/html/index.html
 ```
