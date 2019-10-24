@@ -6,9 +6,10 @@ __date__ = "August 2019"
 
 
 import numpy as np
+import warnings
 from scipy.signal import stft
 from scipy.interpolate import interp2d
-import warnings
+
 
 EPSILON = 1e-12
 
@@ -19,8 +20,8 @@ def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None, target_times=None, \
 	"""
 	Norm, scale, threshold, strech, and resize a Short Time Fourier Transform.
 
-	Note
-	----
+	Notes
+	-----
 	- `fill_value` necessary?
 	- Look at all references and see what can be simplified.
 	- within_syll_normalize could probably go
@@ -48,7 +49,6 @@ def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None, target_times=None, \
 		Spectrogram
 	flag : bool
 		...
-
 	"""
 	if max_dur is None:
 		max_dur = p['max_dur']

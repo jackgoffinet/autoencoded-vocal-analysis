@@ -18,7 +18,7 @@ import os
 import umap
 import warnings
 
-from tooltip_plot import tooltip_plot
+from ava.plotting.tooltip_plot import tooltip_plot
 
 # Silence numpy.loadtxt when reading empty files.
 warnings.filterwarnings("ignore", category=UserWarning)
