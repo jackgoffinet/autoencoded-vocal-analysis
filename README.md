@@ -2,7 +2,7 @@
 #### Generative modeling of animal vocalizations
 Current version: 0.2.1
 
-See our [preprint](https://doi.org/10.1101/811661) on bioRxiv for details:
+See our [preprint](https://doi.org/10.1101/811661) on bioRxiv for details.
 
 See `mouse_sylls_mwe.py` and the other `*_mwe.py` files for usage.
 
@@ -21,6 +21,7 @@ $ open build/html/index.html
 ```
 
 Dependencies:
+* Python 3
 * [PyTorch](https://pytorch.org)
 * [Joblib](https://joblib.readthedocs.io/)
 * [UMAP](https://umap-learn.readthedocs.io/)

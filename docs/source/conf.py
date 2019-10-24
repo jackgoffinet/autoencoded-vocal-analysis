@@ -11,22 +11,22 @@
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-
+#
 import os
 import sys
-sys.path.insert(0, os.path.relpath('../../ava/'))
+sys.path.insert(0, os.path.relpath('..'))
 
 
 # -- Project information -----------------------------------------------------
 
-project = 'Autoencoded Vocal Analysis'
+project = 'AVA'
 copyright = '2019, Jack Goffinet'
 author = 'Jack Goffinet'
 
 # The short X.Y version
-version = '0.1'
+version = ''
 # The full version, including alpha/beta/rc tags
-release = '0.1.0'
+release = '0.2.1'
 
 
 # -- General configuration ---------------------------------------------------
@@ -105,7 +105,7 @@ html_static_path = ['_static']
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'AutoencodedVocalAnalysisdoc'
+htmlhelp_basename = 'AVAdoc'
 
 
 # -- Options for LaTeX output ------------------------------------------------
@@ -132,7 +132,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'AutoencodedVocalAnalysis.tex', 'Autoencoded Vocal Analysis Documentation',
+    (master_doc, 'AVA.tex', 'AVA Documentation',
      'Jack Goffinet', 'manual'),
 ]
 
@@ -142,7 +142,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'autoencodedvocalanalysis', 'Autoencoded Vocal Analysis Documentation',
+    (master_doc, 'ava', 'AVA Documentation',
      [author], 1)
 ]
 
@@ -153,8 +153,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'AutoencodedVocalAnalysis', 'Autoencoded Vocal Analysis Documentation',
-     author, 'AutoencodedVocalAnalysis', 'One line description of project.',
+    (master_doc, 'AVA', 'AVA Documentation',
+     author, 'AVA', 'One line description of project.',
      'Miscellaneous'),
 ]
 

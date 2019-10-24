@@ -20,14 +20,6 @@ ava.models.vae\_dataset module
     :undoc-members:
     :show-inheritance:
 
-ava.models.window\_vae module
------------------------------
-
-.. automodule:: ava.models.window_vae
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 ava.models.window\_vae\_dataset module
 --------------------------------------
 

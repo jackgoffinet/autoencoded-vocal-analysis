@@ -12,14 +12,6 @@ ava.data.data\_container module
     :undoc-members:
     :show-inheritance:
 
-ava.data.save\_everything module
---------------------------------
-
-.. automodule:: ava.data.save_everything
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 
 Module contents
 ---------------

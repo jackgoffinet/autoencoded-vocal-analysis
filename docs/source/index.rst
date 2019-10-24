@@ -1,46 +1,19 @@
-AVA: Autoencoded Vocal Analysis
-===============================
+.. AVA documentation master file, created by
+   sphinx-quickstart on Thu Oct 24 10:52:56 2019.
+   You can adapt this file completely to your liking, but it should at least
+   contain the root `toctree` directive.
 
-AVA is a Python package for inferring latent descriptions of animal
-vocalizations using variational autoencoders (VAEs). You can find the code
-`on github <https://github.com/jackgoffinet/autoencoded-vocal-analysis>`_.
-
-This documentation is a work in progress.
-
-Installation
-------------
-
-TO DO:
-	- dependencies list
-	- pip install
-
-::
-
-	$ cd path/to/ava/
-	$ git clone https://github.com/jackgoffinet/autoencoded-vocal-analysis.git
-	$ python setup.py
-
-Quickstart Guide
-----------------
-
-Stuff.
-
-API Reference
--------------
-
-Stuff
-
+Autoencoded Vocal Analysis 0.2.1
+================================
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
    :caption: Contents:
 
-   installation.rst
-   quickstart.rst
-   modules.rst
 
-Indices and Tables
-------------------
+
+Indices and tables
+==================
 
 * :ref:`genindex`
 * :ref:`modindex`
