@@ -3,7 +3,10 @@ AVA: autoencoded vocal analysis
 
 Welcome to AVA, a python package for inferring latent descriptions of animal
 vocalizations using variational autoencoders. See our
-`preprint <https://doi.org/10.1101/811661>`_ for details.
+`preprint <https://doi.org/10.1101/811661>`_ for details:
+
+Goffinet, J., Mooney, R., & Pearson, J. (2019) Inferring low-dimensional latent
+representations of animal vocalizations, *biorXiv*, 811661.
 
 You can find the software
 `on github <https://github.com/jackgoffinet/autoencoded-vocal-analysis>`_.
@@ -17,10 +20,15 @@ You can find the software
    $ cd autoencoded-vocal-analysis
    $ pip install .
 
+**Examples**
 
-**To do: User Guide**
+See the `examples/` subdirectory
+`on github <https://github.com/jackgoffinet/autoencoded-vocal-analysis>`_.
 
-For now, see the examples subdirectory in the code.
+
+**Coming soon: User Guide**
+
+For now, see the `examples/` subdirectory in the code.
 
 Contents
 ========

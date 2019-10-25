@@ -14,12 +14,7 @@ ava/docs/build/
 ava/docs/source/_static/
 ava/docs/source/_templates/
 AVA_Autoencoded_Vocal_Analysis.egg-info
-docs/source/finch_warp_mwe.rst
-docs/source/finch_window_mwe.rst
-docs/source/mouse_sylls_mwe.rst
-docs/source/mouse_window_mwe.rst
 docs/source/setup.rst
-docs/docs
 *.pdf
 *.png
 *.jpg
