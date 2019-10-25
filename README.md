@@ -6,17 +6,14 @@ See our [preprint](https://doi.org/10.1101/811661) on bioRxiv for details.
 
 See `examples/` for usage.
 
-To build package:
-```
-$ cd path/to/autoencoded-vocal-analysis
-$ python setup.py sdist bdist_wheel
-```
+See [readthedocs](https://autoencoded-vocal-analysis.readthedocs.io/en/latest/ava.html)
+for documentation.
 
-To build docs:
+To build:
 ```
-$ cd path/to/autoencoded-vocal-analysis/docs
-$ make html
-$ open build/html/index.html
+$ git clone https://github.com/jackgoffinet/autoencoded-vocal-analysis.git
+$ cd path/to/autoencoded-vocal-analysis
+$ pip install .
 ```
 
 Dependencies:
