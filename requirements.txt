@@ -1,0 +1,9 @@
+numpy
+scipy
+matplotlib
+numba
+sklearn
+pytorch>=1.1
+umap
+affinewarp
+bokeh
