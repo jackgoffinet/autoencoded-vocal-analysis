@@ -1,9 +1,9 @@
-numpy>=1.11.0
-pytorch>=1.1
-matplotlib>=1.5.1
-joblib>=0.11
+numpy
+pytorch
+matplotlib
+joblib
 umap
-numba>=0.44
+numba
 sklearn
 scipy
-bokeh>=1.2
+bokeh
