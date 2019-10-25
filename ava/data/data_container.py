@@ -17,7 +17,10 @@ __date__ = "July-October 2019"
 
 
 import h5py
-from numba.errors import NumbaPerformanceWarning
+try:
+	from numba.errors import NumbaPerformanceWarning
+except NameError:
+	pass
 import numpy as np
 import os
 from scipy.io import wavfile
@@ -502,7 +505,11 @@ class DataContainer():
 			print("Running UMAP... (n="+str(len(latent_means))+")")
 		# https://github.com/lmcinnes/umap/issues/252
 		with warnings.catch_warnings():
-			warnings.filterwarnings("ignore", category=NumbaPerformanceWarning)
+			try:
+				warnings.filterwarnings("ignore", \
+						category=NumbaPerformanceWarning)
+			except NameError:
+				pass
 			embedding = transform.fit_transform(latent_means)
 		if self.verbose:
 			print("Done.")

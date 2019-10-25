@@ -27,19 +27,19 @@ def get_spec(audio, p):
 	----------
 	audio : numpy array of floats
 		Audio
-
 	p : dict
-		Spectrogram parameters.
+		Spectrogram parameters. Should the following keys: `'fs'`, `'nperseg'`,
+		`'noverlap'`, `'min_freq'`, `'max_freq'`, `'spec_min_val'`,
+		`'spec_max_val'`
 
 	Returns
 	-------
 	spec : numpy array of floats
 		Spectrogram of shape [freq_bins x time_bins]
-
 	dt : float
-		Time step associated with time bins.
-
-	f : Array of frequencies.
+		Time step between time bins.
+	f : numpy.ndarray
+		Array of frequencies.
 	"""
 	f, t, spec = stft(audio, fs=p['fs'], nperseg=p['nperseg'], \
 		noverlap=p['noverlap'])
@@ -58,18 +58,23 @@ def clean_segments_by_hand(audio_dirs, orig_seg_dirs, new_seg_dirs, p, \
 	"""
 	Plot spectrograms and ask for accept/reject input.
 
+	The accepted segments are taken from `orig_seg_dirs` and copied to
+	`new_seg_dirs`.
+
 	Parameters
 	----------
-	audio_dirs : ...
-		...
-	orig_seg_dirs : ...
-		...
-	new_seg_dirs : ...
-		...
-	p : ...
-		...
-	shoulder : ...
-		...
+	audio_dirs : list of str
+		Audio directories.
+	orig_seg_dirs : list of str
+		Original segment directories.
+	new_seg_dirs : list of str
+		New segment directories.
+	p : dict
+		Parameters. Should the following keys: `'fs'`, `'nperseg'`,
+		`'noverlap'`, `'min_freq'`, `'max_freq'`, `'spec_min_val'`,
+		`'spec_max_val'`
+	shoulder : float, optional
+		Duration of audio to plot on either side of segment. Defaults to `0.1`.
 	"""
 	audio_fns, orig_seg_fns = get_audio_seg_filenames(audio_dirs, orig_seg_dirs)
 	temp_dict = dict(zip(orig_seg_dirs, new_seg_dirs))
@@ -106,7 +111,6 @@ def clean_segments_by_hand(audio_dirs, orig_seg_dirs, new_seg_dirs, p, \
 			plt.axvline(x=offset, c='r')
 			plt.savefig('temp.pdf')
 			plt.close('all')
-
 			response = input("[Good]? or 'x': ")
 			if response != 'x':
 				good_indices.append(i)
@@ -122,9 +126,9 @@ def copy_segments_to_standard_format(orig_seg_dirs, new_seg_dirs, seg_ext, \
 	"""
 	Copy onsets/offsets from SAP, MUPET, or Deepsqueak into their files.
 
-	Note
-	----
-	- TO DO: rename
+	Notes
+	-----
+	- `delimiter`, `usecols`, and `skiprows` are all sent to `numpy.loadtxt`.
 
 	Parameters
 	----------
@@ -132,17 +136,16 @@ def copy_segments_to_standard_format(orig_seg_dirs, new_seg_dirs, seg_ext, \
 		Directories containing original segments.
 	new_seg_dirs : list of str
 		Directories for new segments.
-	seg_ext : ..
-		....
-	delimiter : ...
-		...
-	usecols : ...
-		...
-	skiprows : ...
-		...
+	seg_ext : str
+		Input filename extension.
+	delimiter : str
+		Input filename delimiter.
+	usecols : tuple
+		Input file onset and offset column.
+	skiprows : int
+		Number of rows to skip.
 	max_duration : {None, float}, optional
-		...
-
+		Maximum segment duration. If None, no max is set. Defaults to `None`.
 	"""
 	assert len(seg_ext) == 4
 	for orig_seg_dir, new_seg_dir in zip(orig_seg_dirs, new_seg_dirs):
@@ -153,7 +156,6 @@ def copy_segments_to_standard_format(orig_seg_dirs, new_seg_dirs, seg_ext, \
 		for seg_fn in seg_fns:
 			segs = np.loadtxt(seg_fn, delimiter=delimiter, skiprows=skiprows, \
 					usecols=usecols).reshape(-1,2)
-
 			if max_duration is not None:
 				new_segs = []
 				for seg in segs:
@@ -189,6 +191,13 @@ def _read_onsets_offsets(filename):
 	----------
 	filename : str
 		Filename of a text file containing one header line and two columns.
+	
+	Returns
+	-------
+	onsets : numpy.ndarray
+		Onset times.
+	offsets : numpy.ndarray
+		Offset times.
 	"""
 	arr = np.loadtxt(filename, skiprows=1)
 	if len(arr) == 0:

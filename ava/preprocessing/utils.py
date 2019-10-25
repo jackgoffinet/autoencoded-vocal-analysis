@@ -22,9 +22,8 @@ def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None, target_times=None, \
 
 	Notes
 	-----
-	- `fill_value` necessary?
-	- Look at all references and see what can be simplified.
-	- within_syll_normalize could probably go
+	* `fill_value` necessary?
+	* Look at all references and see what can be simplified.
 
 	Parameters
 	----------

@@ -12,7 +12,10 @@ from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
 import numpy as np
-from numba.errors import NumbaPerformanceWarning
+try:
+	from numba.errors import NumbaPerformanceWarning
+except NameError:
+	pass
 import os
 from scipy.io import wavfile
 import umap
@@ -64,7 +67,10 @@ def refine_segments_pre_vae(seg_dirs, audio_dirs, out_seg_dirs, p, \
 	transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, \
 			metric='euclidean', random_state=42)
 	with warnings.catch_warnings():
-		warnings.filterwarnings("ignore", category=NumbaPerformanceWarning)
+		try:
+			warnings.filterwarnings("ignore", category=NumbaPerformanceWarning)
+		except NameError:
+			pass
 		embed = transform.fit_transform(specs.reshape(len(specs), -1))
 	if verbose:
 		print("\tDone.")

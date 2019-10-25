@@ -1,39 +1,28 @@
 """
 AVA: Autoencoded Vocal Analysis
 
-Modules
--------
 
 ::
 
 	ava
 	│
 	├── data
-	│	├── data_container
-	│	└── save_everything
+	│	└── data_container
 	├── models
 	│	├── vae_dataset
 	│	├── vae
-	│	├── window_vae_dataset
-	│	└── window_vae
+	│	└── window_vae_dataset
 	├── plotting
-	│	├── cluster_pca_plot
-	│	├── cluster_plots
-	│	├── feature_correlation_plots
-	│	├── latent_axes_plot
+	│	├── grid_plot
 	│	├── latent_projection
-	│	├── longitudinal_gif
-	│	├── mmd_plots
-	│	├── pairwise_distance_plots
-	│	├── trace_plot
-	│	└── vocal_motor_gif
+	│	└── tooltip_plot
 	├── preprocessing
 	│	├── preprocess
 	│	└── utils
 	└── segmenting
-		├── amplitude_segmenting_v2
+		├── amplitude_segmenting
 		├── refine_segments
 		├── segment
-		├── template_segmentation_v2
+		├── template_segmentation
 		└── utils
 """

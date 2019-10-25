@@ -29,3 +29,11 @@ Dependencies:
 * [Sphinx read-the-docs theme](https://sphinx-rtd-theme.readthedocs.io/en/stable/)
 
 Issues and/or pull requests are appreciated!
+
+See also:
+* [Animal Vocalization Generative Network](https://github.com/timsainb/AVGN), a
+	nice repo by Tim Sainburg for clustering birdsong syllables and generating
+	syllable interpolations.
+* [DeepSqueak](https://github.com/DrCoffey/DeepSqueak) and
+	[MUPET](https://github.com/mvansegbroeck/mupet), MATLAB packages for
+	detecting and classifying rodent ultrasonic vocalizations.
