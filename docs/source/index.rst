@@ -30,16 +30,6 @@ See the `examples/` subdirectory
 
 For now, see the `examples/` subdirectory in the code.
 
-Contents
-========
-
-.. toctree::
-   :maxdepth: 2
-   :glob:
-
-   *
-
-
 
 Indices and tables
 ==================

@@ -15,7 +15,7 @@
 import os
 import sys
 # sys.path.insert(0, os.path.abspath('.'))
-sys.path.insert(0, os.path.abspath('../../'))
+sys.path.insert(0, os.path.abspath('../../../autoencoded-vocal-analysis/'))
 
 
 # -- Project information -----------------------------------------------------
@@ -28,6 +28,9 @@ author = 'Jack Goffinet'
 version = ''
 # The full version, including alpha/beta/rc tags
 release = '0.2.1'
+
+autodoc_mock_imports = ['torch', 'numpy', 'matplotlib', 'joblib', 'umap', \
+	'numba', 'sklearn', 'scipy', 'bokeh', 'affinewarp']
 
 
 # -- General configuration ---------------------------------------------------
@@ -45,8 +48,7 @@ extensions = [
 ]
 
 napoleon_google_docstring = False
-napoleon_use_param = False
-napoleon_use_ivar = True
+napoleon_numpy_docstring = True
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
