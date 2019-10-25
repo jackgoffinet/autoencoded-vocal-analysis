@@ -1,7 +1,4 @@
 dist/
-build/
-assets/
-dist/
 plots/
 __pycache__/
 ava/__pycache__/
@@ -9,12 +6,9 @@ ava/models/__pycache__/
 ava/plotting/__pycache__/
 ava/preprocessing/__pycache__/
 ava/data/
+docs/build/
 ava/segmenting/__pycache__/
-ava/docs/build/
-ava/docs/source/_static/
-ava/docs/source/_templates/
 AVA_Autoencoded_Vocal_Analysis.egg-info
-docs/source/setup.rst
 *.pdf
 *.png
 *.jpg
