@@ -11,7 +11,6 @@ docs/build/
 ava/segmenting/__pycache__/
 AVA_Autoencoded_Vocal_Analysis.egg-info
 *.pdf
-*.png
 *.jpg
 *.npy
 *.pyc

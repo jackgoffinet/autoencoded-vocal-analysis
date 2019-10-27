@@ -7,3 +7,4 @@ numba
 sklearn
 scipy
 bokeh
+h5py

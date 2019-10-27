@@ -5,3 +5,4 @@ umap
 numba
 sklearn
 scipy
+h5py
