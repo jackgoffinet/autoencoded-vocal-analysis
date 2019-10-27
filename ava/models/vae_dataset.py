@@ -1,7 +1,7 @@
 """
 Methods for handling syllable data using PyTorch.
 
-Meant to be used in conjunction with ``ava.models.vae.VAE`` objects.
+Meant to be used in conjunction with `ava.models.vae.VAE` objects.
 """
 __date__ = "November 2018 - August 2019"
 

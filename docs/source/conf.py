@@ -29,7 +29,7 @@ version = ''
 # The full version, including alpha/beta/rc tags
 release = '0.2.1'
 
-autodoc_mock_imports = ['torch', 'bokeh', 'affinewarp']
+autodoc_mock_imports = ['torch', 'bokeh', 'affinewarp', 'numba']
 
 
 # -- General configuration ---------------------------------------------------
@@ -44,6 +44,8 @@ autodoc_mock_imports = ['torch', 'bokeh', 'affinewarp']
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
+    'sphinx.ext.mathjax',
+    'sphinx.ext.viewcode',
 ]
 
 napoleon_google_docstring = False

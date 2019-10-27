@@ -3,14 +3,14 @@ AVA segmenting module
 
 Contains
 --------
-ava.segmenting.amplitude_segmentation
+`ava.segmenting.amplitude_segmentation`
 	Segment based on amplitude thresholds.
-ava.segmenting.refine_segments
+`ava.segmenting.refine_segments`
 	Get rid of of false positive syllables (noise).
-ava.segmenting.segment
+`ava.segmenting.segment`
 	Segment large batches of audio files.
-ava.segmenting.template_segmentation
+`ava.segmenting.template_segmentation`
 	Segment based on peaks in spectrogram cross correlation.
-ava.segmenting.utils
+`ava.segmenting.utils`
 	Useful functions for segmenting.
 """

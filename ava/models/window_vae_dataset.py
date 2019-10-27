@@ -1,13 +1,5 @@
 """
-Data stuff for animal vocalization syllables.
-
-Contains
---------
-- function get_window_partition
-- function get_window_data_loaders
-- function get_warped_window_data_loaders
-- class FixedWindowDataset
-- class WarpedWindowDataset
+Useful functions for feeding data to the shotgun VAE.
 
 """
 __date__ = "August - September 2019"
@@ -278,7 +270,7 @@ class WarpedWindowDataset(Dataset):
 		self.start_q = start_q
 		self.stop_q = stop_q
 		self.warp_fns = warp_fns
-		self.compute_warp(template_dir, load_warp=load_warp)
+		self._compute_warp(template_dir, load_warp=load_warp)
 		self.window_frac = self.p['window_length'] / self.template_dur
 
 
@@ -291,10 +283,18 @@ class WarpedWindowDataset(Dataset):
 		"""
 		Write hdf5 files containing spectrograms of random audio chunks.
 
-		NOTE
+		Note
 		----
-	 	This should be consistent with
-		preprocessing.preprocessing.process_sylls.
+	 	This should be consistent with preprocessing.preprocess.process_sylls.
+
+		Paramters
+		---------
+		save_dir : str
+			Where to write.
+		num_files : int, optional
+			Number of files to write. Defaults to `400`.
+		sylls_per_file : int, optional
+			Number of spectrograms to write per file. Defaults to `100`.
 		"""
 		if save_dir != '' and not os.path.exists(save_dir):
 			os.mkdir(save_dir)
@@ -308,16 +308,16 @@ class WarpedWindowDataset(Dataset):
 				f.create_dataset('specs', data=specs)
 
 
-	def get_template(self, feature_dir):
+	def _get_template(self, feature_dir):
 		"""Adapted from segmentation/template_segmentation_v2.py"""
 		filenames = [os.path.join(feature_dir, i) for i in os.listdir(feature_dir) \
-			if is_wav_file(i)]
+			if _is_wav_file(i)]
 		specs = []
 		for i, filename in enumerate(filenames):
 			fs, audio = wavfile.read(filename)
 			assert fs == self.fs, "Found samplerate="+str(fs)+\
 				", expected "+str(self.fs)
-			spec, dt = self.get_spec(audio)
+			spec, dt = self._get_spec(audio)
 			spec = gaussian_filter(spec, (0.5,0.5))
 			specs.append(spec)
 		min_time_bins = min(spec.shape[1] for spec in specs)
@@ -327,7 +327,7 @@ class WarpedWindowDataset(Dataset):
 		return template
 
 
-	def get_spec(self, audio, target_ts=None):
+	def _get_spec(self, audio, target_ts=None):
 		"""Not many options here."""
 		try:
 			f, t, spec = stft(audio, fs=self.fs, nperseg=self.p['nperseg'], \
@@ -354,7 +354,7 @@ class WarpedWindowDataset(Dataset):
 		return spec, t[1]-t[0]
 
 
-	def get_unwarped_times(self, y_vals, k):
+	def _get_unwarped_times(self, y_vals, k):
 		"""
 		Convert quantile times in [0,1] to real times in [0,1].
 
@@ -367,11 +367,11 @@ class WarpedWindowDataset(Dataset):
 		return x_vals
 
 
-	def compute_warp(self, template_dir, load_warp=False):
+	def _compute_warp(self, template_dir, load_warp=False):
 		"""
 		Warp each song rendition to the template.
 		"""
-		template = self.get_template(template_dir)
+		template = self._get_template(template_dir)
 		if load_warp:
 			try:
 				self.x_knots = np.load(self.warp_fns[0])
@@ -382,7 +382,7 @@ class WarpedWindowDataset(Dataset):
 		amp_traces = []
 		specs = []
 		for i in range(len(self.audio)):
-			specs.append(self.get_spec(self.audio[i])[0].T)
+			specs.append(self._get_spec(self.audio[i])[0].T)
 			amp_trace = np.sum(specs[-1], axis=1)
 			amp_trace -= np.min(amp_trace)
 			amp_trace /= np.max(amp_trace)
@@ -424,7 +424,7 @@ class WarpedWindowDataset(Dataset):
 				stop_t = start_t + self.window_frac
 				t_vals = np.linspace(start_t, stop_t, self.p['num_time_bins'])
 				# Inverse warp.
-				target_ts = self.get_unwarped_times(t_vals, file_index)
+				target_ts = self._get_unwarped_times(t_vals, file_index)
 				target_ts *= self.template_dur
 				# Then make a spectrogram.
 				spec, flag = self.p['get_spec'](0.0, self.template_dur, \
@@ -463,6 +463,18 @@ class WarpedWindowDataset(Dataset):
 	def get_specific_item(self, query_filename, quantile):
 		"""
 		Return a specific window of birdsong as a numpy array.
+
+		Parameters
+		----------
+		query_filename : str
+			Audio filename.
+		quantile : float
+			0 <= `quantile` <= 1
+
+		Returns
+		-------
+		spec : numpy.ndarray
+			Spectrogram.
 		"""
 		file_index = self.audio_filenames.index(query_filename)
 		start_t = self.start_q + quantile * \
@@ -470,7 +482,7 @@ class WarpedWindowDataset(Dataset):
 		stop_t = start_t + self.window_frac
 		t_vals = np.linspace(start_t, stop_t, self.p['num_time_bins'])
 		# Inverse warp.
-		target_ts = self.get_unwarped_times(t_vals, file_index)
+		target_ts = self._get_unwarped_times(t_vals, file_index)
 		target_ts *= self.template_dur
 		# Then make a spectrogram.
 		spec, flag = self.p['get_spec'](0.0, self.template_dur, \
@@ -478,7 +490,7 @@ class WarpedWindowDataset(Dataset):
 			max_dur=None, target_times=target_ts)
 
 		if not flag: # NOTE: HERE
-			print("flag")
+			print("Invalid spectrogram!")
 			print(quantile)
 			print(start_wt, stop_wt)
 			print(len(self.audio[file_index])/self.fs)
@@ -496,7 +508,7 @@ class WarpedWindowDataset(Dataset):
 			print(start_t, stop_t)
 			print(y_knot)
 			print(flag)
-			quit()
+			assert False
 		return spec
 
 
@@ -524,20 +536,20 @@ def get_hdf5s_from_dir(dir):
 	plotting.data_container relies on this.
 	"""
 	return [os.path.join(dir, f) for f in sorted(os.listdir(dir)) if \
-		is_hdf5_file(f)]
+		_is_hdf5_file(f)]
 
 
 def _get_wavs_from_dir(dir):
 	return [os.path.join(dir, f) for f in sorted(os.listdir(dir)) if \
-		is_wav_file(f)]
+		_is_wav_file(f)]
 
 
-def is_hdf5_file(filename):
+def _is_hdf5_file(filename):
 	"""Is the given filename an hdf5 file?"""
 	return len(filename) > 5 and filename[-5:] == '.hdf5'
 
 
-def is_wav_file(filename):
+def _is_wav_file(filename):
 	return len(filename) > 4 and filename[-4:] == '.wav'
 
 
