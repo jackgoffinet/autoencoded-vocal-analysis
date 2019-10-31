@@ -1,7 +1,5 @@
-## Autoencoded Vocal Analysis
+## Autoencoded Vocal Analysis 0.2.2
 #### Generative modeling of animal vocalizations
-Current version: 0.2.1
-
 
 <img src="docs/source/logo.png" width="300" align="middle" alt="logo">
 
@@ -15,7 +13,7 @@ for documentation.
 #### To build:
 ```
 $ git clone https://github.com/jackgoffinet/autoencoded-vocal-analysis.git
-$ cd path/to/autoencoded-vocal-analysis
+$ cd autoencoded-vocal-analysis
 $ pip install .
 ```
 

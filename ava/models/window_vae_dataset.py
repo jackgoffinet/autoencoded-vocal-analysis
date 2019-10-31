@@ -227,7 +227,7 @@ class FixedWindowDataset(Dataset):
 		Note
 		----
 	 	This should be consistent with
-		preprocessing.preprocessing.process_sylls.
+		ava.preprocessing.preprocess.process_sylls.
 		"""
 		if not os.path.exists(save_dir):
 			os.mkdir(save_dir)
@@ -283,18 +283,19 @@ class WarpedWindowDataset(Dataset):
 		"""
 		Write hdf5 files containing spectrograms of random audio chunks.
 
-		Note
-		----
-	 	This should be consistent with preprocessing.preprocess.process_sylls.
-
-		Paramters
-		---------
+		Parameters
+		----------
 		save_dir : str
 			Where to write.
 		num_files : int, optional
 			Number of files to write. Defaults to `400`.
 		sylls_per_file : int, optional
 			Number of spectrograms to write per file. Defaults to `100`.
+
+		Note
+		----
+	 	This should be consistent with
+		ava.preprocessing.preprocess.process_sylls.
 		"""
 		if save_dir != '' and not os.path.exists(save_dir):
 			os.mkdir(save_dir)
@@ -533,7 +534,7 @@ def get_hdf5s_from_dir(dir):
 
 	Note
 	----
-	plotting.data_container relies on this.
+	ava.data.data_container relies on this.
 	"""
 	return [os.path.join(dir, f) for f in sorted(os.listdir(dir)) if \
 		_is_hdf5_file(f)]

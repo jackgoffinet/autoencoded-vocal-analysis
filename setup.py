@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
 	name="AVA: Autoencoded Vocal Analysis",
-	version="0.2.1",
+	version="0.2.2",
 	author="Jack Goffinet",
 	author_email="jack.goffinet@duke.edu",
 	description="Generative modeling of animal vocalizations",

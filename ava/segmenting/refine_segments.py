@@ -35,7 +35,7 @@ warnings.filterwarnings("ignore", message="Chunk (non-data) not understood*")
 
 
 def refine_segments_pre_vae(seg_dirs, audio_dirs, out_seg_dirs, p, \
-	n_samples=8000, num_imgs=1000, verbose=True):
+	n_samples=8000, num_imgs=1000, verbose=True, img_fn='temp.pdf'):
 	"""
 	Manually remove noise by selecting regions of UMAP spectrogram projections.
 
@@ -55,7 +55,8 @@ def refine_segments_pre_vae(seg_dirs, audio_dirs, out_seg_dirs, p, \
 		Number of images to embed in the tooltip plot. Defaults to ``1000``.
 	verbose : bool, optional
 		Defaults to ``True``.
-
+	img_fn : str, optional
+		Image filename. Defaults to ``'temp.pdf'``.
 	"""
 	if verbose:
 		print("\nCleaning segments\n-----------------")
@@ -80,7 +81,7 @@ def refine_segments_pre_vae(seg_dirs, audio_dirs, out_seg_dirs, p, \
 
 	# Keep drawing boxes around noise.
 	while True:
-		_plot_helper(embed, colors)
+		_plot_helper(embed, colors, verbose=verbose, filename=img_fn)
 		if first_iteration:
 			if verbose:
 				print("Writing html plot:")
@@ -89,17 +90,17 @@ def refine_segments_pre_vae(seg_dirs, audio_dirs, out_seg_dirs, p, \
 			tooltip_plot(embed, specs, num_imgs=num_imgs, title=title)
 			if verbose:
 				print("\tDone.")
-		if input("Press [q] to quit drawing rectangles: ") == 'q':
+		if input("Press [q] to quit drawing rectangles or [return] continue: ") == 'q':
 			break
 		print("Select a rectangle containing noise:")
 		x1 = _get_input("x1: ")
 		x2 = _get_input("x2: ")
 		y1 = _get_input("y1: ")
 		y2 = _get_input("y2: ")
-		bounds['x1'].append(x1)
-		bounds['x2'].append(x2)
-		bounds['y1'].append(y1)
-		bounds['y2'].append(y2)
+		bounds['x1'].append(min(x1, x2))
+		bounds['x2'].append(max(x1, x2))
+		bounds['y1'].append(min(y1, y2))
+		bounds['y2'].append(max(y1, y2))
 		# Update scatter colors.
 		colors = _update_colors(colors, embed, bounds)
 
@@ -110,59 +111,59 @@ def refine_segments_pre_vae(seg_dirs, audio_dirs, out_seg_dirs, p, \
 	Parallel(n_jobs=n_jobs)(delayed(_update_segs_helper)(*args) for args in gen)
 
 
-def _refine_segments_post_vae(dc, seg_dirs, out_seg_dirs, verbose=True):
-	"""
-	Manually remove noise by selecting regions of UMAP latent mean projections.
-
-
-	Parameters
-	----------
-	dc : ava.data.data_container.DataContainer
-		DataContainer object
-	seg_dirs :
-		...
-	out_seg_dirs :
-		....
-	verbose : bool, optional
-		Defaults to ``True``.
-
-	"""
-	embed = dc.request('latent_mean_umap')
-	bounds = {'x1': [], 'x2': [], 'y1': [], 'y2': []}
-	colors = ['b'] * len(embed)
-	first_iteration = True
-	raise NotImplementedError
-
-	# Keep drawing boxes around noise.
-	while True:
-		_plot_helper(embed, colors)
-		if first_iteration:
-			if verbose:
-				print("Writing html plot:")
-			first_iteration = False
-			title = "Select unwanted sounds:"
-			tooltip_plot(embed, specs, num_imgs=num_imgs, title=title)
-			if verbose:
-				print("\tDone.")
-		if input("Press [q] to quit drawing rectangles: ") == 'q':
-			break
-		print("Select a rectangle containing noise:")
-		x1 = _get_input("x1: ")
-		x2 = _get_input("x2: ")
-		y1 = _get_input("y1: ")
-		y2 = _get_input("y2: ")
-		bounds['x1'].append(x1)
-		bounds['x2'].append(x2)
-		bounds['y1'].append(y1)
-		bounds['y2'].append(y2)
-		# Update scatter colors.
-		colors = _update_colors(colors, embed, bounds)
-
-	# Write files to out_seg_dirs.
-	gen = zip(seg_dirs, audio_dirs, out_seg_dirs, repeat(p), repeat(max_len), \
-			repeat(transform), repeat(bounds), repeat(verbose))
-	n_jobs = min(len(seg_dirs), os.cpu_count()-1)
-	Parallel(n_jobs=n_jobs)(delayed(_update_segs_helper)(*args) for args in gen)
+# def _refine_segments_post_vae(dc, seg_dirs, out_seg_dirs, verbose=True):
+# 	"""
+# 	Manually remove noise by selecting regions of UMAP latent mean projections.
+#
+#
+# 	Parameters
+# 	----------
+# 	dc : ava.data.data_container.DataContainer
+# 		DataContainer object
+# 	seg_dirs :
+# 		...
+# 	out_seg_dirs :
+# 		....
+# 	verbose : bool, optional
+# 		Defaults to ``True``.
+#
+# 	"""
+# 	embed = dc.request('latent_mean_umap')
+# 	bounds = {'x1': [], 'x2': [], 'y1': [], 'y2': []}
+# 	colors = ['b'] * len(embed)
+# 	first_iteration = True
+# 	raise NotImplementedError
+#
+# 	# Keep drawing boxes around noise.
+# 	while True:
+# 		_plot_helper(embed, colors, verbose=verbose)
+# 		if first_iteration:
+# 			if verbose:
+# 				print("Writing html plot:")
+# 			first_iteration = False
+# 			title = "Select unwanted sounds:"
+# 			tooltip_plot(embed, specs, num_imgs=num_imgs, title=title)
+# 			if verbose:
+# 				print("\tDone.")
+# 		if input("Press [q] to quit drawing rectangles: ") == 'q':
+# 			break
+# 		print("Select a rectangle containing noise:")
+# 		x1 = _get_input("x1: ")
+# 		x2 = _get_input("x2: ")
+# 		y1 = _get_input("y1: ")
+# 		y2 = _get_input("y2: ")
+# 		bounds['x1'].append(x1)
+# 		bounds['x2'].append(x2)
+# 		bounds['y1'].append(y1)
+# 		bounds['y2'].append(y2)
+# 		# Update scatter colors.
+# 		colors = _update_colors(colors, embed, bounds)
+#
+# 	# Write files to out_seg_dirs.
+# 	gen = zip(seg_dirs, audio_dirs, out_seg_dirs, repeat(p), repeat(max_len), \
+# 			repeat(transform), repeat(bounds), repeat(verbose))
+# 	n_jobs = min(len(seg_dirs), os.cpu_count()-1)
+# 	Parallel(n_jobs=n_jobs)(delayed(_update_segs_helper)(*args) for args in gen)
 
 
 
@@ -228,7 +229,7 @@ def _get_specs(audio_dirs, seg_dirs, p, n_samples=None, max_len=None):
 	return specs, max_len, all_fns
 
 
-def _plot_helper(embed, colors, title=""):
+def _plot_helper(embed, colors, title="", filename='temp.pdf', verbose=True):
 	"""Helper function to plot a UMAP projection with grids."""
 	plt.scatter(embed[:,0], embed[:,1], c=colors, s=0.9, alpha=0.7)
 	delta = 1
@@ -251,8 +252,11 @@ def _plot_helper(embed, colors, title=""):
 	for y_val in range(min_yval, max_yval+1):
 		plt.axhline(y=y_val, lw=0.5, alpha=0.7)
 	plt.title(title)
-	plt.savefig('temp.pdf')
+	plt.savefig(filename)
 	plt.close('all')
+	if verbose:
+		print("Grid plot saved to:", filename)
+
 
 
 def _update_segs_helper(seg_dir, audio_dir, out_seg_dir, p, max_len, transform,\

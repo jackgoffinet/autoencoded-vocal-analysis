@@ -4,7 +4,7 @@ DataContainer class for linking directories containing different sorts of data.
 This is meant to make plotting and analysis easier.
 
 TO DO
-=====
+-----
 - request random subsets.
 - check for errors
 - throw better errors
@@ -545,13 +545,15 @@ class DataContainer():
 		Parameters
 		----------
 		field : str
-			...
-
+			Name of data being requested. See ``ALL_FIELDS`` for a complete
+			list.
 		kind : str, 'mupet' or 'deepsqueak'
-			...
+			Is this a MUPET or a DeepSqueak field?
 
-		TO DO: cleaner error handling
-
+		Returns
+		-------
+		data : numpy.ndarray
+			Requested data.
 		"""
 		self._check_for_dirs( \
 			['spec_dirs', 'feature_dirs', 'projection_dirs'], field)

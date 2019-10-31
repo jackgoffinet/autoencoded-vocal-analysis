@@ -1,13 +1,11 @@
 """
 Segment song bouts using linear acoustic feature templates.
 
-
-TO DO:
-	- Align the examplar spectrograms?
 """
-__date__ = "April-August 2019"
+__date__ = "April-October 2019"
 
 
+from affinewarp import ShiftWarping
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
 import numpy as np
@@ -19,18 +17,38 @@ import umap
 import warnings
 
 from ava.plotting.tooltip_plot import tooltip_plot
+from ava.segmenting.utils import softmax
 
 # Silence numpy.loadtxt when reading empty files.
 warnings.filterwarnings("ignore", category=UserWarning)
 
-EPSILON = 1e-12
-NUM_MAD = 1.8
-
+EPSILON = 1e-9
 
 
 def get_spec(fs, audio, p):
-	"""Not many options here."""
-	f, t, spec = stft(audio, fs=fs, nperseg=p['nperseg'], noverlap=p['noverlap'])
+	"""
+	Get a spetrogrma. Not many options here.
+
+	Parameters
+	----------
+	fs : float
+		Samplerate.
+	audio : numpy.ndarray
+		Raw audio.
+	p : dict
+		Parameters. Must contain keys: ``'nperseg'``, ``'noverlap'``,
+		``'min_freq'``, ``'max_freq'``, ``'spec_min_val'``, and
+		``'spec_max_val'``.
+
+	Returns
+	-------
+	spec : numpy.ndarray
+		Spectrogram.
+	dt : float
+		Timestep.
+	"""
+	f, t, spec = stft(audio, fs=fs, nperseg=p['nperseg'], \
+			noverlap=p['noverlap'])
 	i1 = np.searchsorted(f, p['min_freq'])
 	i2 = np.searchsorted(f, p['max_freq'])
 	spec = spec[i1:i2]
@@ -51,17 +69,17 @@ def get_template(feature_dir, p):
 	feature_dir : str
 		Directory containing multiple audio files to average together.
 	p : dict
-		Parameters.
+		Parameters. Must contain keys: ...
 
 	Returns
 	-------
 	template : np.ndarray
-		...
+		Spectrogram template.
 	dt : float
-		...
+		Timestep.
 	"""
 	filenames = [os.path.join(feature_dir, i) for i in os.listdir(feature_dir) \
-		if is_audio_file(i)]
+		if _is_audio_file(i)]
 	specs = []
 	for i, filename in enumerate(filenames):
 		fs, audio = wavfile.read(filename)
@@ -78,42 +96,70 @@ def get_template(feature_dir, p):
 	return template, dt
 
 
-def segment_files(audio_dirs, segment_dirs, template, p):
-	"""Write segments"""
+def segment_files(audio_dirs, segment_dirs, template, p, num_mad=2.0):
+	"""
+	Write segments.
+
+	Parameters
+	----------
+	audio_dirs : list of str
+		Audio directories.
+	segment_dirs : list of str
+		Corresponding directories containing segmenting decisions.
+	template : numpy.ndarray
+		Spectrogram template.
+	p : dict
+		Segmenting parameters.
+	num_mad : float, optional
+		Number of median absolute deviations for cross-correlation threshold.
+		Defaults to ``2.0``.
+
+	Returns
+	-------
+	result : dict
+		Maps audio filenames to segments (numpy.ndarrays).
+	"""
 	result = {}
 	for audio_dir, segment_dir in zip(audio_dirs, segment_dirs):
+		if not os.path.exists(segment_dir):
+			os.makedirs(segment_dir)
 		audio_fns = [os.path.join(audio_dir, i) for i in os.listdir(audio_dir) \
-			if is_audio_file(i)]
+			if _is_audio_file(i)]
 		for audio_fn in audio_fns:
-			segments = segment_file(audio_fn, template, p)
+			segments = segment_file(audio_fn, template, p, num_mad=num_mad)
 			result[audio_fn] = segments
-			segment_fn = audio_fn[:-4] + '.txt'
+			segment_fn = os.path.split(audio_fn)[-1][:-4] + '.txt'
 			segment_fn = os.path.join(segment_dir, segment_fn)
-			np.savetxt(segment_fn, segments, fmt='%.5f', \
-				delimiter=p['delimiter'])
+			np.savetxt(segment_fn, segments, fmt='%.5f')
 	return result
 
 
 def read_segment_decisions(audio_dirs, segment_dirs):
-	"""Returns the same data as <segment_files>"""
+	"""Returns the same data as ``segment_files``."""
 	result = {}
 	for audio_dir, segment_dir in zip(audio_dirs, segment_dirs):
 		audio_fns = [os.path.join(audio_dir, i) for i in os.listdir(audio_dir) \
-			if is_audio_file(i)]
+			if _is_audio_file(i)]
 		for audio_fn in audio_fns:
-			segment_fn = audio_fn[:-4] + '.txt'
+			segment_fn = os.path.split(audio_fn)[-1][:-4] + '.txt'
 			segment_fn = os.path.join(segment_dir, segment_fn)
 			segments = np.loadtxt(segment_fn)
 			result[audio_fn] = segments
 	return result
 
 
-def segment_file(filename, template, p):
+def segment_file(filename, template, p, num_mad=2.0, min_dt=0.05):
 	"""
 	Match linear audio features, extract times where features align.
 
 	Parameters
 	----------
+	filename : str
+		Audio filename.
+	template : numpy.ndarray
+		Spectrogram template.
+	p : dict
+		Segmenting parameters.
 
 	Returns
 	-------
@@ -127,26 +173,25 @@ def segment_file(filename, template, p):
 	big_spec, dt = get_spec(fs, audio, p)
 	spec_len = template.shape[1]
 	template = template.flatten()
-	# Compute normalized cross-correlation
+	# Compute normalized cross-correlation.
 	result = np.zeros(big_spec.shape[1] - spec_len)
 	for i in range(len(result)):
-		temp = big_spec[:, i:i+spec_len].flatten()
+		temp = big_spec[:,i:i+spec_len].flatten()
 		temp -= np.mean(temp)
 		temp /= np.sum(np.power(temp, 2)) + EPSILON
 		result[i] = np.dot(template, temp)
 	median = np.median(result)
 	abs_devs = np.abs(result - median)
-	mad_sigma = np.median(abs_devs) + EPSILON
-
+	mad = np.median(abs_devs) + EPSILON
 	# Get maxima.
 	times = dt * np.arange(len(result))
-	indices = np.argwhere(result>median + NUM_MAD).flatten()[1:-1]
+	indices = np.argwhere(result>median + num_mad*mad).flatten()[1:-1]
 	max_indices = []
 	for i in range(2,len(indices)-1):
 		if max(result[indices[i]-1], result[indices[i]+1]) < result[indices[i]]:
 			max_indices.append(indices[i])
 	max_indices = np.array(max_indices, dtype='int')
-	max_indices = _clean_max_indices(max_indices, times, result)
+	max_indices = _clean_max_indices(max_indices, times, result, min_dt=min_dt)
 	# Define onsets/offsets.
 	segments = np.zeros((len(max_indices), 2))
 	segments[:,0] = dt * max_indices # onsets
@@ -211,7 +256,7 @@ def clean_collected_data(result, audio_dirs, segment_dirs, template_length, p, \
 	X, Y = embedding[:,0], embedding[:,1]
 	i = 0
 	while True:
-		colors = ['b' if in_region(embed, bounds) else 'r' for embed in embedding]
+		colors = ['b' if _in_region(embed, bounds) else 'r' for embed in embedding]
 		print("Selected ", len([c for c in colors if c=='b']), "out of", len(colors))
 		plt.scatter(X, Y, c=colors, s=0.9, alpha=0.5)
 		for x_tick in np.arange(np.floor(np.min(X)), np.ceil(np.max(X))):
@@ -232,19 +277,17 @@ def clean_collected_data(result, audio_dirs, segment_dirs, template_length, p, \
 		if temp == 'c':
 			break
 		i += 1
-	np.save('bounds.npy', bounds)
 	# Save only the good segments.
 	num_deleted, num_total = 0, 0
 	for audio_dir, seg_dir in zip(audio_dirs, segment_dirs):
 		audio_fns = [os.path.join(audio_dir, i) for i in os.listdir(audio_dir) \
-			if is_audio_file(i)]
+			if _is_audio_file(i)]
 		for audio_fn in audio_fns:
 			fs, audio = wavfile.read(audio_fn)
 			assert fs == p['fs']
-			segment_fn = audio_fn[:-4] + '.txt'
+			segment_fn = os.path.split(audio_fn)[-1][:-4] + '.txt'
 			segment_fn = os.path.join(seg_dir, segment_fn)
-			segments = np.loadtxt(segment_fn, \
-				delimiter=p['delimiter']).reshape(-1,2)
+			segments = np.loadtxt(segment_fn).reshape(-1,2)
 			if len(segments) == 0:
 				continue
 			new_segments = np.zeros(segments.shape)
@@ -258,22 +301,164 @@ def clean_collected_data(result, audio_dirs, segment_dirs, template_length, p, \
 				spec, dt = get_spec(fs, audio[i1:i2], p)
 				if template_length is None:
 					temp_spec = np.zeros((spec.shape[0], max_t))
-					temp_spec[:,:spec.shape[1]] = spec
+					temp_spec[:, :spec.shape[1]] = spec
 					spec = temp_spec
 				embed = transform.transform(spec.reshape(1,-1)).reshape(2)
-				if in_region(embed, bounds):
+				if _in_region(embed, bounds):
 					new_segments[i] = segment[:]
 					i += 1
 					num_total += 1
 				else:
 					num_deleted += 1
 			new_segments = new_segments[:i]
-			np.savetxt(segment_fn, new_segments, fmt='%.5f', \
-				delimiter=p['delimiter'])
-	print("deleted", num_deleted, "total", num_total)
+			np.savetxt(segment_fn, new_segments, fmt='%.5f')
+	print("deleted", num_deleted, "remaining", num_total)
 
 
-def _clean_max_indices(old_indices, old_times, values, min_dt=0.1):
+def segment_sylls_from_songs(audio_dirs, song_seg_dirs, syll_seg_dirs, p, \
+	shoulder=0.05, img_fn='temp.pdf'):
+	"""
+	Split song renditions into syllables.
+
+	Parameters
+	----------
+	audio_dirs : list of str
+		Audio directories.
+	song_seg_dirs : list of str
+		Directories containing song segments.
+	syll_seg_dirs : list of str
+		Directories where syllable segments are written.
+	p : dict
+		Segmenting parameters.
+	shoulder : float, optional
+		Duration of padding on either side of song segments.
+	img_fn : str, optional
+		Image filename. Defaults to ``'temp.pdf'``.
+	"""
+	# Read segments.
+	song_segs = read_segment_decisions(audio_dirs, song_seg_dirs)
+	# Collect spectrograms.
+	empty_audio_files = []
+	specs, fns, song_onsets = [], [], []
+	for audio_fn in song_segs:
+		fs, audio = wavfile.read(audio_fn)
+		for seg in song_segs[audio_fn].reshape(-1,2):
+			onset, offset = seg[0] - shoulder, seg[1] + shoulder
+			i1, i2 = int(fs*onset), int(fs*offset)
+			assert i1 >= 0, "Negative index! Decrease `shoulder`."
+			assert i2 <= len(audio), "Index > len(audio)! Decrease `shoulder`."
+			spec, dt = get_spec(fs, audio[i1:i2], p)
+			specs.append(spec)
+			fns.append(audio_fn)
+			song_onsets.append(onset)
+		if len(song_segs[audio_fn]) == 0:
+			empty_audio_files.append(audio_fn)
+	assert len(specs) > 0, "Found no spectrograms!"
+	# Calculate and smooth amplitude traces.
+	amp_traces = []
+	for spec in specs:
+		if p['softmax']:
+			amps = softmax(spec, t=p['temperature'])
+		else:
+			amps = np.sum(spec, axis=0)
+		# amps = gaussian_filter(amps, p['smoothing_timescale']/dt)
+		amps -= np.mean(amps)
+		amps /= np.std(amps) + EPSILON
+		amp_traces.append(amps)
+	amp_traces = np.array(amp_traces)
+	max_t = amp_traces.shape[1]*dt*1e3
+	num_time_bins = amp_traces.shape[1]
+	model = ShiftWarping(maxlag=.3, smoothness_reg_scale=10.)
+	model.fit(amp_traces[:,:,np.newaxis], iterations=100)
+	aligned = model.predict().squeeze()
+	max_raw_val = np.max(amp_traces)
+	max_aligned_val = np.max(aligned)
+	shifts = model.shifts
+	quantiles = []
+	break_flag = False
+	while True:
+		# Plot.
+		_, axarr = plt.subplots(3,1, sharex=True)
+		axarr[0].imshow(specs[0], origin='lower', aspect='auto', \
+				extent=[0,max_t,p['min_freq']/1e3,p['max_freq']/1e3])
+		temp = np.copy(amp_traces)
+		for q in quantiles:
+			for i in range(len(temp)):
+				temp[i,int(round(q*num_time_bins))+shifts[i]] = max_raw_val
+		axarr[1].imshow(temp, origin='lower', aspect='auto', \
+				extent=[0,max_t,0,len(amp_traces)])
+		temp = np.copy(aligned)
+		for q in quantiles:
+			for i in range(len(temp)):
+				temp[i,int(round(q*num_time_bins))] = max_aligned_val
+		axarr[2].imshow(temp, origin='lower', aspect='auto', \
+				extent=[0,max_t,0,len(amp_traces)])
+		axarr[0].set_ylabel("Frequency (kHz)")
+		axarr[1].set_ylabel('Amplitude')
+		axarr[2].set_ylabel('Shifted')
+		axarr[0].set_title('Enter segmenting quantiles:')
+		axarr[2].set_xlabel('Time (ms)')
+		plt.savefig(img_fn)
+		plt.close('all')
+		# Ask for segmenting decisions.
+		while True:
+			temp = input("Add or delete quantile or [s]top: ")
+			if temp == 's':
+				break_flag = True
+				break
+			try:
+				temp = float(temp)
+				assert 0.0 < temp and temp < 1.0
+				if temp in quantiles:
+					quantiles.remove(temp)
+				else:
+					quantiles.append(temp)
+				break
+			except:
+				print("Invalid input!")
+				print("Must be \'s\' or a float between 0 and 1.")
+				continue
+		if break_flag:
+			break
+	# Write syllable segments.
+	duration = num_time_bins * dt
+	quantiles = np.array(quantiles)
+	quantiles.sort()
+	files_encountered = {}
+	for i, (fn, song_onset) in enumerate(zip(fns, song_onsets)):
+		# Unshifted onsets and offsets.
+		onsets = song_onset + duration * quantiles[:-1]
+		offsets = song_onset + duration * quantiles[1:]
+		# Apply shifts.
+		onsets += shifts[i] * dt
+		offsets += shifts[i] * dt
+		# Save.
+		index = audio_dirs.index(os.path.split(fn)[0])
+		write_fn = os.path.join(syll_seg_dirs[index], os.path.split(fn)[-1])
+		write_fn = write_fn[:-4] + '.txt'
+		if not os.path.exists(os.path.split(write_fn)[0]):
+			os.makedirs(os.path.split(write_fn)[0])
+		segs = np.stack([onsets, offsets]).reshape(2,-1).T
+		header, mode = "", 'ab'
+		if fn not in files_encountered:
+			files_encountered[fn] = 1
+			mode = 'wb'
+			header += "Syllables from song: " + fn + "\n"
+		header += "Song onset: "+str(song_onset)
+		with open(write_fn, mode) as f:
+			np.savetxt(f, segs, fmt='%.5f', header=header)
+	# Write empty files corresponding to audio files without song.
+	for fn in empty_audio_files:
+		index = audio_dirs.index(os.path.split(fn)[0])
+		write_fn = os.path.join(syll_seg_dirs[index], os.path.split(fn)[-1])
+		write_fn = write_fn[:-4] + '.txt'
+		if not os.path.exists(os.path.split(write_fn)[0]):
+			os.makedirs(os.path.split(write_fn)[0])
+		header = "Syllables from song: " + fn
+		np.savetxt(write_fn, np.array([]), header=header)
+
+
+def _clean_max_indices(old_indices, old_times, values, min_dt=0.05):
 	"""Remove maxima that are too close together."""
 	if len(old_indices) <= 1:
 		return old_indices
@@ -297,8 +482,7 @@ def _clean_max_indices(old_indices, old_times, values, min_dt=0.1):
 	return indices
 
 
-
-def in_region(point, bounds):
+def _in_region(point, bounds):
 	"""Is the point in the union of the given rectangles?"""
 	for i in range(len(bounds['x1s'])):
 		if point[0] > bounds['x1s'][i] and point[0] < bounds['x2s'][i] and \
@@ -307,57 +491,13 @@ def in_region(point, bounds):
 	return False
 
 
-def is_audio_file(filename):
-	"""Does this filename have a recognized audio extension?"""
+def _is_audio_file(filename):
 	return len(filename) > 4 and filename[-4:] in ['.wav']
 
 
 
 if __name__ == '__main__':
-	# # Take 1.
-	# root = '/media/jackg/Jacks_Animal_Sounds/birds/jonna/blu285/'
-	# feature_dir = root + 'song_templates/'
-	# audio_dirs = [root + i for i in ['OPTO_CHUNK']]
-	# seg_dirs = audio_dirs
-	# p = {
-	# 	'fs':32000,
-	# 	'min_freq':400,
-	# 	'max_freq':8e3,
-	# 	'spec_min_val': 2.0,
-	# 	'spec_max_val': 6.5,
-	# 	'nperseg': 512,
-	# 	'noverlap': 0,
-	# 	'delimiter': '\t',
-	# }
-	#
-	# template, dt = get_template(feature_dir, p)
-	# template_length = template.shape[1] * dt
-	#
-	# plt.imshow(template, aspect='auto', origin='lower')
-	# plt.colorbar()
-	# plt.savefig('temp_spec.pdf')
-	# plt.close('all')
-	#
-	# result = segment_files(audio_dirs, seg_dirs, template, p)
-	#
-	# clean_collected_data(result, audio_dirs, seg_dirs, template_length, p)
-
-	# Take 2.
-	p = {
-		'fs':32000,
-		'min_freq':400,
-		'max_freq':8e3,
-		'spec_min_val': 2.0,
-		'spec_max_val': 6.5,
-		'nperseg': 512,
-		'noverlap': 0,
-		'delimiter': ' ',
-	}
-	root = '/media/jackg/Jacks_Animal_Sounds/birds/jonna/blu285/'
-	audio_dirs = [root + i for i in ['OPTO_SAP', 'DIR_SAP', 'UNDIR_SAP']]
-	seg_dirs = audio_dirs
-	result = read_segment_decisions(audio_dirs, seg_dirs)
-	clean_collected_data(result, audio_dirs, seg_dirs, None, p)
+	pass
 
 
 ###

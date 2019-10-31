@@ -15,7 +15,7 @@ import os
 def indexed_grid_plot_DC(dc, indices, ax=None, save_and_close=True, gap=3, \
 	side_len=128, filename='grid.pdf'):
 	"""
-	Plot a bunch of spectrograms in a grid.
+	Plot a grid of spectrograms.
 
 	Parameters
 	----------

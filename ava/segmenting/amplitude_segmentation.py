@@ -9,7 +9,7 @@ import numpy as np
 from scipy.io import wavfile
 from scipy.ndimage.filters import gaussian_filter, gaussian_filter1d
 
-from ava.segmenting.utils import get_spec
+from ava.segmenting.utils import get_spec, softmax
 
 
 EPSILON = 1e-9
@@ -42,16 +42,15 @@ def get_onsets_offsets(audio, p, return_traces=False):
 	min_syll_len = int(np.floor(p['min_dur'] / dt))
 	max_syll_len = int(np.ceil(p['max_dur'] / dt))
 	th_1, th_2, th_3 = p['th_1'], p['th_2'], p['th_3'] # treshholds
-	smoothing_time = p['smoothing_timescale'] / dt
 	onsets, offsets = [], []
 	too_short, too_long = 0, 0
 
+	# Calculate amplitude and smooth.
 	if p['softmax']:
-		amps = _softmax(spec, t=p['temperature'])
+		amps = softmax(spec, t=p['temperature'])
 	else:
 		amps = np.sum(spec, axis=0)
-	# Smooth.
-	amps = gaussian_filter(amps, smoothing_time)
+	amps = gaussian_filter(amps, p['smoothing_timescale']/dt)
 
 	# Find local maxima greater than th_3.
 	local_maxima = []
@@ -105,12 +104,6 @@ def get_onsets_offsets(audio, p, return_traces=False):
 	if return_traces:
 		return new_onsets, new_offsets, [amps]
 	return new_onsets, new_offsets
-
-
-def _softmax(arr, t=0.5):
-	temp = np.exp(arr/t)
-	temp /= np.sum(temp, axis=0) + EPSILON
-	return np.sum(np.multiply(arr, temp), axis=0)
 
 
 

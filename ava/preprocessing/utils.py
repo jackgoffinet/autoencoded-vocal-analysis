@@ -1,6 +1,10 @@
 """
 Useful functions for preprocessing.
 
+TO DO
+-----
+* Clean up ``get_spec``.
+
 """
 __date__ = "August 2019"
 
@@ -27,25 +31,29 @@ def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None, target_times=None, \
 
 	Parameters
 	----------
-	t1 : float or None
-		...
-	t2 : float or None
-		....
-	audio : ...
-		...
-	p : ...
-		... TO DO: Add reference!
-	fs : ...
-		...
-	target_freqs : ....
-		...
+	t1 : float
+		Onset time.
+	t2 : float
+		Offset time.
+	audio : numpy.ndarray
+		Raw audio.
+	p : dict
+		Parameters. Must include keys: ...
+	fs : float
+		Samplerate.
+	target_freqs : numpy.ndarray or ``None``, optional
+		Interpolated frequencies.
+	target_times : numpy.ndarray or ``None``, optional
+		Intepolated times.
 	fill_value : ....
 		...
+	max_dur : float, optional
+		Maximum duration.
 
 	Returns
 	-------
 	spec : numpy.ndarray
-		Spectrogram
+		Spectrogram.
 	flag : bool
 		...
 	"""
@@ -93,7 +101,7 @@ def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None, target_times=None, \
 	spec = np.clip(spec, 0.0, 1.0)
 	# Within-syllable normalize.
 	if p['within_syll_normalize']:
-		spec -= np.percentile(spec, 10.0)
+		spec -= np.quantile(spec, p['normalize_quantile'])
 		spec[spec<0.0] = 0.0
 		spec /= np.max(spec) + EPSILON
 	return spec, True

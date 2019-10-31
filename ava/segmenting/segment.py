@@ -39,8 +39,7 @@ def segment(audio_dir, seg_dir, p, verbose=True):
 	p : dict
 		Segmenting parameters. TO DO: ADD REFERENCE!
 	verbose : bool, optional
-		Defaults to ``False``.
-
+		Defaults to ``True``.
 	"""
 	if verbose:
 		print("\nSegmenting audio in", audio_dir+"\n"+'-'*(20+len(audio_dir)))
@@ -76,15 +75,14 @@ def tune_segmenting_params(load_dirs, p):
 	Returns
 	-------
 	p : dict
-		Adjusted segmenting parameters
-
+		Adjusted segmenting parameters.
 	"""
 	print("Tune segmenting parameters\n---------------------------")
 	# Collect filenames.
 	filenames = []
 	for load_dir in load_dirs:
 		filenames += [os.path.join(load_dir, i) for i in os.listdir(load_dir) \
-				if is_audio_file(i)]
+				if _is_audio_file(i)]
 	if len(filenames) == 0:
 		warnings.warn("Found no audio files in directories: "+str(load_dirs))
 		return
@@ -101,10 +99,10 @@ def tune_segmenting_params(load_dirs, p):
 		# Tune the parameters.
 		for key in p:
 			# Skip non-tunable parameters.
-			if key in ['num_time_bins', 'num_freq_bins'] or not is_number(p[key]):
+			if key in ['num_time_bins', 'num_freq_bins'] or not _is_number(p[key]):
 				continue
 			temp = 'not number and not empty'
-			while not is_number_or_empty(temp):
+			while not _is_number_or_empty(temp):
 				temp = input('Set value for '+key+': ['+str(p[key])+ '] ')
 			if temp != '':
 				p[key] = float(temp)
@@ -169,7 +167,7 @@ def tune_segmenting_params(load_dirs, p):
 			# Continue.
 			all_events = [j for j in onsets if j>i1 and j<i2] + \
 					[j for j in offsets if j>i1 and j<i2]
-			if len(all_events) > 0 or (iteration+1) % 5 == 0:
+			if len(all_events) > 0 or (iteration+1) % 20 == 0:
 				temp = input('Continue? [y] or [s]top tuning or [r]etune params: ')
 			else:
 				iteration += 1
@@ -182,18 +180,18 @@ def tune_segmenting_params(load_dirs, p):
 def get_audio_seg_filenames(audio_dir, segment_dir, p):
 	"""Return lists of sorted filenames."""
 	temp_filenames = [i for i in sorted(os.listdir(audio_dir)) if \
-			is_audio_file(i)]
+			_is_audio_file(i)]
 	audio_filenames = [os.path.join(audio_dir, i) for i in temp_filenames]
 	temp_filenames = [i[:-4] + '.txt' for i in temp_filenames]
 	seg_filenames = [os.path.join(segment_dir, i) for i in temp_filenames]
 	return audio_filenames, seg_filenames
 
 
-def is_audio_file(fn):
+def _is_audio_file(fn):
 	return len(fn) >= 4 and fn[-4:] == '.wav'
 
 
-def is_number_or_empty(s):
+def _is_number_or_empty(s):
 	if s == '':
 		return True
 	try:
@@ -203,7 +201,7 @@ def is_number_or_empty(s):
 		return False
 
 
-def is_number(s):
+def _is_number(s):
 	return type(s) == type(4) or type(s) == type(4.0)
 
 

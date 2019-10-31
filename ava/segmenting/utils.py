@@ -183,6 +183,13 @@ def get_audio_seg_filenames(audio_dirs, seg_dirs):
 	return audio_fns, seg_fns
 
 
+def softmax(arr, t=0.5):
+	"""Softmax along first array dimension."""
+	temp = np.exp(arr/t)
+	temp /= np.sum(temp, axis=0) + EPSILON
+	return np.sum(np.multiply(arr, temp), axis=0)
+
+
 def _read_onsets_offsets(filename):
 	"""
 	A wrapper around numpy.loadtxt for reading onsets & offsets.
@@ -191,7 +198,7 @@ def _read_onsets_offsets(filename):
 	----------
 	filename : str
 		Filename of a text file containing one header line and two columns.
-	
+
 	Returns
 	-------
 	onsets : numpy.ndarray

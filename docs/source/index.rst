@@ -12,9 +12,9 @@ You can find the software
 `on github <https://github.com/jackgoffinet/autoencoded-vocal-analysis>`_.
 
 
-**Installation**
+**Quick Install**
 
-.. code-block:: bash
+.. code-block::
 
    $ git clone https://github.com/jackgoffinet/autoencoded-vocal-analysis.git
    $ cd autoencoded-vocal-analysis
@@ -26,9 +26,18 @@ See the `examples/` subdirectory
 `on github <https://github.com/jackgoffinet/autoencoded-vocal-analysis>`_.
 
 
-**Coming soon: User Guide**
+.. toctree::
+   :maxdepth: 2
+   :caption: User Guide (In progress):
 
-For now, see the `examples/` subdirectory in the code.
+   install
+   overview
+   segment
+   preprocess
+   training
+   data_management
+   plotting_analysis
+
 
 
 Indices and tables
