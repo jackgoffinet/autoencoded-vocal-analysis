@@ -14,11 +14,12 @@ You can find the software
 
 **Quick Install**
 
-.. code-block::
+.. code-block:: bash
 
    $ git clone https://github.com/jackgoffinet/autoencoded-vocal-analysis.git
    $ cd autoencoded-vocal-analysis
    $ pip install .
+
 
 **Examples**
 
@@ -30,13 +31,13 @@ See the `examples/` subdirectory
    :maxdepth: 2
    :caption: User Guide (In progress):
 
-   install
-   overview
-   segment
-   preprocess
-   training
-   data_management
-   plotting_analysis
+   install.md
+   overview.md
+   segment.md
+   preprocess.md
+   training.md
+   data_management.md
+   plotting_analysis.md
 
 
 
