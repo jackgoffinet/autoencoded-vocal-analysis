@@ -177,7 +177,7 @@ class DataContainer():
 		│   │   ├── bar.csv
 		│   │   └── baz.csv
 		│   ├── spectrograms             (used to train models, written by
-		│   │   ├── syllables_000.hdf5   preprocessing.process_sylls)
+		│   │   ├── syllables_000.hdf5   preprocessing.preprocess.process_sylls)
 		│   │   └── syllables_001.hdf5
 		│   └── projections              (latent means, UMAP, PCA, tSNE
 		│      ├── syllables_000.hdf5    projections, copies of features in

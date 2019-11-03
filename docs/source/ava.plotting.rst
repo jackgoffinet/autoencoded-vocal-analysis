@@ -20,6 +20,14 @@ ava.plotting.latent\_projection module
     :undoc-members:
     :show-inheritance:
 
+ava.plotting.mmd\_plots module
+------------------------------
+
+.. automodule:: ava.plotting.mmd_plots
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 ava.plotting.tooltip\_plot module
 ---------------------------------
 

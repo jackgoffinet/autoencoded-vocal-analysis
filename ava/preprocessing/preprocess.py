@@ -141,7 +141,7 @@ def get_syll_specs(onsets, offsets, audio_filename, p):
 	return specs, valid_syllables
 
 
-def tune_syll_preprocessing_params(audio_dirs, seg_dirs, p):
+def tune_syll_preprocessing_params(audio_dirs, seg_dirs, p, img_fn='temp.pdf'):
 	"""
 	Flip through spectrograms and tune preprocessing parameters.
 
@@ -158,7 +158,6 @@ def tune_syll_preprocessing_params(audio_dirs, seg_dirs, p):
 	-------
 	p : dict
 		Adjusted preprocessing parameters.
-
 	"""
 	print("Tune preprocessing parameters:")
 
@@ -204,7 +203,7 @@ def tune_syll_preprocessing_params(audio_dirs, seg_dirs, p):
 			# Plot.
 			plt.imshow(spec, aspect='equal', origin='lower', vmin=0, vmax=1)
 			plt.axis('off')
-			plt.savefig('temp.pdf')
+			plt.savefig(img_fn)
 			plt.close('all')
 			temp = input('Continue? [y] or [s]top tuning or [r]etune params: ')
 			if temp == 's':

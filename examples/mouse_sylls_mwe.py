@@ -35,7 +35,6 @@ from ava.segmenting.amplitude_segmentation import get_onsets_offsets
 #########################################
 mouse_params = {
 	'segment': {
-		'max_dur': 0.2,
 		'min_freq': 30e3,
 		'max_freq': 110e3,
 		'nperseg': 1024, # FFT
@@ -46,38 +45,36 @@ mouse_params = {
 		'th_1':1.5,
 		'th_2':2.0,
 		'th_3':2.5,
+		'max_dur': 0.2,
 		'min_dur':0.03,
-		'max_dur':0.2,
-		'freq_smoothing': 3.0,
 		'smoothing_timescale': 0.007,
 		'softmax': False,
 		'temperature':0.5,
 		'algorithm': get_onsets_offsets,
-		'window_dir': 0.6,
 	},
 	'preprocess': {
 		'get_spec': get_spec,
-		'max_dur': 0.2, # min duration?
-		'min_freq': 30e3,
-		'max_freq': 110e3,
-		'num_freq_bins': X_SHAPE[0],
-		'num_time_bins': X_SHAPE[1],
+		'max_dur': 0.2, # maximum syllable duration
+		'min_freq': 30e3, # minimum frequency
+		'max_freq': 110e3, # maximum frequency
+		'num_freq_bins': X_SHAPE[0], # hard-coded
+		'num_time_bins': X_SHAPE[1], # hard-coded
 		'nperseg': 1024, # FFT
 		'noverlap': 512, # FFT
-		'spec_min_val': 2.0,
-		'spec_max_val': 6.0,
-		'fs': 250000,
-		'mel': False, # Frequency spacing
-		'MAD': True,
-		'time_stretch': True,
-		'within_syll_normalize': False,
-		'max_num_syllables': None, # per directory
-		'sylls_per_file': 20,
+		'spec_min_val': 2.0, # minimum log-spectrogram value
+		'spec_max_val': 6.0, # maximum log-spectrogram value
+		'fs': 250000, # audio samplerate
+		'mel': False, # frequency spacing, mel or linear
+		'time_stretch': True, # stretch short syllables?
+		'within_syll_normalize': False, # normalize spectrogram values on a
+										# spectrogram-by-spectrogram basis
+		'max_num_syllables': None, # maximum number of syllables per directory
+		'sylls_per_file': 20, # syllable per file
 		'real_preprocess_params': ('min_freq', 'max_freq', 'spec_min_val', \
-				'spec_max_val', 'max_dur'),
-		'int_preprocess_params': ('nperseg','noverlap'),
+				'spec_max_val', 'max_dur'), # tunable parameters
+		'int_preprocess_params': ('nperseg','noverlap'), # tunable parameters
 		'binary_preprocess_params': ('time_stretch', 'mel', \
-				'within_syll_normalize', 'MAD'),
+				'within_syll_normalize'), # tunable parameters
 	},
 }
 

@@ -61,7 +61,7 @@ def segment(audio_dir, seg_dir, p, verbose=True):
 		print("Found", num_sylls, "segments in", audio_dir)
 
 
-def tune_segmenting_params(load_dirs, p):
+def tune_segmenting_params(load_dirs, p, img_fn='temp.pdf'):
 	"""
 	Tune segementing parameters by visualizing segmenting decisions.
 
@@ -71,6 +71,8 @@ def tune_segmenting_params(load_dirs, p):
 		Directories containing audio files.
 	p : dict
 		Segmenting parameters. TO DO: ADD REFERENCE!
+	img_fn : str, optional
+		Where to save segmenting images.
 
 	Returns
 	-------
@@ -161,7 +163,7 @@ def tune_segmenting_params(load_dirs, p):
 			for trace in traces:
 				axarr[1].plot(xvals, trace[i1:i2])
 			axarr[1].set_xlabel('Time (s)')
-			plt.savefig('temp.pdf')
+			plt.savefig(img_fn)
 			plt.close('all')
 
 			# Continue.

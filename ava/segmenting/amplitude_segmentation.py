@@ -18,7 +18,17 @@ EPSILON = 1e-9
 
 def get_onsets_offsets(audio, p, return_traces=False):
 	"""
-	Segment the spectrogram using thresholds on its ampltiude.
+	Segment the spectrogram using thresholds on its amplitude.
+
+	A syllable is detected if the amplitude trace exceeds `p['th_3']`. An offset
+	is then detected if there is a subsequent local minimum in the amplitude
+	trace with amplitude less than `p['th_2']`, or when the amplitude drops
+	below `p['th_1']`, whichever comes first. Syllable onset is determined
+	analogously.
+
+	Note
+	----
+	`p['th_1'] <= p['th_2'] <= p['th_3']`
 
 	Parameters
 	----------
@@ -28,6 +38,7 @@ def get_onsets_offsets(audio, p, return_traces=False):
 		Parameters.
 	return_traces : bool, optional
 		Whether to return traces. Defaults to `False`.
+
 	Returns
 	-------
 	onsets : numpy array

@@ -5,7 +5,6 @@ ava/__pycache__/
 ava/models/__pycache__/
 ava/plotting/__pycache__/
 ava/preprocessing/__pycache__/
-ava/data/
 build/
 docs/build/
 ava/segmenting/__pycache__/

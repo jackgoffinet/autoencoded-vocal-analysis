@@ -124,7 +124,7 @@ def clean_segments_by_hand(audio_dirs, orig_seg_dirs, new_seg_dirs, p, \
 def copy_segments_to_standard_format(orig_seg_dirs, new_seg_dirs, seg_ext, \
 	delimiter, usecols, skiprows, max_duration=None):
 	"""
-	Copy onsets/offsets from SAP, MUPET, or Deepsqueak into their files.
+	Copy onsets/offsets from SAP, MUPET, or Deepsqueak into a standard format.
 
 	Notes
 	-----
@@ -209,6 +209,8 @@ def _read_onsets_offsets(filename):
 	arr = np.loadtxt(filename, skiprows=1)
 	if len(arr) == 0:
 		return [], []
+	if len(arr.shape) == 1:
+		arr = arr.reshape(1,2)
 	assert arr.shape[1] == 2, "Found invalid shape: "+str(arr.shape)
 	return arr[:,0], arr[:,1]
 
