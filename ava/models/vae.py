@@ -15,11 +15,9 @@ VAE References
 
 	`<https://arxiv.org/abs/1401.4082>`_
 """
-__date__ = "November 2018 - July 2019"
+__date__ = "November 2018 - November 2019"
 
 
-import matplotlib.pyplot as plt
-plt.switch_backend('agg')
 import numpy as np
 import os
 import torch
@@ -214,7 +212,6 @@ class VAE(nn.Module):
 		d : torch.Tensor
 			Posterior diagonal factor, as defined above. Shape:
 			``[batch_size, self.z_dim]``
-
 		"""
 		x = x.unsqueeze(1)
 		x = F.relu(self.conv1(self.bn1(x)))
@@ -289,8 +286,9 @@ class VAE(nn.Module):
 			\log p(x_i,\hat{z}) + \mathbb{H}[q(z|x_i)]
 
 		where :math:`N` denotes the number of samples from the data distribution
-		and the expectation is estimated by a single latent sample,
-		:math:`\hat{z}`.
+		and the expectation is estimated using a single latent sample,
+		:math:`\hat{z}`. In practice, the outer expectation is estimated using
+		minibatches.
 
 		Parameters
 		----------
@@ -309,7 +307,6 @@ class VAE(nn.Module):
 			Latent means. Shape: ``[batch_size, self.z_dim]``
 		reconstructions : numpy.ndarray, if `return_latent_rec`
 			Reconstructed means. Shape: ``[batch_size, height=128, width=128]``
-
 		"""
 		mu, u, d = self.encode(x)
 		latent_dist = LowRankMultivariateNormal(mu, u, d)
@@ -341,16 +338,15 @@ class VAE(nn.Module):
 		elbo : float
 			A biased estimate of the ELBO, estimated using samples from
 			`train_loader`.
-
 		"""
 		self.train()
 		train_loss = 0.0
 		for batch_idx, data in enumerate(train_loader):
 			data = data.to(self.device)
-			self.optimizer.zero_grad()
 			loss = self.forward(data)
-			loss.backward()
 			train_loss += loss.item()
+			self.optimizer.zero_grad()
+			loss.backward()
 			self.optimizer.step()
 		train_loss /= len(train_loader.dataset)
 		print('Epoch: {} Average loss: {:.4f}'.format(self.epoch, \
@@ -373,7 +369,6 @@ class VAE(nn.Module):
 		elbo : float
 			An unbiased estimate of the ELBO, estimated using samples from
 			`test_loader`.
-
 		"""
 		self.eval()
 		test_loss = 0.0
@@ -407,7 +402,6 @@ class VAE(nn.Module):
 		vis_freq : int, optional
 			Syllable reconstructions are plotted every `vis_freq` epochs.
 			Defaults to ``1``.
-
 		"""
 		print("="*40)
 		print("Training: epochs", self.epoch, "to", self.epoch+epochs-1)
@@ -463,7 +457,6 @@ class VAE(nn.Module):
 		Note
 		----
 		- `self.lr`, `self.save_dir`, and `self.z_dim` are not loaded.
-
 		"""
 		checkpoint = torch.load(filename)
 		assert checkpoint['z_dim'] == self.z_dim
@@ -502,7 +495,6 @@ class VAE(nn.Module):
 			Spectgorams from `loader`.
 		rec_specs : numpy.ndarray
 			Corresponding spectrogram reconstructions.
-
 		"""
 		# Collect random indices.
 		assert num_specs <= len(loader.dataset) and num_specs >= 1

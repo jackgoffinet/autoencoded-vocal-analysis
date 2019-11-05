@@ -6,14 +6,12 @@ This is meant to make plotting and analysis easier.
 TO DO
 -----
 - request random subsets.
-- check for errors
 - throw better errors
 - Read feature files.
-- Flexibly read segmenting decisions.
 - make sure input directories are iterable
 - add features to existing files.
 """
-__date__ = "July-October 2019"
+__date__ = "July-November 2019"
 
 
 import h5py
@@ -56,6 +54,8 @@ SAP_FIELDS = ['syllable_duration_sap', 'syllable_start', 'mean_amplitude',
 ALL_FIELDS = AUDIO_FIELDS + FILENAME_FIELDS + SEGMENT_FIELDS + \
 	PROJECTION_FIELDS + SPEC_FIELDS + MUPET_FIELDS + DEEPSQUEAK_FIELDS + \
 	SAP_FIELDS
+"""All fields that can be requested by a DataContainer object."""
+
 MUPET_ONSET_COL = MUPET_FIELDS.index('syllable_start_time')
 DEEPSQUEAK_ONSET_COL = DEEPSQUEAK_FIELDS.index('begin_time')
 SAP_ONSET_COL = SAP_FIELDS.index('syllable_start')
@@ -261,8 +261,8 @@ class DataContainer():
 
 		Note
 		----
-		Besides `__init__`, this should be the only external-facing method.
-
+		Besides `__init__` and `clean_projections`, this should be the only
+		external-facing method.
 		"""
 		if field not in ALL_FIELDS:
 			print(str(field) + " is not a valid field!")
@@ -280,6 +280,16 @@ class DataContainer():
 		if self.verbose:
 			print("\tDone with:", field)
 		return data
+
+
+	def clean_projections(self):
+		"""Remove all projections."""
+		for proj_dir in self.projection_dirs:
+			fns = [os.path.join(proj_dir, i) for i in os.listdir(proj_dir)]
+			fns = [i for i in fns if len(i) > 5 and i[-5:] == '.hdf5']
+			for fn in fns:
+				os.remove(fn)
+		self.fields = self._check_for_fields()
 
 
 	def _make_field(self, field):
@@ -698,14 +708,6 @@ class DataContainer():
 			assert temp is not None, dir_name + " must be specified before " + \
 				field + " is made!"
 
-	def clean_projections(self):
-		"""Remove all projections."""
-		for proj_dir in self.projection_dirs:
-			fns = [os.path.join(proj_dir, i) for i in os.listdir(proj_dir)]
-			fns = [i for i in fns if i[-5:] == '.hdf5']
-			for fn in fns:
-				os.remove(fn)
-		self.fields = self._check_for_fields()
 
 
 def _read_columns(filename, columns=(0,1), delimiter=',', skiprows=1, \

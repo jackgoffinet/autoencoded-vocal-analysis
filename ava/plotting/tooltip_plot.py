@@ -18,30 +18,36 @@ import umap
 
 
 
-def tooltip_plot_DC(d, num_imgs=5000, output_dir='html', title="", n=30000):
+def tooltip_plot_DC(d, output_dir='html', num_imgs=5000, title="", n=30000,
+	grid=False):
 	"""
 	DataContainer version of tooltip_plot.
 
 	Parameters
 	----------
-	d : plotting.DataContainer
-		See plotting.DataContainer class for details.
-
-	Other Parameters
-	----------------
-	See plotting.tooltip_plot.tooltip_plot
-
+	d : ava.data.data_container.DataContainer
+		See ava.data.data_container for details.
+	output_dir : str, optional
+		Directory where html and jpegs are written. Deafaults to "temp".
+	num_imgs : int, optional
+		Number of points with tooltip images. Defaults to 10000.
+	title : str, optional
+		Title of plot. Defaults to ''.
+	n : int, optional
+		Total number of scatterpoints to plot. Defaults to 30000.
+	grid : bool, optional
+		Show x and y grid? Defaults to `False`.
 	"""
 	embedding = d.request('latent_mean_umap')
 	images = d.request('specs')
 	output_dir = os.path.join(d.plots_dir, output_dir)
 	print("writing tooltip plot to", output_dir)
 	tooltip_plot(embedding, images, output_dir=output_dir, num_imgs=num_imgs, \
-		title=title, n=n)
+		title=title, n=n, grid=grid)
 
 
 def tooltip_plot(embedding, images, output_dir='temp', num_imgs=10000, title="",
-	n=30000):
+	n=30000, grid=False):
 	"""
 	Create a scatterplot of the embedding with spectrogram tooltips.
 
@@ -49,22 +55,19 @@ def tooltip_plot(embedding, images, output_dir='temp', num_imgs=10000, title="",
 	----------
 	embedding : numpy.ndarray
 		The scatterplot coordinates. Shape: (num_points, 2)
-
 	images : numpy.ndarray
 		A spectrogram image for each scatter point. Shape:
 		(num_points, height, width)
-
 	output_dir : str, optional
 		Directory where html and jpegs are written. Deafaults to "temp".
-
 	num_imgs : int, optional
 		Number of points with tooltip images. Defaults to 10000.
-
 	title : str, optional
 		Title of plot. Defaults to ''.
-
 	n : int, optional
 		Total number of scatterpoints to plot. Defaults to 30000.
+	grid : bool, optional
+		Show x and y grid? Defaults to `False`.
 	"""
 	# Shuffle the embedding and images.
 	np.random.seed(42)
@@ -110,9 +113,9 @@ def tooltip_plot(embedding, images, output_dir='temp', num_imgs=10000, title="",
 	p.add_tools(hover)
 	p.title.align = "center"
 	p.title.text_font_size = "25px"
-	p.axis.visible = False
-	p.xgrid.visible = False
-	p.ygrid.visible = False
+	p.axis.visible = grid
+	p.xgrid.visible = grid
+	p.ygrid.visible = grid
 	show(p)
 
 
