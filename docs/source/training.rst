@@ -21,7 +21,7 @@ training set, and one for a test set.
 	partition = get_syllable_partition(spec_dirs, split)
 
 	# Make Dataloaders.
-	from ava.model.vae_dataset import get_syllable_data_loaders
+	from ava.models.vae_dataset import get_syllable_data_loaders
 	loaders = get_syllable_data_loaders(partition)
 
 
@@ -70,3 +70,20 @@ Warped Shotgun VAE Training
 ###########################
 
 TO DO
+
+Mode Collapse
+#############
+
+One possible issue during training is known as mode collapse or posterior
+collapse. This happens when
+the VAE's tendency to regularize overwhelms its ability to reconstruct
+spectrograms, and is the tendency of the VAE to ignore its input so that each
+reconstruction is simply the mean spectrogram. There are two ways to deal with
+this in AVA. First, we can increase the contrast of the spectrograms by
+decreasing the range between :code:`'spec_min_val'` and :code:`'spec_max_'` in the
+preprocessing step. Second, we can increase the model precision in the training
+step to strike a different regularization/reconstruction tradeoff:
+
+.. code:: Python3
+
+	model = VAE(model_precision=20.0) # default is 10.0

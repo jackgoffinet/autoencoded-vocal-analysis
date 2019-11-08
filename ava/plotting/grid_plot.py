@@ -45,7 +45,7 @@ def indexed_grid_plot_DC(dc, indices, ax=None, save_and_close=True, gap=3, \
 			save_and_close=save_and_close, filename=filename)
 
 
-def grid_plot(specs, gap=3, ax=None, save_and_close=True, \
+def grid_plot(specs, gap=3, vmin=0.0, vmax=1.0, ax=None, save_and_close=True, \
 	filename='temp.pdf'):
 	"""
 	Parameters
@@ -55,6 +55,10 @@ def grid_plot(specs, gap=3, ax=None, save_and_close=True, \
 	gap : int or tuple of two ints, optional
 		The vertical and horizontal gap between images, in pixels. Defaults to
 		`3`.
+	vmin : float, optional
+		Passed to matplotlib.pyplot.imshow. Defaults to `0.0`.
+	vmax : float, optional
+		Passed to matplotlib.pyplot.imshow. Defaults to `1.0`.
 	ax : matplotlib.pyplot.axis, optional
 		Axis to plot figure. Defaults to matplotlib.pyplot.gca().
 	save_and_close : bool, optional
@@ -85,7 +89,7 @@ def grid_plot(specs, gap=3, ax=None, save_and_close=True, \
 	if ax is None:
 		ax = plt.gca()
 	ax.imshow(img, aspect='equal', origin='lower', interpolation='none',
-		vmin=0, vmax=1)
+		vmin=vmin, vmax=vmax)
 	ax.axis('off')
 	if save_and_close:
 		plt.tight_layout()
