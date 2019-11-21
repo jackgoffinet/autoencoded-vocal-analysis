@@ -1,4 +1,9 @@
-0.2.0	10/18/19	Preprint release
-0.2.1	10/26/19	Fixed import bugs and docs
-0.2.2	10/31/19	segmenting.template_segmentation changes
-0.2.3	11/05/19	segmenting.template_segmentation changes and docs update
+0.2.0  10/18/19  Preprint release
+0.2.1  10/26/19  Fixed import bugs and docs
+0.2.2  10/31/19  segmenting.template_segmentation changes
+0.2.3  11/05/19  segmenting.template_segmentation changes and docs update
+0.2.4  11/21/19  DataContainer.clean_projections -> clear_projections
+                 plotting.mmd_plots added
+                 plotting.shotgun_movie added
+                 preprocessing.preprocess.process_sylls bug fix
+								 segmenting.refine_segments.refine_segments_post_vae added

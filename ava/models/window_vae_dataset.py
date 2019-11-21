@@ -2,7 +2,7 @@
 Useful functions for feeding data to the shotgun VAE.
 
 """
-__date__ = "August - September 2019"
+__date__ = "August - November 2019"
 
 
 from affinewarp import PiecewiseWarping
@@ -22,21 +22,26 @@ EPSILON = 1e-12
 
 
 
-def get_window_partition(audio_dirs, roi_dirs, split, roi_extension='.txt', \
-	shuffle=True):
+def get_window_partition(audio_dirs, roi_dirs, split=0.8, shuffle=True):
 	"""
 	Get a train/test split.
 
 	Parameters
 	----------
-	audio_dirs : ...
-		...
+	audio_dirs : list of str
+		Audio directories.
+	roi_dirs : list of str
+		ROI (segment) directories.
+	split : float, optional
+		Train/test split. Defaults to ``0.8``, indicating an 80/20 train/test
+		split.
+	shuffle : bool, optional
+		Whether to shuffle at the audio file level. Defaults to ``True``.
 
 	Returns
 	-------
 	partition : dict
-		...
-
+		Defines the test/train split.
 	"""
 	assert(split > 0.0 and split <= 1.0)
 	# Collect filenames.
@@ -45,7 +50,7 @@ def get_window_partition(audio_dirs, roi_dirs, split, roi_extension='.txt', \
 		temp = _get_wavs_from_dir(audio_dir)
 		audio_filenames += temp
 		roi_filenames += \
-			[os.path.join(roi_dir, os.path.split(i)[-1][:-4]+roi_extension) \
+			[os.path.join(roi_dir, os.path.split(i)[-1][:-4]+'.txt') \
 			for i in temp]
 	# Reproducibly shuffle.
 	audio_filenames = np.array(audio_filenames)
@@ -71,7 +76,27 @@ def get_window_partition(audio_dirs, roi_dirs, split, roi_extension='.txt', \
 def get_fixed_window_data_loaders(partition, p, batch_size=64, \
 	shuffle=(True, False), num_workers=4):
 	"""
+	Get DataLoaders for training and testing.
 
+	Parameters
+	----------
+	partition : dict
+		Output of ``ava.models.window_vae_dataset.get_window_partition``.
+	p : dict
+		Preprocessing parameters. Must contain keys: ...
+	batch_size : int, optional
+		Defaults to ``64``.
+	shuffle : tuple of bool, optional
+		Whether to shuffle train and test sets, respectively. Defaults to
+		``(True, False)``.
+	num_workers : int, optional
+		Number of CPU workers to feed data to the network. Defaults to ``4``.
+
+	Returns
+	-------
+	loaders : dict
+		Maps the keys ``'train'`` and ``'test'`` to their respective
+		DataLoaders.
 	"""
 	train_dataset = FixedWindowDataset(partition['train']['audio'], \
 		partition['train']['rois'], p, transform=numpy_to_tensor)
@@ -92,7 +117,13 @@ def get_warped_window_data_loaders(audio_dirs, template_dir, p, batch_size=64, \
 	"""
 	Get DataLoaders for training and testing.
 
-	Right now, these are the same data loaders...
+	Warning
+	-------
+	- Audio files must all be the same duration!
+
+	Note
+	----
+	- TO DO: add train/test split.
 
 	Parameters
 	----------
@@ -117,15 +148,6 @@ def get_warped_window_data_loaders(audio_dirs, template_dir, p, batch_size=64, \
 	-------
 	loaders : dict
 		A dictionary ...
-
-	Warning
-	-------
-	- Audio files must all be the same duration!
-
-	Note
-	----
-	- TO DO: add train/test split.
-
 	"""
 	audio_fns = []
 	for audio_dir in audio_dirs:
@@ -149,14 +171,12 @@ class FixedWindowDataset(Dataset):
 
 		Parameters
 		----------
-		audio_filenames : list of strings
+		audio_filenames : list of str
 			List of wav files.
-
-		roi_filenames : list of strings
-			List of files containing animal vocalization times. Format: ...
-
-		transform : None or function, optional
-			Transformation to apply to each item. Defaults to None (no
+		roi_filenames : list of str
+			List of files containing animal vocalization times.
+		transform : {``None``, function}, optional
+			Transformation to apply to each item. Defaults to ``None`` (no
 			transformation)
 		"""
 		self.audio = [wavfile.read(fn)[1] for fn in audio_filenames]
@@ -179,7 +199,7 @@ class FixedWindowDataset(Dataset):
 		return self.dataset_length
 
 
-	def __getitem__(self, index, seed=None):
+	def __getitem__(self, index, seed=None, shoulder=0.05):
 		result = []
 		single_index = False
 		try:
@@ -205,8 +225,8 @@ class FixedWindowDataset(Dataset):
 				target_times = np.linspace(onset, offset, \
 						self.p['num_time_bins'])
 				# Then make a spectrogram.
-				spec, flag = self.p['get_spec'](max(0.0, onset-0.05), \
-						offset+0.05, self.audio[file_index], self.p, \
+				spec, flag = self.p['get_spec'](max(0.0, onset-shoulder), \
+						offset+shoulder, self.audio[file_index], self.p, \
 						fs=self.fs, target_times=target_times)
 				if not flag:
 					continue
@@ -228,6 +248,15 @@ class FixedWindowDataset(Dataset):
 		----
 	 	This should be consistent with
 		ava.preprocessing.preprocess.process_sylls.
+
+		Parameters
+		----------
+		save_dir : str
+			Directory to save hdf5s in.
+		num_files : int, optional
+			Number of files to save. Defaults to ``500``.
+		sylls_per_file : int, optional
+			Number of syllables in each file. Defaults to ``100``.
 		"""
 		if not os.path.exists(save_dir):
 			os.mkdir(save_dir)
@@ -251,15 +280,32 @@ class WarpedWindowDataset(Dataset):
 		"""
 		Create a torch.utils.data.Dataset for chunks of animal vocalization.
 
+		TO DO: change warp_fns to non-keyword arguments
+
 		Parameters
 		----------
 		audio_filenames : list of strings
 			List of wav files.
 		template_dir : str
-			...
+			Directory containing audio files of the template.
+		p : dict
+			Preprocessing parameters. Must have keys: ...
 		transform : {None, function}, optional
 			Transformation to apply to each item. Defaults to ``None`` (no
 			transformation)
+		dataset_length : int, optional
+			Defaults to ``2048``.
+		load_warp : bool, optional
+			Whether to load the results of a previous warp. Defaults to
+			``False``.
+		start_q : float, optional
+			Start quantile. Defaults to ``-0.1``.
+		stop_q : float, optional
+			Stop quantile. Defaults to ``1.1``.
+		warp_fns : list of str, optional
+			The two elements specify where to save the x knots and y knots of
+			the warp, respectively. Defaults to
+			``['temp_data/x_knots.npy', 'temp_data/y_knots.npy']``.
 		"""
 		self.audio_filenames = audio_filenames
 		self.audio = [wavfile.read(fn)[1] for fn in audio_filenames]
@@ -283,6 +329,11 @@ class WarpedWindowDataset(Dataset):
 		"""
 		Write hdf5 files containing spectrograms of random audio chunks.
 
+		Note
+		----
+	 	This should be consistent with
+		ava.preprocessing.preprocess.process_sylls.
+
 		Parameters
 		----------
 		save_dir : str
@@ -291,11 +342,6 @@ class WarpedWindowDataset(Dataset):
 			Number of files to write. Defaults to `400`.
 		sylls_per_file : int, optional
 			Number of spectrograms to write per file. Defaults to `100`.
-
-		Note
-		----
-	 	This should be consistent with
-		ava.preprocessing.preprocess.process_sylls.
 		"""
 		if save_dir != '' and not os.path.exists(save_dir):
 			os.mkdir(save_dir)
@@ -465,12 +511,14 @@ class WarpedWindowDataset(Dataset):
 		"""
 		Return a specific window of birdsong as a numpy array.
 
+		TO DO: clean up the flag section
+
 		Parameters
 		----------
 		query_filename : str
 			Audio filename.
 		quantile : float
-			0 <= `quantile` <= 1
+			0 <= ``quantile`` <= 1
 
 		Returns
 		-------
@@ -534,13 +582,14 @@ def get_hdf5s_from_dir(dir):
 
 	Note
 	----
-	ava.data.data_container relies on this.
+	``ava.data.data_container`` relies on this.
 	"""
 	return [os.path.join(dir, f) for f in sorted(os.listdir(dir)) if \
 		_is_hdf5_file(f)]
 
 
 def _get_wavs_from_dir(dir):
+	"""Return a sorted list of wave files from a directory."""
 	return [os.path.join(dir, f) for f in sorted(os.listdir(dir)) if \
 		_is_wav_file(f)]
 
@@ -551,6 +600,7 @@ def _is_hdf5_file(filename):
 
 
 def _is_wav_file(filename):
+	"""Is the given filename a wave file?"""
 	return len(filename) > 4 and filename[-4:] == '.wav'
 
 

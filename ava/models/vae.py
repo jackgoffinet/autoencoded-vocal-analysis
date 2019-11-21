@@ -458,7 +458,7 @@ class VAE(nn.Module):
 		----
 		- `self.lr`, `self.save_dir`, and `self.z_dim` are not loaded.
 		"""
-		checkpoint = torch.load(filename)
+		checkpoint = torch.load(filename, map_location=self.device)
 		assert checkpoint['z_dim'] == self.z_dim
 		layers = self._get_layers()
 		for layer_name in layers:

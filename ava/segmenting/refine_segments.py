@@ -1,10 +1,8 @@
 """
 Remove noise from segmenting files.
 
-TO DO:
-	- implement refine_segments_post_vae
 """
-__date__ = "August-October 2019"
+__date__ = "August-November 2019"
 
 
 from itertools import repeat
@@ -25,17 +23,15 @@ from ava.plotting.tooltip_plot import tooltip_plot
 from ava.segmenting.utils import get_spec, get_audio_seg_filenames, \
 		_read_onsets_offsets
 
-# https://github.com/lmcinnes/umap/issues/252
-warnings.filterwarnings("ignore", message="parallel=True*")
-# warnings.filterwarnings("ignore", message="The keyword argument " + \
-# 		"'parallel=True' was specified but no transformation for parallel " + \
-# 		"execution was possible.")
+
 # Silence scipy.io.wavfile.read metadata warnings.
 warnings.filterwarnings("ignore", message="Chunk (non-data) not understood*")
 
 
+
 def refine_segments_pre_vae(seg_dirs, audio_dirs, out_seg_dirs, p, \
-	n_samples=8000, num_imgs=1000, verbose=True, img_fn='temp.pdf'):
+	n_samples=8000, num_imgs=1000, verbose=True, img_fn='temp.pdf', \
+	tooltip_output_dir='temp'):
 	"""
 	Manually remove noise by selecting regions of UMAP spectrogram projections.
 
@@ -57,6 +53,8 @@ def refine_segments_pre_vae(seg_dirs, audio_dirs, out_seg_dirs, p, \
 		Defaults to ``True``.
 	img_fn : str, optional
 		Image filename. Defaults to ``'temp.pdf'``.
+	tooltip_output_dir : str, optional
+		Where to save tooltip plot. Defaults to ``'temp'``.
 	"""
 	if verbose:
 		print("\nCleaning segments\n-----------------")
@@ -87,7 +85,8 @@ def refine_segments_pre_vae(seg_dirs, audio_dirs, out_seg_dirs, p, \
 				print("Writing html plot:")
 			first_iteration = False
 			title = "Select unwanted sounds:"
-			tooltip_plot(embed, specs, num_imgs=num_imgs, title=title)
+			tooltip_plot(embed, specs, num_imgs=num_imgs, title=title, \
+					output_dir=tooltip_output_dir)
 			if verbose:
 				print("\tDone.")
 		if input("Press [q] to quit drawing rectangles or [return] continue: ") == 'q':
@@ -111,60 +110,94 @@ def refine_segments_pre_vae(seg_dirs, audio_dirs, out_seg_dirs, p, \
 	Parallel(n_jobs=n_jobs)(delayed(_update_segs_helper)(*args) for args in gen)
 
 
-# def _refine_segments_post_vae(dc, seg_dirs, out_seg_dirs, verbose=True):
-# 	"""
-# 	Manually remove noise by selecting regions of UMAP latent mean projections.
-#
-#
-# 	Parameters
-# 	----------
-# 	dc : ava.data.data_container.DataContainer
-# 		DataContainer object
-# 	seg_dirs :
-# 		...
-# 	out_seg_dirs :
-# 		....
-# 	verbose : bool, optional
-# 		Defaults to ``True``.
-#
-# 	"""
-# 	embed = dc.request('latent_mean_umap')
-# 	bounds = {'x1': [], 'x2': [], 'y1': [], 'y2': []}
-# 	colors = ['b'] * len(embed)
-# 	first_iteration = True
-# 	raise NotImplementedError
-#
-# 	# Keep drawing boxes around noise.
-# 	while True:
-# 		_plot_helper(embed, colors, verbose=verbose)
-# 		if first_iteration:
-# 			if verbose:
-# 				print("Writing html plot:")
-# 			first_iteration = False
-# 			title = "Select unwanted sounds:"
-# 			tooltip_plot(embed, specs, num_imgs=num_imgs, title=title)
-# 			if verbose:
-# 				print("\tDone.")
-# 		if input("Press [q] to quit drawing rectangles: ") == 'q':
-# 			break
-# 		print("Select a rectangle containing noise:")
-# 		x1 = _get_input("x1: ")
-# 		x2 = _get_input("x2: ")
-# 		y1 = _get_input("y1: ")
-# 		y2 = _get_input("y2: ")
-# 		bounds['x1'].append(x1)
-# 		bounds['x2'].append(x2)
-# 		bounds['y1'].append(y1)
-# 		bounds['y2'].append(y2)
-# 		# Update scatter colors.
-# 		colors = _update_colors(colors, embed, bounds)
-#
-# 	# Write files to out_seg_dirs.
-# 	gen = zip(seg_dirs, audio_dirs, out_seg_dirs, repeat(p), repeat(max_len), \
-# 			repeat(transform), repeat(bounds), repeat(verbose))
-# 	n_jobs = min(len(seg_dirs), os.cpu_count()-1)
-# 	Parallel(n_jobs=n_jobs)(delayed(_update_segs_helper)(*args) for args in gen)
+def refine_segments_post_vae(dc, seg_dirs, audio_dirs, out_seg_dirs, \
+	verbose=True, num_imgs=2000, tooltip_output_dir='temp', make_tooltip=True):
+	"""
+	Manually remove noise by selecting regions of UMAP latent mean projections.
 
+	Doesn't support datasets that are too large to fit in memory.
+
+	Parameters
+	----------
+	dc : ava.data.data_container.DataContainer
+		DataContainer object
+	seg_dirs : list of str
+		Original segment directories.
+	out_seg_dirs : list of str
+		Output segment directories.
+	verbose : bool, optional
+		Defaults to ``True``.
+	num_imgs : int, optional
+		Number of images for tooltip plot. Defaults to ``2000``.
+	tooltip_output_dir : str, optional
+		Where to save tooltip plot. Defaults to ``'temp'``.
+	make_tooltip : bool, optional
+		Defaults to ``True``.
+	"""
+	# Get UMAP embedding.
+	embed = dc.request('latent_mean_umap')
+	bounds = {'x1': [], 'x2': [], 'y1': [], 'y2': []}
+	colors = ['b'] * len(embed)
+	first_iteration = True
+	# Keep drawing boxes around noise.
+	while True:
+		_plot_helper(embed, colors, verbose=verbose)
+		if first_iteration and make_tooltip:
+			if verbose:
+				print("Writing html plot:")
+			first_iteration = False
+			title = "Select unwanted sounds:"
+			specs = dc.request('specs')
+			tooltip_plot(embed, specs, num_imgs=num_imgs, title=title, \
+					output_dir=tooltip_output_dir, grid=True)
+			if verbose:
+				print("\tDone.")
+		if input("Press [q] to quit drawing or [return] to continue: ") == 'q':
+			break
+		print("Select a rectangle containing noise:")
+		x1 = _get_input("x1: ")
+		x2 = _get_input("x2: ")
+		y1 = _get_input("y1: ")
+		y2 = _get_input("y2: ")
+		bounds['x1'].append(min(x1,x2))
+		bounds['x2'].append(max(x1,x2))
+		bounds['y1'].append(min(y1,y2))
+		bounds['y2'].append(max(y1,y2))
+		# Update scatter colors.
+		colors = _update_colors(colors, embed, bounds)
+	# Write files to out_seg_dirs.
+	audio_fns = dc.request('audio_filenames')
+	segs = np.zeros((len(audio_fns), 2))
+	segs[:,0] = dc.request('onsets')
+	segs[:,1] = dc.request('offsets')
+	good_sylls = np.argwhere(colors == 'b').flatten()
+	good_sylls = [i for i in range(len(colors)) if colors[i] == 'b']
+	good_sylls = np.array(good_sylls, dtype='int')
+	for fn in np.unique(audio_fns):
+		# File stuff.
+		index = [1 if a in fn else 0 for a in audio_dirs].index(1)
+		seg_fn = os.path.split(fn)[-1][:-4] + '.txt'
+		out_seg_fn = os.path.join(out_seg_dirs[index], seg_fn)
+		seg_fn = os.path.join(seg_dirs[index], seg_fn)
+		if not os.path.exists(out_seg_dirs[index]):
+			os.makedirs(out_seg_dirs[index])
+		# Collect indices of syllables to save.
+		indices = np.argwhere(audio_fns == fn).flatten()
+		indices = np.intersect1d(indices, good_sylls, assume_unique=True)
+		header = "Cleaned onsets/offsets from: " + seg_fn
+		np.savetxt(out_seg_fn, segs[indices], fmt='%.5f', header=header)
+	# Write empty files if we don't have any syllables from them.
+	for audio_dir, out_seg_dir in zip(audio_dirs, out_seg_dirs):
+		for temp_fn in [os.path.join(audio_dir, i) for i in os.listdir(audio_dir)]:
+			if _is_audio_file(temp_fn) and temp_fn not in audio_fns:
+				header = "Cleaned onsets/offsets from: " + temp_fn
+				out_seg_fn = os.path.split(temp_fn)[-1][:-4] + '.txt'
+				out_seg_fn = os.path.join(out_seg_dir, out_seg_fn)
+				np.savetxt(out_seg_fn, np.array([]), header=header)
+	if verbose:
+		msg = "Retained "+str(sum(1 for i in colors if i=='b'))
+		msg += " out of " + str(len(colors)) + " segments."
+		print(msg)
 
 
 def _get_specs(audio_dirs, seg_dirs, p, n_samples=None, max_len=None):
@@ -180,19 +213,18 @@ def _get_specs(audio_dirs, seg_dirs, p, n_samples=None, max_len=None):
 	p : dict
 		Segementing parameters. TO DO: ADD REFERENCE!
 	n_samples : {int, None}, optional
-		...
+		Defaults to ``None``.
 	max_len : {int, None}, optional
-		...
+		Maximum number of spectrogram time bins.
 
 	Returns
 	-------
-	specs : ..
-		...
-	max_len : ...
-		...
+	specs : list of numpy.ndarray
+		Spectrograms.
+	max_len : int
+		Maximum number of spectrogram time bins.
 	all_fns : ...
 		...
-
 	"""
 	# Get the filenames.
 	audio_fns, seg_fns = get_audio_seg_filenames(audio_dirs, seg_dirs)
@@ -258,31 +290,30 @@ def _plot_helper(embed, colors, title="", filename='temp.pdf', verbose=True):
 		print("Grid plot saved to:", filename)
 
 
-
-def _update_segs_helper(seg_dir, audio_dir, out_seg_dir, p, max_len, transform,\
-	bounds, verbose):
+def _update_segs_helper(seg_dir, audio_dir, out_seg_dir, p, max_len,
+	transform, bounds, verbose):
 	"""
 	Write updated segments.
 
 	Parameters
 	----------
 	seg_dir : str
-		...
+		Original segment directory.
 	audio_dir : str
-		...
+		Audio directory.
 	out_seg_dir : str
-		...
+		Output segment directory.
 	p : dict
-		...
+		Params. TO DO: add reference!
 	max_len : int
-		...
-	transform : ...
-		...
-	bounds : ...
-		...
-	verbose : ...
-		...
-
+		Maximum number of spectrogram time bins.
+	transform : umap.umap_.UMAP
+		UMAP object.
+	bounds : dict
+		Maps the keys ``'x1'``, ``'x2'``, ``'y1'``, and ``'y2'`` to values
+		defining rectangular bounds.
+	verbose : bool
+		Verbosity.
 	"""
 	if verbose:
 		print("Updating segments in:", seg_dir)
@@ -319,13 +350,12 @@ def _write_segs(segs, out_fn, header_fn):
 
 	Parameters
 	----------
-	segs : list of
-		...
+	segs : list of lists
+		Onsets and offsets for each segment.
 	out_fn : str
-		...
+		Output filename.
 	header_fn : str
-		...
-
+		Filename to write in header.
 	"""
 	segs = np.stack([np.array(seg) for seg in segs])
 	header = "Cleaned onsets/offsets for " + header_fn
@@ -354,11 +384,14 @@ def _update_colors(colors, embed, bounds):
 def _in_bounds(point, bounds):
 	"""Is the point in the given rectangular bounds?"""
 	for i in range(len(bounds['x1'])):
-		if point[0] > bounds['x1'] and point[0] < bounds['x2'] and \
-				point[1] > bounds['y1'] and point[1] < bounds['y2']:
+		if point[0] > bounds['x1'][i] and point[0] < bounds['x2'][i] and \
+				point[1] > bounds['y1'][i] and point[1] < bounds['y2'][i]:
 			return True
 	return False
 
+
+def _is_audio_file(filename):
+	return len(filename) > 4 and filename[-4:] == '.wav'
 
 
 if __name__ == '__main__':

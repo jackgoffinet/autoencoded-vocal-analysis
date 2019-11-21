@@ -41,7 +41,6 @@ def process_sylls(audio_dir, segment_dir, save_dir, p, verbose=True):
 		Preprocessing parameters. TO DO: add reference.
 	verbose : bool, optional
 		Defaults to ``True``.
-
 	"""
 	if verbose:
 		print("Processing audio files in", audio_dir)
@@ -84,7 +83,7 @@ def process_sylls(audio_dir, segment_dir, save_dir, p, verbose=True):
 						data=np.array(syll_data[k][:sylls_per_file]))
 				f.create_dataset('specs', \
 					data=np.stack(syll_data['specs'][:sylls_per_file]))
-				temp = [os.path.join(save_dir, i) for i in \
+				temp = [os.path.join(audio_dir, i) for i in \
 					syll_data['audio_filenames'][:sylls_per_file]]
 				f.create_dataset('audio_filenames', \
 					data=np.array(temp).astype('S'))
@@ -120,7 +119,6 @@ def get_syll_specs(onsets, offsets, audio_filename, p):
 		Spectrograms
 	valid_syllables : list of int
 		Indices of `specs` containing valid syllables.
-
 	"""
 	fs, audio = wavfile.read(audio_filename)
 	assert p['nperseg'] % 2 == 0 and p['nperseg'] > 2
@@ -225,7 +223,6 @@ def tune_window_preprocessing_params(audio_dirs, p):
 	-------
 	p : dict
 		Adjusted preprocessing parameters.
-
 	"""
 	print("Tune preprocessing parameters:")
 
@@ -322,7 +319,6 @@ def read_onsets_offsets_from_file(txt_filename, p):
 	----
 	The text file must have two coulumns separated by whitespace and ``#``
 	prepended to header and footer lines.
-
 	"""
 	segs = np.loadtxt(txt_filename).reshape(-1,2)
 	return segs[:,0], segs[:,1]

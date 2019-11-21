@@ -1,4 +1,4 @@
-## Autoencoded Vocal Analysis 0.2.3
+## Autoencoded Vocal Analysis 0.2.4
 #### Generative modeling of animal vocalizations
 
 <img src="docs/source/logo.png" width="300" align="middle" alt="logo">

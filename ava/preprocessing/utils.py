@@ -26,7 +26,7 @@ def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None, target_times=None, \
 
 	Notes
 	-----
-	* `fill_value` necessary?
+	* ``fill_value`` necessary?
 	* Look at all references and see what can be simplified.
 
 	Parameters
@@ -45,8 +45,8 @@ def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None, target_times=None, \
 		Interpolated frequencies.
 	target_times : numpy.ndarray or ``None``, optional
 		Intepolated times.
-	fill_value : ....
-		...
+	fill_value : float, optional
+		Defaults to ``-1/EPSILON``.
 	max_dur : float, optional
 		Maximum duration.
 
@@ -60,7 +60,8 @@ def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None, target_times=None, \
 	if max_dur is None:
 		max_dur = p['max_dur']
 	if t2 - t1 > max_dur + 1e-4:
-		message = "Found segment longer than <max_dur>: "+str(t2-t1)+">"+str(max_dur)
+		message = "Found segment longer than <max_dur>: " + \
+				str(t2-t1)+">"+str(max_dur)
 		warnings.warn(message)
 	s1, s2 = int(round(t1*fs)), int(round(t2*fs))
 	assert s1 < s2, "s1: " + str(s1) + " s2: " + str(s2) + " t1: " + str(t1) + \

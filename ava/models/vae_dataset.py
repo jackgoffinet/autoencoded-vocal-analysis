@@ -70,14 +70,11 @@ def get_syllable_data_loaders(partition, batch_size=64, shuffle=(True, False), \
 	partition : dictionary
 		Test train split: a dictionary that maps the keys 'test' and 'train'
 		to disjoint lists of .hdf5 filenames containing syllables.
-
 	batch_size : int, optional
 		Batch size of the returned Dataloaders. Defaults to 32.
-
 	shuffle : tuple of bools, optional
 		Whether to shuffle data for the train and test Dataloaders,
 		respectively. Defaults to (True, False).
-
 	num_workers : int, optional
 		How many subprocesses to use for data loading. Defaults to 3.
 
@@ -86,7 +83,6 @@ def get_syllable_data_loaders(partition, batch_size=64, shuffle=(True, False), \
 	dataloaders : dictionary
 		Dictionary mapping two keys, ``'test'`` and ``'train'``, to respective
 		torch.utils.data.Dataloader objects.
-
 	"""
 	sylls_per_file = _get_sylls_per_file(partition)
 	train_dataset = SyllableDataset(filenames=partition['train'], \
@@ -114,10 +110,8 @@ class SyllableDataset(Dataset):
 		----------
 		filenames : list of strings
 			List of hdf5 files containing syllable spectrograms.
-
 		sylls_per_file : int
 			Number of syllables in each hdf5 file.
-
 		transform : None or function, optional
 			Transformation to apply to each item. Defaults to None (no
 			transformation)

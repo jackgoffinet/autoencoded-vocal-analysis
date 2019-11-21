@@ -1,9 +1,6 @@
 """
 Plot a syllable projection with spectrograms appearing as tooltips.
 
-
-TO DO:
-- Stop reading and writing the embedding.
 """
 __date__ = "March 2019 - July 2019"
 
@@ -18,29 +15,29 @@ import umap
 
 
 
-def tooltip_plot_DC(d, output_dir='html', num_imgs=5000, title="", n=30000,
+def tooltip_plot_DC(dc, output_dir='html', num_imgs=5000, title="", n=30000,
 	grid=False):
 	"""
 	DataContainer version of tooltip_plot.
 
 	Parameters
 	----------
-	d : ava.data.data_container.DataContainer
+	dc : ava.data.data_container.DataContainer
 		See ava.data.data_container for details.
 	output_dir : str, optional
-		Directory where html and jpegs are written. Deafaults to "temp".
+		Directory where html and jpegs are written. Deafaults to ``'temp'``.
 	num_imgs : int, optional
-		Number of points with tooltip images. Defaults to 10000.
+		Number of points with tooltip images. Defaults to ``10000``.
 	title : str, optional
-		Title of plot. Defaults to ''.
+		Title of plot. Defaults to ``''``.
 	n : int, optional
-		Total number of scatterpoints to plot. Defaults to 30000.
+		Total number of scatterpoints to plot. Defaults to ``30000``.
 	grid : bool, optional
-		Show x and y grid? Defaults to `False`.
+		Show x and y grid? Defaults to ``False``.
 	"""
-	embedding = d.request('latent_mean_umap')
-	images = d.request('specs')
-	output_dir = os.path.join(d.plots_dir, output_dir)
+	embedding = dc.request('latent_mean_umap')
+	images = dc.request('specs')
+	output_dir = os.path.join(dc.plots_dir, output_dir)
 	print("writing tooltip plot to", output_dir)
 	tooltip_plot(embedding, images, output_dir=output_dir, num_imgs=num_imgs, \
 		title=title, n=n, grid=grid)

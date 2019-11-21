@@ -224,7 +224,6 @@ class DataContainer():
 	It's fine to leave some of the initialization parameters unspecified. If the
 	DataContainer object is asked to do something it can't, it will hopefully
 	complain politely. Or at least informatively.
-
 	"""
 
 	def __init__(self, audio_dirs=None, segment_dirs=None, spec_dirs=None, \
@@ -261,7 +260,7 @@ class DataContainer():
 
 		Note
 		----
-		Besides `__init__` and `clean_projections`, this should be the only
+		Besides `__init__` and `clear_projections`, this should be the only
 		external-facing method.
 		"""
 		if field not in ALL_FIELDS:
@@ -282,7 +281,7 @@ class DataContainer():
 		return data
 
 
-	def clean_projections(self):
+	def clear_projections(self):
 		"""Remove all projections."""
 		for proj_dir in self.projection_dirs:
 			fns = [os.path.join(proj_dir, i) for i in os.listdir(proj_dir)]
@@ -290,6 +289,22 @@ class DataContainer():
 			for fn in fns:
 				os.remove(fn)
 		self.fields = self._check_for_fields()
+
+
+	def clean_projections(self):
+		"""
+		Remove all projections.
+
+		Note
+		----
+		* This will be deprecated in 0.3.0. Use ``clear_projections`` instead.
+		"""
+		warnings.warn(
+			"clean_projections will be deprecated in v0.2.5. " + \
+			"Use clear_projections instead.",
+			UserWarning
+		)
+		self.clear_projections()
 
 
 	def _make_field(self, field):
@@ -355,7 +370,7 @@ class DataContainer():
 			for j, hdf5 in enumerate(hdf5s):
 				filename = os.path.join(load_dir, os.path.split(hdf5)[-1])
 				with h5py.File(filename, 'r') as f:
-					assert (field in f), "Can\'t find field \'"+field+"\' in"+\
+					assert field in f, "Can\'t find field \'"+field+"\' in"+ \
 						" file \'"+filename+"\'!"
 					if field == 'audio_filenames':
 						data = np.array([k.decode('UTF-8') for k in f[field]])
@@ -447,7 +462,8 @@ class DataContainer():
 			self.sylls_per_file = len(f['specs'])
 		spf = self.sylls_per_file
 		# Load the model, making sure to get z_dim correct.
-		z_dim = torch.load(self.model_filename)['z_dim']
+		map_loc = 'cuda' if torch.cuda.is_available() else 'cpu'
+		z_dim = torch.load(self.model_filename, map_location=map_loc)['z_dim']
 		model = VAE(z_dim=z_dim)
 		model.load_state(self.model_filename)
 		# For each directory...
@@ -467,9 +483,7 @@ class DataContainer():
 				all_latent.append(latent_means)
 				# Write them to the corresponding projection directory.
 				hdf5s = get_hdf5s_from_dir(spec_dir)
-				assert len(latent_means) // len(hdf5s) == spf, "Inconsistent number\
-					of syllables per file ("+str(len(latent_means) // len(hdf5s))+\
-					") in directory "+spec_dir+". Expected "+str(spf)+"."
+				assert len(latent_means) // len(hdf5s) == spf
 				for j in range(len(hdf5s)):
 					filename = os.path.join(proj_dir, os.path.split(hdf5s[j])[-1])
 					data = latent_means[j*spf:(j+1)*spf]

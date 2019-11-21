@@ -26,8 +26,52 @@ def latent_projection_plot_DC(dc, embedding_type='latent_mean_umap', \
 	save_and_close=True, show_axis=False, default_color='b', \
 	condition_func=None):
 	"""
+	Make a scatterplot of latent means projected to two dimensions.
+
 	Parameters
 	----------
+	dc : ava.data.data_container.DataContainer
+		See ava.data.data_container.
+	embedding_type : str, optional
+		Defaults to ``'latent_mean_umap'``.
+	color_by : {str, None}, optional
+		If ``None``, all points are colored ``default_color``. Otherwise,
+		``color_by`` is requested from the DataContainer and passed to the
+		matplotlib.pyplot.scatter as the color parameter. The one exception is
+		if ``color_by == 'filename_lambda'``, in which case, scatter color is
+		some function of the audio filename, passed to ``condition_func``.
+		Defaults to ``None``.
+	title : {str, None}, optional
+		Plot title. Defaults to ``None``.
+	filename : str, optional
+		Where to save the image, relative to ``dc.plots_dir``. Defaults to
+		``'latent.pdf'``.
+	colorbar : bool, optional
+		Whether to include a colorbar. Defaults to ``False``.
+	colormap : str, optional
+		The pyplot colormap to use if color_by returns numerical values.
+		Defaults to ``'viridis'``.
+	alpha : float, optional
+		Alpha value of scatterpoints. Defaults to ``0.5``.
+	s : float, optional
+		Size of scatterpoints. Defaults to ``0.9``.
+	ax : {..., None}, optional
+	 	Scatter axis. If ``None``, ``matplotlib.pyplot.gca()`` is used. Defaults
+		to ``None``.
+	cax : {..., None}, optional
+		Colorbar axis. If ``None``, an axis is made. Defaults to ``None``.
+	shuffle : bool, optional
+		Whether to shuffle to zorder of points. Defaults to ``True``.
+	save_and_close : bool, optional
+		Defaults to ``True``.
+	show_axis : bool, optional
+		Defaults to ``False``.
+	default_color : str, optional
+		Defaults to ``'b'``.
+	condition_func : {function, None}, optional
+		Only used when ``color_by == 'filename_lambda'``, in which case
+		``condition_func`` maps audio filenames to pyplot colors. Defaults to
+		``None``.
 	"""
 	embedding = dc.request(embedding_type)
 	if color_by is None:
@@ -36,6 +80,7 @@ def latent_projection_plot_DC(dc, embedding_type='latent_mean_umap', \
 		assert condition_func is not None
 		fns = dc.request('audio_filenames')
 		color = [condition_func(fn) for fn in fns]
+		alpha = None # Let condition_func handle alpha values.
 	else:
 		color = dc.request(color_by)
 	if title is None and color_by not in [None, 'filename_lambda']:
@@ -48,12 +93,27 @@ def latent_projection_plot_DC(dc, embedding_type='latent_mean_umap', \
 		save_and_close=save_and_close, show_axis=show_axis)
 
 
-def latent_projection_plot_with_noise_DC(dc, embedding_type='latent_mean_umap', \
-	color_by=None, title=None, filename='latent.pdf', colorbar=False, \
-	colormap='viridis', alpha=0.5, s=0.9, ax=None, cax=None, shuffle=True, \
-	save_and_close=True, show_axis=False, default_color='b', \
-	condition_func=None, noise_box=None):
-	assert noise_box is not None
+def latent_projection_plot_with_noise_DC(dc, noise_box,
+	embedding_type='latent_mean_umap', color_by=None, title=None, \
+	filename='latent.pdf', colorbar=False, colormap='viridis', alpha=0.5, \
+	s=0.9, ax=None, cax=None, shuffle=True, save_and_close=True, \
+	show_axis=False, default_color='b', condition_func=None):
+	"""
+	Same as latent_projection_plot_DC, but with noise to exclude.
+
+	Parameters
+	----------
+	dc : ava.data.data_container.DataContainer
+		See ava.data.data_container.
+	noise_box : list of float
+		Must contain four elements: ``[x1, x2, y1, y2]``, which are interpreted
+		as a region of the latent mean UMAP embedding containing noise. The
+		points within this rectangle are excluded.
+
+	Note
+	----
+	For other parameters, see latent_projection_plot_DC.
+	"""
 	embedding = dc.request(embedding_type)
 	indices = []
 	x1, x2, y1, y2 = noise_box
@@ -90,7 +150,7 @@ def latent_projection_plot_with_noise_DC(dc, embedding_type='latent_mean_umap', 
 		show_axis=show_axis)
 
 
-def projection_plot(embedding, color='b', title="",
+def projection_plot(embedding, color='b', title=None,
 	save_filename='latent.pdf', colorbar=False, shuffle=True, \
 	colormap='viridis', alpha=0.6, s=0.9, ax=None, cax=None, \
 	save_and_close=True, show_axis=False):
@@ -100,8 +160,16 @@ def projection_plot(embedding, color='b', title="",
 	----------
 	embedding : numpy.ndarray
 		...
-
-	color : str or numpy.ndarray, optional
+	color : {str, numpy.ndarray}, optional
+		Defaults to ``'b'``.
+	title : {str, None}, optional
+		Defaults to ``None``.
+	save_filename : str, optional
+		Defaults to ``'temp.pdf'``.
+	colorbar : bool, optional
+		...
+	shuffle : bool, optional
+		...
 	"""
 	X, Y = embedding[:,0], embedding[:,1]
 	if shuffle:
