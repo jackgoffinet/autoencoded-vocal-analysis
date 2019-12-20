@@ -312,12 +312,15 @@ class VAE(nn.Module):
 		latent_dist = LowRankMultivariateNormal(mu, u, d)
 		z = latent_dist.rsample()
 		x_rec = self.decode(z)
-		elbo = -0.5 * (torch.sum(torch.pow(z,2)) + self.z_dim * \
-			np.log(2*np.pi)) # E_{q} p(z)
-		elbo = elbo + -0.5 * (self.model_precision * \
-			torch.sum(torch.pow(x.view(-1,X_DIM) - x_rec, 2)) + self.X_DIM * \
-			np.log(2*np.pi)) # E_{q} p(x|z)
-		elbo = elbo + torch.sum(latent_dist.entropy()) # H[q(z|x)]
+		# E_{q(z|x)} p(z)
+		elbo = -0.5 * (torch.sum(torch.pow(z,2)) + self.z_dim * np.log(2*np.pi))
+		# E_{q(z|x)} p(x|z)
+		pxz_term = -0.5 * X_DIM * (np.log(2*np.pi/self.model_precision))
+		l2s = torch.sum(torch.pow(x.view(x.shape[0],-1) - x_rec, 2), dim=1)
+		pxz_term = pxz_term - 0.5 * self.model_precision * torch.sum(l2s)
+		elbo = elbo + pxz_term
+		# H[q(z|x)]
+		elbo = elbo + torch.sum(latent_dist.entropy())
 		if return_latent_rec:
 			return -elbo, z.detach().cpu().numpy(), \
 				x_rec.view(-1, X_SHAPE[0], X_SHAPE[1]).detach().cpu().numpy()
