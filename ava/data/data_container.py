@@ -6,8 +6,6 @@ This is meant to make plotting and analysis easier.
 TO DO
 -----
 - request random subsets.
-- throw better errors
-- Read feature files.
 - make sure input directories are iterable
 - add features to existing files.
 """
@@ -300,7 +298,7 @@ class DataContainer():
 		* This will be deprecated in 0.3.0. Use ``clear_projections`` instead.
 		"""
 		warnings.warn(
-			"clean_projections will be deprecated in v0.2.5. " + \
+			"clean_projections will be deprecated in v0.3.0. " + \
 			"Use clear_projections instead.",
 			UserWarning
 		)
@@ -341,8 +339,8 @@ class DataContainer():
 		Parameters
 		----------
 		field : str
-			Field name to read from file.
-
+			Field name to read from file. See ``ALL_FIELDS`` for possible
+			fields.
 		"""
 		if field in AUDIO_FIELDS:
 			raise NotImplementedError
@@ -385,7 +383,6 @@ class DataContainer():
 		Read all the segmented audio and return it.
 
 		result[audio_dir][audio_filename] = [audio_1, audio_2, ..., audio_n]
-
 		"""
 		self._check_for_dirs(['audio_dirs'], 'audio')
 		segments = self.request('segments')
@@ -420,7 +417,6 @@ class DataContainer():
 		-------
 		segments : dict
 			Maps audio directories to audio filenames to numpy arrays.
-
 		"""
 		self._check_for_dirs(['audio_dirs', 'segment_dirs'], 'segments')
 		result = {}
@@ -450,7 +446,6 @@ class DataContainer():
 		Note
 		----
 		* Duplicated code with ``_write_projection``?
-
 		"""
 		self._check_for_dirs(['projection_dirs', 'spec_dirs', 'model_filename'],\
 			'latent_means')
@@ -562,8 +557,8 @@ class DataContainer():
 		"""
 		Read a feature from a text file and put it in an hdf5 file.
 
-		Read from self.feature_dirs and write to self.projection_dirs.
-		This gets a bit tricky because we need to match up the syllables in the
+		Read from self.feature_dirs and write to self.projection_dirs. This
+		could be a bit tricky because we need to match up the syllables in the
 		text file with the ones in the hdf5 file.
 
 		Parameters
@@ -739,17 +734,14 @@ def _read_columns(filename, columns=(0,1), delimiter=',', skiprows=1, \
 
 
 def _is_seg_file(filename):
-	"""
-	Is this a segmenting file?
-
-	TO DO: add csvs, delimiters
-	"""
+	"""Is this a segmenting file?"""
 	return len(filename) > 4 and filename[-4:] == '.txt'
 
 
 def _is_wav_file(filename):
 	"""Is this a wav file?"""
 	return len(filename) > 4 and filename[-4:] == '.wav'
+
 
 
 if __name__ == '__main__':

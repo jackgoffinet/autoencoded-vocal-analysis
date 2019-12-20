@@ -1,4 +1,4 @@
-## Autoencoded Vocal Analysis 0.2.4
+## Autoencoded Vocal Analysis 0.2.5
 #### Generative modeling of animal vocalizations
 
 <img src="docs/source/logo.png" width="300" align="middle" alt="logo">
@@ -32,3 +32,5 @@ Issues and/or pull requests are appreciated!
 * [DeepSqueak](https://github.com/DrCoffey/DeepSqueak) and
 	[MUPET](https://github.com/mvansegbroeck/mupet), MATLAB packages for
 	detecting and classifying rodent ultrasonic vocalizations.
+* [Sound Analysis Pro](http://www.soundanalysispro.com/), software for analyzing
+	birdsong.

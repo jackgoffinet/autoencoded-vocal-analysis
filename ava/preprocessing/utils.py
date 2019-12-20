@@ -1,12 +1,8 @@
 """
 Useful functions for preprocessing.
 
-TO DO
------
-* Clean up ``get_spec``.
-
 """
-__date__ = "August 2019"
+__date__ = "August-December 2019"
 
 
 import numpy as np
@@ -28,6 +24,7 @@ def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None, target_times=None, \
 	-----
 	* ``fill_value`` necessary?
 	* Look at all references and see what can be simplified.
+	* Why is there a flag returned?
 
 	Parameters
 	----------
@@ -55,7 +52,7 @@ def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None, target_times=None, \
 	spec : numpy.ndarray
 		Spectrogram.
 	flag : bool
-		...
+		``True``
 	"""
 	if max_dur is None:
 		max_dur = p['max_dur']

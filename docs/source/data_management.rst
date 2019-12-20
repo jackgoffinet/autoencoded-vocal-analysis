@@ -63,7 +63,7 @@ We can use the DataContainer object to tie this all together:
 			model_filename=model_fn)
 
 
-The DataContainer has only one publicly-facing method: :code:`request`
+The DataContainer has one main publicly-facing method: :code:`request`
 
 .. code:: Python3
 

@@ -17,6 +17,8 @@ Contents
 	├── plotting
 	│	├── grid_plot
 	│	├── latent_projection
+	│	├── mmd_plots
+	│	├── shotgun_movie
 	│	└── tooltip_plot
 	├── preprocessing
 	│	├── preprocess

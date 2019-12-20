@@ -25,7 +25,8 @@ EPSILON = 1e-12
 
 
 
-def process_sylls(audio_dir, segment_dir, save_dir, p, verbose=True):
+def process_sylls(audio_dir, segment_dir, save_dir, p, shuffle=True, \
+	verbose=True):
 	"""
 	Extract syllables from `audio_dir` and save to `save_dir`.
 

@@ -6,4 +6,6 @@
                  plotting.mmd_plots added
                  plotting.shotgun_movie added
                  preprocessing.preprocess.process_sylls bug fix
-								 segmenting.refine_segments.refine_segments_post_vae added
+                 segmenting.refine_segments.refine_segments_post_vae added
+0.2.5  12/20/19  preprocessing.preprocess.process_sylls now shuffles by default.
+                 Small changes to DataContainer.

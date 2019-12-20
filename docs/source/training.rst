@@ -80,9 +80,9 @@ the VAE's tendency to regularize overwhelms its ability to reconstruct
 spectrograms, and is the tendency of the VAE to ignore its input so that each
 reconstruction is simply the mean spectrogram. There are two ways to deal with
 this in AVA. First, we can increase the contrast of the spectrograms by
-decreasing the range between :code:`'spec_min_val'` and :code:`'spec_max_'` in the
-preprocessing step. Second, we can increase the model precision in the training
-step to strike a different regularization/reconstruction tradeoff:
+decreasing the range between :code:`'spec_min_val'` and :code:`'spec_max_val'`
+in the preprocessing step. Second, we can increase the model precision in the
+training step to strike a different regularization/reconstruction tradeoff:
 
 .. code:: Python3
 

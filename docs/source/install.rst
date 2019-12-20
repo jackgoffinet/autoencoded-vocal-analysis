@@ -7,6 +7,9 @@ addition to these packages, AVA also requires `PyTorch <https://pytorch.org>`__
 (>=v1.1), `UMAP <https://umap-learn.readthedocs.io/>`__, and
 `affinewarp <https://github.com/ahwillia/affinewarp>`__.
 
+Installation
+############
+
 AVA can be installed by opening a
 `shell <https://en.wikipedia.org/wiki/Command-line_interface>`__, navigating to a
 suitable directory, and entering the following commands:
@@ -31,5 +34,5 @@ GPU Acceleration
 ################
 
 Like most neural network models, the VAE trains much faster on GPU than on
-CPU. Training times on GPU are about 30 minutes to a couple hours, and roughly
-10-20x slower on CPU.
+CPU. Training times on GPU are about 30 minutes to a few hours, and roughly
+10x slower on CPU. If you have a GPU, make sure to install PyTorch with CUDA.

@@ -94,9 +94,9 @@ class VAE(nn.Module):
 			Precision of the noise model, p(x|z) = N(mu(z), \Lambda) where
 			\Lambda = model_precision * I. Defaults to 10.0.
 		device_name: str, optional
-			Name of device to train the model on. Valid options are ["cpu", "cuda",
-			"auto"]. "auto" will choose "cuda" if it is available. Defaults to
-			"auto".
+			Name of device to train the model on. Valid options are ["cpu",
+			"cuda", "auto"]. "auto" will choose "cuda" if it is available.
+			Defaults to "auto".
 
 		Note
 		----
@@ -313,11 +313,11 @@ class VAE(nn.Module):
 		z = latent_dist.rsample()
 		x_rec = self.decode(z)
 		elbo = -0.5 * (torch.sum(torch.pow(z,2)) + self.z_dim * \
-			np.log(2*np.pi)) # B * p(z)
+			np.log(2*np.pi)) # E_{q} p(z)
 		elbo = elbo + -0.5 * (self.model_precision * \
-			torch.sum(torch.pow(x.view(-1,X_DIM) - x_rec, 2)) + self.z_dim * \
-			np.log(2*np.pi)) # ~ B * E_{q} p(x|z)
-		elbo = elbo + torch.sum(latent_dist.entropy()) # ~ B * H[q(z|x)]
+			torch.sum(torch.pow(x.view(-1,X_DIM) - x_rec, 2)) + self.X_DIM * \
+			np.log(2*np.pi)) # E_{q} p(x|z)
+		elbo = elbo + torch.sum(latent_dist.entropy()) # H[q(z|x)]
 		if return_latent_rec:
 			return -elbo, z.detach().cpu().numpy(), \
 				x_rec.view(-1, X_SHAPE[0], X_SHAPE[1]).detach().cpu().numpy()
@@ -342,10 +342,10 @@ class VAE(nn.Module):
 		self.train()
 		train_loss = 0.0
 		for batch_idx, data in enumerate(train_loader):
+			self.optimizer.zero_grad()
 			data = data.to(self.device)
 			loss = self.forward(data)
 			train_loss += loss.item()
-			self.optimizer.zero_grad()
 			loss.backward()
 			self.optimizer.step()
 		train_loss /= len(train_loader.dataset)
@@ -447,7 +447,7 @@ class VAE(nn.Module):
 		"""
 		Load all the model parameters from the given ``.tar`` file.
 
-		The ``.tar`` file should have been written by `self.save_state`.
+		The ``.tar`` file should be written by `self.save_state`.
 
 		Parameters
 		----------
@@ -531,7 +531,6 @@ class VAE(nn.Module):
 		----
 		- Make sure your loader is not set to shuffle if you're going to match
 		  these with labels or other fields later.
-
 		"""
 		latent = np.zeros((len(loader.dataset), self.z_dim))
 		i = 0

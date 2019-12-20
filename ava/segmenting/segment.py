@@ -42,7 +42,7 @@ def segment(audio_dir, seg_dir, p, verbose=True):
 		Defaults to ``True``.
 	"""
 	if verbose:
-		print("\nSegmenting audio in", audio_dir+"\n"+'-'*(20+len(audio_dir)))
+		print("Segmenting audio in", audio_dir)
 	if not os.path.exists(seg_dir):
 		os.makedirs(seg_dir)
 	num_sylls = 0
@@ -58,16 +58,16 @@ def segment(audio_dir, seg_dir, p, verbose=True):
 		header = "Onsets/offsets for " + audio_fn
 		np.savetxt(seg_fn, combined, fmt='%.5f', header=header)
 	if verbose:
-		print("Found", num_sylls, "segments in", audio_dir)
+		print("\tFound", num_sylls, "segments in", audio_dir)
 
 
-def tune_segmenting_params(load_dirs, p, img_fn='temp.pdf'):
+def tune_segmenting_params(audio_dirs, p, img_fn='temp.pdf'):
 	"""
 	Tune segementing parameters by visualizing segmenting decisions.
 
 	Parameters
 	----------
-	load_dirs : list of str
+	audio_dirs : list of str
 		Directories containing audio files.
 	p : dict
 		Segmenting parameters. TO DO: ADD REFERENCE!
@@ -82,11 +82,11 @@ def tune_segmenting_params(load_dirs, p, img_fn='temp.pdf'):
 	print("Tune segmenting parameters\n---------------------------")
 	# Collect filenames.
 	filenames = []
-	for load_dir in load_dirs:
+	for load_dir in audio_dirs:
 		filenames += [os.path.join(load_dir, i) for i in os.listdir(load_dir) \
 				if _is_audio_file(i)]
 	if len(filenames) == 0:
-		warnings.warn("Found no audio files in directories: "+str(load_dirs))
+		warnings.warn("Found no audio files in directories: "+str(audio_dirs))
 		return
 	# Set the amount of audio to display.
 	if 'window_dur' in p:
