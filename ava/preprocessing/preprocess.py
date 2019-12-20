@@ -40,6 +40,8 @@ def process_sylls(audio_dir, segment_dir, save_dir, p, shuffle=True, \
 		Directory to save processed syllables in.
 	p : dict
 		Preprocessing parameters. TO DO: add reference.
+	shuffle : bool, optional
+		Shuffle by filename. Defaults to ``True``.
 	verbose : bool, optional
 		Defaults to ``True``.
 	"""
@@ -49,6 +51,13 @@ def process_sylls(audio_dir, segment_dir, save_dir, p, shuffle=True, \
 		os.makedirs(save_dir)
 	audio_filenames, seg_filenames = \
 			get_audio_seg_filenames(audio_dir, segment_dir, p)
+	if shuffle:
+		np.random.seed(42)
+		perm = np.random.permutation(len(audio_filenames))
+		np.random.seed(None)
+		audio_filenames = np.array(audio_filenames)[perm]
+		seg_filenames = np.array(seg_filenames)[perm]
+		
 	write_file_num = 0
 	syll_data = {
 		'specs':[],
