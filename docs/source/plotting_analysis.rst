@@ -34,3 +34,16 @@ This plots a UMAP projection of the latent means and saves the result to
 :code:`os.path.join(dc.plots_dir, 'latent.pdf')`.
 
 See the :code:`ava.plotting` documentation for more plotting and analysis tools.
+
+
+Shotgun VAE
+###########
+
+In order to use some of these plotting functions with the shotgun VAE, we need
+to first save some spectrograms. The shotgun VAE dataset has a method to do
+this: ``write_hdf5_files``
+
+.. code:: Python3
+
+	spec_dir = 'where/to/save/specs'
+	loaders['test'].dataset.write_hdf5_files(spec_dir, num_files=1000)

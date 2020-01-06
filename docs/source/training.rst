@@ -64,7 +64,35 @@ You may also want to continue training a previously saved model:
 Shotgun VAE Training
 ####################
 
-TO DO
+Training the shotgun VAE is pretty similar to training the syllable VAE, the
+main difference being the Dataloader we feed it: instead of making spectrograms
+beforehand, we make them during training.
+
+.. code:: Python3
+
+	# Define parameters and directories.
+	params = {...}
+	audio_dirs = [...]
+	roi_dirs = [...] # same format as syllable segments
+
+	# Make a Dataloader.
+	from ava.models.window_vae_dataset import get_window_partition, \
+			get_fixed_window_data_loaders
+	split = 0.8 # 80/20 train/test split
+	partition = get_window_partition(audio_dirs, roi_dirs, split)
+	loaders = get_fixed_window_data_loaders(partition, params)
+
+
+Then training is the same as before:
+
+.. code:: Python3
+
+	# Train.
+	from ava.models.vae import VAE
+	save_dir = 'model/parameters/should/be/saved/here/'
+	model = VAE(save_dir=save_dir)
+	model.train_loop(loaders, epochs=101)
+
 
 Warped Shotgun VAE Training
 ###########################

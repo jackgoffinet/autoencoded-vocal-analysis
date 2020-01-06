@@ -3,7 +3,7 @@ Minimal working example for shotgun VAE using unwarped birdsong.
 
 0) Define directories and parameters.
 1) Tune preprocessing parameters.
-2) Warp song renditions & train a generative model.
+2) Train the VAE.
 3) Plot and analyze.
 
 """
@@ -52,7 +52,7 @@ audio_dirs = [os.path.join(root, 'audio')]
 roi_dirs = [os.path.join(root, 'segs')]
 spec_dirs = [os.path.join(root, 'h5s')]
 proj_dirs = [os.path.join(root, 'proj')]
-model_filename = os.path.join(root, 'checkpoint_050.tar')
+model_filename = os.path.join(root, 'checkpoint_100.tar')
 plots_dir = root
 
 
@@ -84,7 +84,6 @@ model.train_loop(loaders, epochs=101, test_freq=None)
 ########################
 from ava.plotting.tooltip_plot import tooltip_plot_DC
 from ava.plotting.latent_projection import latent_projection_plot_DC
-from ava.plotting.trace_plot import warped_trace_plot_DC
 
 loaders['test'].dataset.write_hdf5_files(spec_dirs[0], num_files=1000)
 latent_projection_plot_DC(dc, alpha=0.25, s=0.5)

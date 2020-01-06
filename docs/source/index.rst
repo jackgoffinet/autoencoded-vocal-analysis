@@ -29,7 +29,7 @@ See the `examples/` subdirectory
 
 .. toctree::
    :maxdepth: 1
-   :caption: User Guide (in progress):
+   :caption: User Guide:
 
    install
    overview
