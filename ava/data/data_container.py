@@ -282,6 +282,8 @@ class DataContainer():
 	def clear_projections(self):
 		"""Remove all projections."""
 		for proj_dir in self.projection_dirs:
+			if not os.path.exists(proj_dir):
+				continue
 			fns = [os.path.join(proj_dir, i) for i in os.listdir(proj_dir)]
 			fns = [i for i in fns if len(i) > 5 and i[-5:] == '.hdf5']
 			for fn in fns:

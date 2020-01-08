@@ -44,11 +44,14 @@ into the VAE. First, we want to define and tune our preprocessing parameters:
 
 This will start an interactive tuning process, where parameters can be adjusted
 and the resulting spectrograms will be saved as an image, by default
-:code:`temp.pdf`.
+:code:`temp.pdf`. We can keep tuning these parameter values until we're happy
+with the spectrograms they produce.
 
-Once we're happy with these parameter values, we can make a spectrogram for each
-detected syllable. These spectrograms should be saved in their own directories
-with a 1-to-1 correspondence between audio directories and segment directories:
+If we're doing a shotgun VAE analysis, then we use these parameters to make the
+Dataloaders (next section). Otherwise, if we're doing a syllable-level analysis,
+we make a spectrogram for each detected syllable. These spectrograms should be
+saved in their own directories with a 1-to-1 correspondence between audio
+directories and segment directories:
 
 
 .. code:: Python3
