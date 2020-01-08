@@ -167,7 +167,7 @@ saved in :code:`'html/'`. You can enter multiple rectangles to cover more
 complicated regions. Selected songs will be shown in blue in an image, by
 default saved as :code:`'temp.pdf'`.
 
-When we press :coded:`c` to continue, the function will keep running, going
+When we press :code:`c` to continue, the function will keep running, going
 through each segment directory and cleaning out the segments that don't get
 projected into one of the boxes we just defined.
 
