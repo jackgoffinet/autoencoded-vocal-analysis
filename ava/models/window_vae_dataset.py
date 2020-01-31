@@ -244,6 +244,10 @@ class FixedWindowDataset(Dataset):
 		"""
 		Write hdf5 files containing spectrograms of random audio chunks.
 
+		To do
+		-----
+		- Write to multiple directories.
+
 		Note
 		----
 	 	This should be consistent with
