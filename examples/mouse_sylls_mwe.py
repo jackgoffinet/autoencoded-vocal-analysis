@@ -33,7 +33,7 @@ from ava.segmenting.amplitude_segmentation import get_onsets_offsets
 #########################################
 # 0) Define directories and parameters. #
 #########################################
-mouse_params = {
+params = {
 	'segment': {
 		'min_freq': 30e3,
 		'max_freq': 110e3,
@@ -85,8 +85,8 @@ proj_dirs = [os.path.join(root, 'projections')]
 spec_dirs = [os.path.join(root, 'specs')]
 model_filename = os.path.join(root, 'checkpoint_150.tar')
 plots_dir = root
-dc = DataContainer(projection_dirs=proj_dirs, feature_dirs=feature_dirs,
-	spec_dirs=spec_dirs, plots_dir=plots_dir, model_filename=model_filename)
+dc = DataContainer(projection_dirs=proj_dirs, spec_dirs=spec_dirs, \
+		plots_dir=plots_dir, model_filename=model_filename)
 
 
 ##################################
@@ -103,10 +103,10 @@ gen = zip(audio_dirs, seg_dirs, repeat(params['segment']))
 Parallel(n_jobs=n_jobs)(delayed(segment)(*args) for args in gen)
 
 
-###############################################
-# 2.5) (optional) Clean segmenting decisions. #
-###############################################
-refine_segments_pre_vae(seg_dirs, audio_dirs, new_seg_dirs, params['segment'])
+# ###############################################
+# # 2.5) (optional) Clean segmenting decisions. #
+# ###############################################
+# refine_segments_pre_vae(seg_dirs, audio_dirs, new_seg_dirs, params['segment'])
 
 
 #####################################
