@@ -2,7 +2,7 @@
 Segment song motifs by finding maxima in spectrogram cross correlations.
 
 """
-__date__ = "April - November 2019"
+__date__ = "April 2019 - June 2020"
 
 
 from affinewarp import ShiftWarping
@@ -10,6 +10,10 @@ from itertools import repeat
 from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
+try:
+	from numba.errors import NumbaPerformanceWarning
+except NameError:
+	pass
 import numpy as np
 from scipy.io import wavfile
 from scipy.signal import stft
@@ -20,14 +24,12 @@ import warnings
 
 from ava.plotting.tooltip_plot import tooltip_plot
 
-# Silence numpy.loadtxt when reading empty files.
-warnings.filterwarnings("ignore", category=UserWarning)
 
 EPSILON = 1e-9
 
 
 
-def get_template(feature_dir, p, smoothing_kernel=(0.5, 0.5)):
+def get_template(feature_dir, p, smoothing_kernel=(0.5, 0.5), verbose=True):
 	"""
 	Create a linear template given exemplar spectrograms.
 
@@ -41,6 +43,8 @@ def get_template(feature_dir, p, smoothing_kernel=(0.5, 0.5)):
 	smoothing_kernel : tuple of floats, optional
 		Each spectrogram is blurred using a gaussian kernel with the following
 		bandwidths, in bins. Defaults to ``(0.5, 0.5)``.
+	verbose : bool, optional
+		Defaults to ``True``.
 
 	Returns
 	-------
@@ -48,7 +52,7 @@ def get_template(feature_dir, p, smoothing_kernel=(0.5, 0.5)):
 		Spectrogram template.
 	"""
 	filenames = [os.path.join(feature_dir, i) for i in os.listdir(feature_dir) \
-		if _is_audio_file(i)]
+		if _is_wav_file(i)]
 	specs = []
 	for i, filename in enumerate(filenames):
 		fs, audio = wavfile.read(filename)
@@ -64,13 +68,16 @@ def get_template(feature_dir, p, smoothing_kernel=(0.5, 0.5)):
 	# Normalize to unit norm.
 	template -= np.mean(template)
 	template /= np.sum(np.power(template, 2)) + EPSILON
+	if verbose:
+		duration = min_time_bins * dt
+		print("Made template:", len(filenames), "files, duration:", duration)
 	return template
 
 
 def segment_files(audio_dirs, segment_dirs, template, p, num_mad=2.0, \
-	min_dt=0.05, n_jobs=1):
+	min_dt=0.05, n_jobs=1, verbose=True):
 	"""
-	Write segments.
+	Write segments to text files.
 
 	Parameters
 	----------
@@ -90,12 +97,16 @@ def segment_files(audio_dirs, segment_dirs, template, p, num_mad=2.0, \
 		Minimum duration between cross correlation maxima. Defaults to ``0.05``.
 	n_jobs : int, optional
 		Number of jobs for parallelization. Defaults to ``1``.
+	verbose : bool, optional
+		Defaults to ``True``.
 
 	Returns
 	-------
 	result : dict
 		Maps audio filenames to segments (numpy.ndarrays).
 	"""
+	if verbose:
+		print("Segmenting files...")
 	# Collect all the filenames we need to parallelize.
 	all_audio_fns = []
 	all_seg_dirs = []
@@ -103,7 +114,7 @@ def segment_files(audio_dirs, segment_dirs, template, p, num_mad=2.0, \
 		if not os.path.exists(segment_dir):
 			os.makedirs(segment_dir)
 		audio_fns = [os.path.join(audio_dir, i) for i in os.listdir(audio_dir) \
-			if _is_audio_file(i)]
+			if _is_wav_file(i)]
 		all_audio_fns = all_audio_fns + audio_fns
 		all_seg_dirs = all_seg_dirs + [segment_dir]*len(audio_fns)
 	# Segment.
@@ -117,15 +128,30 @@ def segment_files(audio_dirs, segment_dirs, template, p, num_mad=2.0, \
 		segment_fn = os.path.split(audio_fn)[-1][:-4] + '.txt'
 		segment_fn = os.path.join(segment_dir, segment_fn)
 		np.savetxt(segment_fn, segments, fmt='%.5f')
+	# Return a dictionary mapping audio filenames to segments.
 	return result
 
 
 def read_segment_decisions(audio_dirs, segment_dirs):
-	"""Returns the same data as ``segment_files``."""
+	"""
+	Returns the same data as ``segment_files``.
+
+	Parameters
+	----------
+	audio_dirs : list of str
+		Audio directories.
+	segment_dirs : list of str
+		Segment directories.
+
+	Returns
+	-------
+	result : dict
+		Maps audio filenames to segments.
+	"""
 	result = {}
 	for audio_dir, segment_dir in zip(audio_dirs, segment_dirs):
 		audio_fns = [os.path.join(audio_dir, i) for i in os.listdir(audio_dir) \
-			if _is_audio_file(i)]
+			if _is_wav_file(i)]
 		for audio_fn in audio_fns:
 			segment_fn = os.path.split(audio_fn)[-1][:-4] + '.txt'
 			segment_fn = os.path.join(segment_dir, segment_fn)
@@ -134,9 +160,10 @@ def read_segment_decisions(audio_dirs, segment_dirs):
 	return result
 
 
-def _segment_file(segment_dir, filename, template, p, num_mad=2.0, min_dt=0.05):
+def _segment_file(segment_dir, filename, template, p, num_mad=2.0, min_dt=0.05,\
+	min_extra_time_bins=5):
 	"""
-	Match linear audio features, extract times where features align.
+	Match linear spetrogram features, extract times where features align.
 
 	Parameters
 	----------
@@ -149,6 +176,13 @@ def _segment_file(segment_dir, filename, template, p, num_mad=2.0, min_dt=0.05):
 	p : dict
 		Parameters. Must contain keys: ``'fs'``, ``'min_freq'``, ``'max_freq'``,
 		``'nperseg'``, ``'noverlap'``, ``'spec_min_val'``, ``'spec_max_val'``.
+	num_mad : float, optional
+		Number of median absolute deviations for cross-correlation threshold.
+		Defaults to ``2.0``.
+	min_dt : float, optional
+		...
+	min_extra_time_bins : int, optional
+		...
 
 	Returns
 	-------
@@ -161,9 +195,26 @@ def _segment_file(segment_dir, filename, template, p, num_mad=2.0, min_dt=0.05):
 	"""
 	fs, audio = wavfile.read(filename)
 	assert fs == p['fs'], "Found samplerate="+str(fs)+", expected "+str(p['fs'])
+	if len(audio) < p['nperseg']:
+		warnings.warn(
+			"Found an audio file that is too short to make a spectrogram: "+\
+			filename + "\nSamples: "+str(len(audio))+"\np[\'nperseg\']: "+\
+			str(p['nperseg']),
+			UserWarning
+		)
+		return segment_dir, filename, np.zeros((0, 2))
 	big_spec, dt = _get_spec(fs, audio, p)
 	spec_len = template.shape[1]
 	template = template.flatten()
+	if big_spec.shape[1] - spec_len < min_extra_time_bins:
+		d1, d2 = dt*spec_len, dt*big_spec.shape[1]
+		warnings.warn(
+			"Found an audio file that is too short to extract segments from: "+\
+			filename + "\nTemplate duration: "+str(d1)+"\nFile duration: "+\
+			str(d2)+"\nConsider reducing the template duration.",
+			UserWarning
+		)
+		return segment_dir, filename, np.zeros((0, 2))
 	# Compute normalized cross-correlation.
 	result = np.zeros(big_spec.shape[1] - spec_len)
 	for i in range(len(result)):
@@ -222,17 +273,33 @@ def clean_collected_data(result, audio_dirs, segment_dirs, p, \
 	specs = []
 	for filename in result.keys():
 		fs, audio = wavfile.read(filename)
-		assert fs == p['fs']
+		assert fs == p['fs'], "Found samplerate=" + str(fs) + \
+				", expected " + str(p['fs'])
 		for segment in result[filename]:
 			i1 = int(round(segment[0] * fs))
 			i2 = int(round(segment[1] * fs))
 			spec, dt = _get_spec(fs, audio[i1:i2], p)
 			specs.append(spec)
+	if len(specs) == 0:
+		warnings.warn(
+			"Found no spectrograms in " + \
+			"ava.segmenting.template_segmentation.clean_collected_data.\n" + \
+			"Consider reducing the `num_mad` parameter in `segment_files`.",
+			UserWarning
+		)
+		return
 	max_t = max(spec.shape[1] for spec in specs)
 	temp_specs = np.zeros((len(specs), specs[0].shape[0], max_t))
 	for i, spec in enumerate(specs):
 		temp_specs[i,:,:spec.shape[1]] = spec
 	specs = temp_specs
+	if len(specs) > max_num_specs:
+		warnings.warn(
+			"Found more spectrograms than `max_num_specs` (" + \
+			str(max_num_specs) + "). Consider increasing `max_num_specs` or" + \
+			" `num_mad`.",
+			UserWarning
+		)
 	np.random.seed(42)
 	specs = specs[np.random.permutation(len(specs))[:max_num_specs]]
 	np.random.seed(None)
@@ -240,7 +307,14 @@ def clean_collected_data(result, audio_dirs, segment_dirs, p, \
 	if verbose:
 		print("Running UMAP...")
 	transform = umap.UMAP(random_state=42, metric='correlation')
-	embedding = transform.fit_transform(specs.reshape(len(specs), -1))
+	# https://github.com/lmcinnes/umap/issues/252
+	with warnings.catch_warnings():
+		try:
+			warnings.filterwarnings("ignore", \
+					category=NumbaPerformanceWarning)
+		except NameError:
+			pass
+		embedding = transform.fit_transform(specs.reshape(len(specs), -1))
 	# Plot and ask for user input.
 	bounds = {
 		'x1s':[],
@@ -290,10 +364,11 @@ def clean_collected_data(result, audio_dirs, segment_dirs, p, \
 	num_deleted, num_total = 0, 0
 	for audio_dir, seg_dir in zip(audio_dirs, segment_dirs):
 		audio_fns = [os.path.join(audio_dir, i) for i in os.listdir(audio_dir) \
-			if _is_audio_file(i)]
+			if _is_wav_file(i)]
 		for audio_fn in audio_fns:
 			fs, audio = wavfile.read(audio_fn)
-			assert fs == p['fs']
+			assert fs == p['fs'], "Found samplerate=" + str(fs) + \
+					", expected " + str(p['fs'])
 			segment_fn = os.path.split(audio_fn)[-1][:-4] + '.txt'
 			segment_fn = os.path.join(seg_dir, segment_fn)
 			segments = np.loadtxt(segment_fn).reshape(-1,2)
@@ -301,6 +376,7 @@ def clean_collected_data(result, audio_dirs, segment_dirs, p, \
 				continue
 			new_segments = np.zeros(segments.shape)
 			i = 0
+			specs = []
 			for segment in segments:
 				i1 = int(round(segment[0] * fs))
 				i2 = int(round(segment[1] * fs))
@@ -308,8 +384,11 @@ def clean_collected_data(result, audio_dirs, segment_dirs, p, \
 				temp_spec = np.zeros((spec.shape[0], max_t))
 				temp_spec[:, :spec.shape[1]] = spec
 				spec = temp_spec
-				embed = transform.transform(spec.reshape(1,-1)).reshape(2)
-				if _in_region(embed, bounds):
+				specs.append(spec)
+			specs = np.stack(specs)
+			embed = transform.transform(specs.reshape(specs.shape[0],-1))
+			for j, segment in enumerate(segments):
+				if _in_region(embed[j], bounds):
 					new_segments[i] = segment[:]
 					i += 1
 					num_total += 1
@@ -318,7 +397,7 @@ def clean_collected_data(result, audio_dirs, segment_dirs, p, \
 			new_segments = new_segments[:i]
 			np.savetxt(segment_fn, new_segments, fmt='%.5f')
 	if verbose:
-		print("deleted", num_deleted, "remaining", num_total)
+		print("deleted:", num_deleted, "remaining:", num_total)
 
 
 def segment_sylls_from_songs(audio_dirs, song_seg_dirs, syll_seg_dirs, p, \
@@ -540,14 +619,18 @@ def _clean_max_indices(old_indices, old_times, values, min_dt=0.05):
 def _in_region(point, bounds):
 	"""Is the point in the union of the given rectangles?"""
 	for i in range(len(bounds['x1s'])):
-		if point[0] > bounds['x1s'][i] and point[0] < bounds['x2s'][i] and \
-				point[1] > bounds['y1s'][i] and point[1] < bounds['y2s'][i]:
+		x_min = min(bounds['x1s'][i], bounds['x2s'][i])
+		x_max = max(bounds['x1s'][i], bounds['x2s'][i])
+		y_min = min(bounds['y1s'][i], bounds['y2s'][i])
+		y_max = max(bounds['y1s'][i], bounds['y2s'][i])
+		if point[0] > x_min and point[0] < x_max and point[1] > y_min and \
+				point[1] < y_max:
 			return True
 	return False
 
 
-def _is_audio_file(filename):
-	return len(filename) > 4 and filename[-4:] in ['.wav']
+def _is_wav_file(filename):
+	return len(filename) > 4 and filename[-4:] == '.wav'
 
 
 def _is_number(answer):

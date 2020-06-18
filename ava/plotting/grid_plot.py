@@ -1,5 +1,5 @@
 """
-Plot a grid of images.
+Plot a grid of spectrograms.
 
 """
 __date__ = "July-August 2019"
@@ -71,9 +71,7 @@ def grid_plot(specs, gap=3, vmin=0.0, vmax=1.0, ax=None, save_and_close=True, \
 	try:
 		a, b, c, d = specs.shape
 	except:
-		print("Invalid shape:")
-		print(specs.shape)
-		print(type(specs), type(specs[0]))
+		print("Invalid shape:", specs.shape, "Should have 4 dimensions.")
 		quit()
 	dx, dy = d+gap[1], c+gap[0]
 	height = a*c + (a-1)*gap[0]

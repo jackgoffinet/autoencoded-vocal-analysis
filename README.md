@@ -1,5 +1,5 @@
-## Autoencoded Vocal Analysis 0.2.5
-#### Generative modeling of animal vocalizations
+## Autoencoded Vocal Analysis 0.3.0
+#### Modeling animal vocalizations with VAEs
 
 <img src="docs/source/logo.png" width="300" align="middle" alt="logo">
 
@@ -18,7 +18,7 @@ $ pip install .
 ```
 
 #### Dependencies:
-* [Python3](https://www.python.org/)
+* [Python3](https://www.python.org/) (3.5+)
 * [PyTorch](https://pytorch.org)
 * [UMAP](https://umap-learn.readthedocs.io/)
 * [affinewarp](https://github.com/ahwillia/affinewarp)

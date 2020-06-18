@@ -121,12 +121,11 @@ def tune_segmenting_params(audio_dirs, p, img_fn='temp.pdf'):
 			# Get spectrogram.
 			fs, audio = wavfile.read(filename)
 			assert fs == p['fs'], 'Found fs='+str(fs)+', expected '+str(p['fs'])
-			if len(audio) < 3*window_samples:
+			if len(audio) < 3*window_samples + 1:
 				temp = len(audio) / p['fs']
-				warnings.warn( \
-						"Skipping short file: "+filename+" ("+str(temp)+"s)")
+				print("Skipping short file: "+filename+" ("+str(temp)+"s)")
 				continue
-			start_index = np.random.randint(len(audio) - 3*window_samples)
+			start_index = np.random.randint(len(audio) - 3*window_samples)			
 			stop_index = start_index + 3*window_samples
 			audio = audio[start_index:stop_index]
 			spec, dt, f = get_spec(audio, p)

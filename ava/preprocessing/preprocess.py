@@ -4,7 +4,7 @@ Compute and process syllable spectrograms.
 TO DO:
 	- support sliding/warped window for tune_preprocessing_params
 """
-__date__ = "December 2018 - July 2019"
+__date__ = "December 2018 - April 2020"
 
 
 import h5py
@@ -57,7 +57,7 @@ def process_sylls(audio_dir, segment_dir, save_dir, p, shuffle=True, \
 		np.random.seed(None)
 		audio_filenames = np.array(audio_filenames)[perm]
 		seg_filenames = np.array(seg_filenames)[perm]
-		
+
 	write_file_num = 0
 	syll_data = {
 		'specs':[],
@@ -101,7 +101,7 @@ def process_sylls(audio_dir, segment_dir, save_dir, p, shuffle=True, \
 			# Remove the written data from temporary storage.
 			for k in syll_data:
 				syll_data[k] = syll_data[k][sylls_per_file:]
-			# Stop if we've written <max_num_syllables>.
+			# Stop if we've written `max_num_syllables`.
 			if p['max_num_syllables'] is not None and \
 					write_file_num*sylls_per_file >= p['max_num_syllables']:
 				return
@@ -218,7 +218,7 @@ def tune_syll_preprocessing_params(audio_dirs, seg_dirs, p, img_fn='temp.pdf'):
 				return p
 
 
-def tune_window_preprocessing_params(audio_dirs, p):
+def tune_window_preprocessing_params(audio_dirs, p, img_fn='temp.pdf'):
 	"""
 	Flip through spectrograms and tune preprocessing parameters.
 
@@ -228,6 +228,8 @@ def tune_window_preprocessing_params(audio_dirs, p):
 		Audio directories
 	p : dict
 		Preprocessing parameters ADD REFERENCE
+	img_fn : str, optional
+		Where to save images. Defaults to ``'temp.pdf'``.
 
 	Returns
 	-------
@@ -273,7 +275,7 @@ def tune_window_preprocessing_params(audio_dirs, p):
 			# Plot.
 			plt.imshow(spec, aspect='equal', origin='lower', vmin=0, vmax=1)
 			plt.axis('off')
-			plt.savefig('temp.pdf')
+			plt.savefig(img_fn)
 			plt.close('all')
 			temp = input('Continue? [y] or [s]top tuning or [r]etune params: ')
 			if temp == 's':
@@ -349,7 +351,7 @@ def _is_number(s):
 
 
 def is_audio_file(fn):
-	return len(fn) >= 4 and fn[-4:] in ['.wav', '.mat']
+	return len(fn) >= 4 and fn[-4:] == '.wav'
 
 
 

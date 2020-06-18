@@ -18,8 +18,7 @@ import numpy as np
 import os
 
 from ava.data.data_container import DataContainer
-from ava.models.vae import X_SHAPE
-from ava.models.vae import VAE
+from ava.models.vae import X_SHAPE, VAE
 from ava.models.vae_dataset import get_syllable_partition, \
 	get_syllable_data_loaders
 from ava.preprocessing.preprocess import process_sylls, \
@@ -49,7 +48,7 @@ params = {
 		'min_dur':0.03,
 		'smoothing_timescale': 0.007,
 		'softmax': False,
-		'temperature':0.5,
+		'temperature': 0.5,
 		'algorithm': get_onsets_offsets,
 	},
 	'preprocess': {

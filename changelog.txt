@@ -9,3 +9,7 @@
                  segmenting.refine_segments.refine_segments_post_vae added
 0.2.5  12/20/19  preprocessing.preprocess.process_sylls now shuffles by default.
                  Small changes to DataContainer.
+0.3.0  06/10/20  Changes to segmenting.template_segmentation
+                 Warped shotgun approach described in docs
+                 Breaking changes to plotting.mmd_plots
+                 Breaking changes to models.window_vae_dataset

@@ -2,7 +2,7 @@
 Useful functions for segmenting.
 
 """
-__date__ = "August 2019"
+__date__ = "August 2019 - April 2020"
 
 
 import matplotlib.pyplot as plt
@@ -13,7 +13,7 @@ from scipy.signal import stft
 from scipy.io import wavfile
 
 
-EPSILON = 1e-12
+EPSILON = 1e-9
 
 
 
@@ -21,7 +21,11 @@ def get_spec(audio, p):
 	"""
 	Get a spectrogram.
 
-	Much simpler than ava.preprocessing.utils.get_spec
+	Much simpler than ``ava.preprocessing.utils.get_spec``
+
+	Raises
+	------
+	- ``AssertionError`` if ``len(audio) < p['nperseg']``.
 
 	Parameters
 	----------
@@ -41,6 +45,8 @@ def get_spec(audio, p):
 	f : numpy.ndarray
 		Array of frequencies.
 	"""
+	assert len(audio) >= p['nperseg'], \
+			"len(audio): " + str(len(audio)) + ", nperseg: " + str(p['nperseg'])
 	f, t, spec = stft(audio, fs=p['fs'], nperseg=p['nperseg'], \
 		noverlap=p['noverlap'])
 	i1 = np.searchsorted(f, p['min_freq'])
@@ -120,7 +126,6 @@ def clean_segments_by_hand(audio_dirs, orig_seg_dirs, new_seg_dirs, p, \
 		np.savetxt(new_seg_fn, combined, fmt='%.5f', header=header)
 
 
-
 def copy_segments_to_standard_format(orig_seg_dirs, new_seg_dirs, seg_ext, \
 	delimiter, usecols, skiprows, max_duration=None):
 	"""
@@ -171,6 +176,43 @@ def copy_segments_to_standard_format(orig_seg_dirs, new_seg_dirs, seg_ext, \
 			np.savetxt(new_seg_fn, segs, fmt='%.5f', header=header)
 
 
+def write_segments_to_audio(in_audio_dirs, out_audio_dirs, seg_dirs, n_zfill=4):
+	"""
+	Write each segment as its own audio file.
+
+	Parameters
+	----------
+	in_audio_dirs : list of str
+		Where to read audio.
+	out_audio_dirs : list of str
+		Where to write audio.
+	seg_dirs : list of str
+		Where to read segments.
+	n_zfill : int, optional
+		For filename formatting. Defaults to ``4``.
+	"""
+	for in_dir, out_dir, seg_dir in zip(in_audio_dirs, out_audio_dirs, seg_dirs):
+		i = 0
+		seg_fns = [j for j in sorted(os.listdir(seg_dir)) if _is_txt_file(j)]
+		audio_fns = [os.path.join(in_dir, j[:-4]+'.wav') for j in seg_fns]
+		seg_fns = [os.path.join(seg_dir, j) for j in seg_fns]
+		if not os.path.exists(out_dir):
+			os.makedirs(out_dir)
+		for seg_fn, audio_fn in zip(seg_fns, audio_fns):
+			segs = np.loadtxt(seg_fn).reshape(-1,2)
+			if len(segs) == 0:
+				continue
+			fs, audio = wavfile.read(audio_fn)
+			for j in range(segs.shape[0]):
+				num_samples = int(round(fs * (segs[j,1]-segs[j,0])))
+				i1 = int(round(fs * segs[j,0]))
+				out_audio = audio[i1:i1+num_samples]
+				out_audio_fn = str(i).zfill(n_zfill)+'.wav'
+				out_audio_fn = os.path.join(out_dir, out_audio_fn)
+				wavfile.write(out_audio_fn, fs, out_audio)
+				i += 1
+
+
 def get_audio_seg_filenames(audio_dirs, seg_dirs):
 	"""Return lists of sorted filenames."""
 	audio_fns, seg_fns = [], []
@@ -217,6 +259,11 @@ def _read_onsets_offsets(filename):
 
 def _is_audio_file(filename):
 	return len(filename) > 4 and filename[-4:] == '.wav'
+
+
+def _is_txt_file(filename):
+	return len(filename) > 4 and filename[-4:] == '.txt'
+
 
 
 if __name__ == '__main__':

@@ -1,25 +1,31 @@
 """
-MMD plots.
+Maximum Mean Discrepancy plots.
+
+Note
+----
+* Because MMD^2 is the value that is directly estimated, this is the value that
+  is saved and passed between functions. In v0.3.0, variable names have been
+  changed to make this distinction clear.
 
 Reference
 ---------
 .. [1] Gretton, Arthur, et al. "A kernel two-sample test." Journal of Machine
-	Learning Research 13.Mar (2012): 723-773.
+	Learning Research 13. Mar (2012): 723-773.
 
 	`<http://www.jmlr.org/papers/volume13/gretton12a/gretton12a.pdf>`_
 """
-__date__ = "August-November 2019"
+__date__ = "August 2019 - June 2020"
 
 
 from itertools import repeat
 from joblib import Parallel, delayed
-import numpy as np
-import os
 from matplotlib.collections import PolyCollection
 from matplotlib.colors import cnames
 from matplotlib.colors import to_rgba
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
+import numpy as np
+import os
 from scipy.cluster.hierarchy import linkage, leaves_list
 from scipy.spatial.distance import squareform
 from sklearn.manifold import TSNE, MDS
@@ -42,7 +48,7 @@ np.random.shuffle(COLOR_LIST)
 np.random.seed(None)
 
 
-def mmd_matrix_plot_DC(dc, condition_from_fn, mmd_fn, condition_fn, \
+def mmd_matrix_plot_DC(dc, condition_from_fn, mmd2_fn, condition_fn, \
 	parallel=False, load_data=False, cluster=True, alg='quadratic', max_n=None,\
 	sigma=None, cmap='Greys', colorbar=True, cax=None, ticks=[0.0,0.3], \
 	filename='mmd_matrix.pdf', ax=None, save_and_close=True):
@@ -55,21 +61,21 @@ def mmd_matrix_plot_DC(dc, condition_from_fn, mmd_fn, condition_fn, \
 		DataContainer object.
 	condition_from_fn : function
 		Returns an int representing condition, given a filename.
-	mmd_fn : str
-		Where MMD values are saved to/loaded from.
+	mmd2_fn : str
+		Where MMD^2 values are saved to/loaded from.
 	condition_fn : str
 		Where conditions are saved to/loaded from.
 	parallel : bool, optional
-		Whether to calculate different MMD values in parallel. If ``True``, MMD
-		values are printed out to stdout and can then be saved and formed into a
-		proper matrix using the ``_matrix_from_txt`` helper function.
+		Whether to calculate different MMD^2 values in parallel. If ``True``,
+		MMD^2 values are printed out to stdout and can then be saved and formed
+		into a proper matrix using the ``_matrix_from_txt`` helper function.
 	load_data : bool, optional
 		Whether to load precomputed data. Defaults to ``False``.
 	cluster : bool, optional
 		Whether to order conditions by a clustering algorithm. Defaults to
 		``True``.
 	alg : {``'linear'``, ``'quadratic'``}, optional
-		Use the linear-time or quadratic time MMD estimate. Defaults to
+		Use the linear-time or quadratic time MMD^2 estimate. Defaults to
 		``'quadratic'``.
 	max_n : int or ``None``, optional
 		Maximum number of samples from each distribution. If ``None``, no
@@ -94,25 +100,25 @@ def mmd_matrix_plot_DC(dc, condition_from_fn, mmd_fn, condition_fn, \
 	save_and_close : bool, optional
 		Whether to save and close the plot. Defaults to ``True``.
 	"""
-	assert mmd_fn is not None
+	assert mmd2_fn is not None
 	loaded = False
 	if load_data:
 		try:
-			mmd = np.load(mmd_fn)
+			mmd2 = np.load(mmd2_fn)
 			loaded = True
 		except:
 			print("Unable to load data!")
 	if not loaded:
-		mmd, _ = _calculate_mmd(dc, condition_from_fn, parallel=parallel, \
-				alg=alg, max_n=max_n, sigma=sigma, mmd_fn=mmd_fn, \
-				condition_fn=condition_fn)
+		mmd2, _ = _calculate_mmd2(dc, condition_from_fn, mmd2_fn=mmd2_fn, \
+				condition_fn=condition_fn, parallel=parallel, alg=alg, \
+				max_n=max_n, sigma=sigma)
 	filename = os.path.join(dc.plots_dir, filename)
-	mmd_matrix_plot(mmd, ax=ax, save_and_close=save_and_close, \
+	mmd_matrix_plot(mmd2, ax=ax, save_and_close=save_and_close, \
 			cluster=cluster, cmap=cmap, filename=filename, colorbar=colorbar, \
 			cax=cax, ticks=ticks)
 
 
-def mmd_matrix_plot(mmd, cluster=True, cmap='viridis', ax=None, \
+def mmd_matrix_plot(mmd2, cluster=True, cmap='viridis', ax=None, \
 	colorbar=True, cax=None, ticks=[0.0,0.3], filename='mmd_matrix.pdf', \
 	save_and_close=True):
 	"""
@@ -120,8 +126,8 @@ def mmd_matrix_plot(mmd, cluster=True, cmap='viridis', ax=None, \
 
 	Parameters
 	----------
-	mmd : numpy.ndarray
-		Pairwise MMD values, a square matrix.
+	mmd2 : numpy.ndarray
+		Pairwise MMD^2 values, a square matrix.
 	cluster : bool, optional
 		Whether to order conditions by a clustering algorithm. Defaults to
 		``True``.
@@ -140,7 +146,7 @@ def mmd_matrix_plot(mmd, cluster=True, cmap='viridis', ax=None, \
 	save_and_close : bool, optional
 		Save and close the figure. Defaults to ``True``.
 	"""
-	mmd = np.clip(mmd, 0.0, None)
+	mmd = _mmd2_to_mmd(mmd2)
 	if cluster:
 		mmd = _cluster_matrix(mmd)
 	if ax is None:
@@ -160,31 +166,31 @@ def mmd_matrix_plot(mmd, cluster=True, cmap='viridis', ax=None, \
 		plt.close('all')
 
 
-def mmd_tsne_plot_DC(dc, mmd_fn=None, condition_fn=None, mmd=None, \
+def mmd_tsne_plot_DC(dc, mmd2_fn=None, condition_fn=None, mmd2=None, \
 	conditions=None, perplexity=30.0, s=4.0, alpha=0.8, label_func=None, \
 	ax=None, save_and_close=True, filename='mmd_tsne.pdf', load_data=False):
 	"""
 	Compute and plot a t-SNE layout from an MMD matrix.
 
-	Either pass ``mmd`` and ``conditions`` directly, or specify ``mmd_fn`` and
+	Either pass ``mmd2`` and ``conditions`` directly, or specify ``mmd2_fn`` and
 	``condition_fn`` and set ``load_data=True``.
 
 	TO DO:
 	-----
-	* add option to calculate MMD.
+	* add option to calculate MMD^2.
 
 	Parameters
 	----------
 	dc : ava.data.data_container.DataContainer
 		DataContainer object.
-	mmd_fn : str
-		Where MMD values are saved to/loaded from.
+	mmd2_fn : str
+		Where MMD^2 values are saved to/loaded from.
 	condition_fn : str
 		Where conditions are saved to/loaded from.
-	mmd : {numpy.ndarray, None}, optional
-		MMD matrix. Defaults to ``None``.
+	mmd2 : {numpy.ndarray, None}, optional
+		MMD^2 matrix. Defaults to ``None``.
 	conditions : {numpy.ndarray, None}, optional
-		Condition for each entry of the MMD array. Defaults to ``None``.
+		Condition for each entry of the MMD^2 array. Defaults to ``None``.
 	perplexity : float, optional
 		Passed to t-SNE. Defaults to ``30.0``.
 	s : float, optional
@@ -201,26 +207,26 @@ def mmd_tsne_plot_DC(dc, mmd_fn=None, condition_fn=None, mmd=None, \
 	filename : str, optional
 		Where to save plot. Defaults to ``'mmd_tsne.pdf'``.
 	load_data : bool, optional
-		Whether to load the MMD and condition data from ``mmd_fn`` and
+		Whether to load the MMD^2 and condition data from ``mmd2_fn`` and
 		``condition_fn``. Defaults to ``False``.
 	"""
 	if load_data:
-		assert mmd_fn is not None and condition_fn is not None
+		assert mmd2_fn is not None and condition_fn is not None
 		try:
-			mmd = np.load(mmd_fn)
+			mmd2 = np.load(mmd2_fn)
 			conditions = np.load(condition_fn)
 		except:
 			print("Unable to load data!")
 			return
 	else:
-		assert mmd is not None and conditions is not None
-	mmd = np.clip(mmd, 0, None)
+		assert mmd2 is not None and conditions is not None
+	mmd2 = np.clip(mmd2, 0, None)
 	all_conditions = list(np.unique(conditions)) # np.unique sorts things
 	colors = [COLOR_LIST[i%len(COLOR_LIST)] for i in conditions]
 	all_colors = [COLOR_LIST[i%len(COLOR_LIST)] for i in all_conditions]
 	transform = TSNE(n_components=2, random_state=42, metric='precomputed', \
 			method='exact', perplexity=perplexity)
-	embed = transform.fit_transform(mmd)
+	embed = transform.fit_transform(mmd2)
 	if ax is None:
 		ax = plt.gca()
 	poly_colors = []
@@ -246,69 +252,6 @@ def mmd_tsne_plot_DC(dc, mmd_fn=None, condition_fn=None, mmd=None, \
 	if save_and_close:
 		plt.savefig(os.path.join(dc.plots_dir, filename))
 		plt.close('all')
-
-
-# def mmd_mds_plot_DC(dc, mmd_fn=None, condition_fn=None, mmd=None, \
-# 	conditions=None, s=4.0, alpha=0.8, label_func=None, metric=True, \
-# 	ax=None, save_and_close=True, filename='mmd_mds.pdf', load_data=True):
-# 	"""
-# 	Compute and plot an MDS layout from an MMD matrix.
-#
-# 	Note
-# 	----
-# 	* add option to calculate MMD.
-#
-# 	Parameters
-# 	----------
-# 	dc : ava.data.data_container.DataContainer
-# 		DataContainer object.
-# 	mmd_fn : str
-# 		Where MMD values are saved to/loaded from.
-# 	condition_fn : str
-# 		Where conditions are saved to/loaded from.
-# 	"""
-# 	if load_data:
-# 		assert mmd_fn is not None and condition_fn is not None
-# 		try:
-# 			mmd = np.load(mmd_fn)
-# 			conditions = np.load(condition_fn)
-# 		except:
-# 			print("Unable to load data!")
-# 			return
-# 	else:
-# 		assert mmd is not None and conditions is not None
-# 	mmd = np.clip(mmd, 0, None)
-# 	all_conditions = list(np.unique(conditions)) # np.unique sorts things
-# 	colors = [COLOR_LIST[i%len(COLOR_LIST)] for i in conditions]
-# 	all_colors = [COLOR_LIST[i%len(COLOR_LIST)] for i in all_conditions]
-# 	transform = MDS(n_components=2, random_state=42, metric=metric, \
-# 			dissimilarity='precomputed')
-# 	embed = transform.fit_transform(mmd)
-# 	if ax is None:
-# 		ax = plt.gca()
-# 	poly_colors = []
-# 	poly_vals = []
-# 	for i in range(len(conditions)-1):
-# 		for j in range(i+1, len(conditions)):
-# 			if conditions[i] == conditions[j]:
-# 				color = to_rgba(colors[i], alpha=0.7)
-# 				ax.plot([embed[i,0],embed[j,0]], [embed[i,1],embed[j,1]], \
-# 					c=color, lw=0.5)
-# 				for k in range(j+1, len(conditions)):
-# 					if conditions[k] == conditions[j]:
-# 						arr = np.stack([embed[i], embed[j], embed[k]])
-# 						poly_colors.append(to_rgba(colors[i], alpha=0.2))
-# 						poly_vals.append(arr)
-# 	pc = PolyCollection(poly_vals, color=poly_colors)
-# 	ax.add_collection(pc)
-# 	ax.scatter(embed[:,0], embed[:,1], color=colors, s=s, alpha=alpha)
-# 	if label_func is not None:
-# 		for i in range(len(embed)):
-# 			ax.annotate(label_func(conditions[i]), embed[i])
-# 	plt.axis('off')
-# 	if save_and_close:
-# 		plt.savefig(os.path.join(dc.plots_dir, filename))
-# 		plt.close('all')
 
 
 def _estimate_mmd2(latent, i1, i2, sigma=None, max_n=None):
@@ -389,9 +332,39 @@ def _cluster_matrix(matrix, index=None):
 	return new_matrix
 
 
-def _calculate_mmd(dc, condition_from_fn, parallel=False, alg='linear', \
-	max_n=None, sigma=None, mmd_fn=None, condition_fn=None):
+def _calculate_mmd2(dc, condition_from_fn, mmd2_fn=None, condition_fn=None, \
+	parallel=False, alg='quadratic', max_n=None, sigma=None):
+	"""
+	Helper function for calculating MMD^2.
+
+	Parameters
+	----------
+	dc : ava.data.data_container.DataContainer
+		DataContainer object
+	condition_from_fn : function
+		Maps audio filenames to conditions
+	mmd2_fn : {str, ``None``}, optional
+		Where MMD^2 values are saved to. Defaults to ``None``.
+	condition_fn : {str, ``None``}, optional
+		Where condition values are saved to. Defaults to ``None``.
+	parallel : bool, optional
+		Whether to parallelize computation
+	alg : {``'linear'``, ``'quadratic'``}, optional
+		Which estimation procedure to use.
+	max_n : {``None``, int}, optional
+		Maximum number of samples to consider
+	sigma : {``None``, float}, optional
+		Kernel bandwidth. Median distance heuristic is used if ``None``.
+
+	Returns
+	-------
+	mmd2 : numpy.ndarray
+		MMD^2 values
+	conditions : numpy.ndarray
+		Condition values
+	"""
 	assert alg in ['linear', 'quadratic']
+	assert mmd2_fn is not None
 	# Collect.
 	latent = dc.request('latent_means')
 	audio_fns = dc.request('audio_filenames')
@@ -400,7 +373,7 @@ def _calculate_mmd(dc, condition_from_fn, parallel=False, alg='linear', \
 	all_conditions = np.unique(condition) # np.unique sorts things
 	n = len(all_conditions)
 	result = np.zeros((n,n))
-	print("Number of conditions:", n)
+	print("Number of conditions found:", n)
 	if sigma is None:
 		sigma = estimate_median_sigma(latent)
 	print("Sigma squared:", sigma)
@@ -415,11 +388,11 @@ def _calculate_mmd(dc, condition_from_fn, parallel=False, alg='linear', \
 			repeat(max_n))
 		n_jobs = os.cpu_count()
 		# Calculate.
-		temp_results = Parallel(n_jobs=n_jobs)(delayed(_mmd_helper)(*args) for \
-				args in gen)
-		for i, j, mmd in temp_results:
-			result[i,j] = mmd
-			result[j,i] = mmd
+		temp_results = Parallel(n_jobs=n_jobs)(delayed(_mmd2_helper)(*args) \
+				for args in gen)
+		for i, j, mmd2 in temp_results:
+			result[i,j] = mmd2
+			result[j,i] = mmd2
 	else:
 		for i in range(n-1):
 			for j in range(i+1, n):
@@ -429,29 +402,33 @@ def _calculate_mmd(dc, condition_from_fn, parallel=False, alg='linear', \
 					temp = _estimate_mmd2_linear_time(latent, i1, i2, \
 								sigma=sigma)
 				elif alg == 'quadratic':
-					temp = _estimate_mmd2(latent, i1, i2, \
-								sigma=sigma, max_n=max_n)
+					temp = _estimate_mmd2(latent, i1, i2, sigma=sigma, \
+							max_n=max_n)
+				else:
+					raise NotImplementedError
 				result[i,j] = temp
 				result[j,i] = temp
 	# Save.
-	np.save(mmd_fn, result)
-	np.save(condition_fn, all_conditions)
+	if mmd2_fn is not None:
+		print("Saving MMD^2 to:", mmd2_fn)
+		np.save(mmd2_fn, result)
+	if condition_fn is not None:
+		print("Saving conditions to:", condition_fn)
+		np.save(condition_fn, all_conditions)
 	return result, all_conditions
 
 
-def _mmd_helper(i, j, condition, all_conditions, alg, latent, sigma, \
+def _mmd2_helper(i, j, condition, all_conditions, alg, latent, sigma, \
 	max_n):
 	"""Helper to make this parallelized."""
 	i1 = np.argwhere(condition == all_conditions[i]).flatten()
 	i2 = np.argwhere(condition == all_conditions[j]).flatten()
 	if alg == 'linear':
-		mmd = _estimate_mmd2_linear_time(latent, i1, i2, \
-				sigma=sigma)
+		mmd2 = _estimate_mmd2_linear_time(latent, i1, i2, sigma=sigma)
 	else:
-		mmd = _estimate_mmd2(latent, i1, i2, \
-				sigma=sigma, max_n=max_n)
-	print(i, j, mmd, flush=True)
-	return i, j, mmd
+		mmd2 = _estimate_mmd2(latent, i1, i2, sigma=sigma, max_n=max_n)
+	print(i, j, mmd2, flush=True)
+	return i, j, mmd2
 
 
 def estimate_median_sigma(latent, n=10000):
@@ -478,14 +455,19 @@ def estimate_median_sigma(latent, n=10000):
 
 
 def _matrix_from_txt(text_fn):
-	"""Read a text file into an MMD matrix."""
-	i_s, j_s, mmds = np.loadtxt(text_fn, delimiter=' ', unpack=True)
+	"""Read a text file into an MMD^2 matrix."""
+	i_s, j_s, mmd2s = np.loadtxt(text_fn, delimiter=' ', unpack=True)
 	n = int(round(max(np.max(i_s), np.max(j_s)))) + 1
-	mmd_matrix = np.zeros((n,n))
-	for i, j, mmd in zip(i_s, j_s, mmds):
-		mmd_matrix[int(i), int(j)] = mmd
-		mmd_matrix[int(j), int(i)] = mmd
-	return mmd_matrix
+	mmd2_matrix = np.zeros((n,n))
+	for i, j, mmd2 in zip(i_s, j_s, mmd2s):
+		mmd2_matrix[int(i), int(j)] = mmd2
+		mmd2_matrix[int(j), int(i)] = mmd2
+	return mmd2_matrix
+
+
+def _mmd2_to_mmd(mmd2):
+	"""Convert squared MMD estimate to an MMD estimate."""
+	return np.sqrt(np.clip(mmd2, 0.0, None))
 
 
 

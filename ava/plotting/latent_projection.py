@@ -2,7 +2,7 @@
 Plot a latent mean projection.
 
 """
-__date__ = "July-October 2019"
+__date__ = "July 2019 - February 2020"
 
 
 from numba.errors import NumbaPerformanceWarning
@@ -49,16 +49,16 @@ def latent_projection_plot_DC(dc, embedding_type='latent_mean_umap', \
 	colorbar : bool, optional
 		Whether to include a colorbar. Defaults to ``False``.
 	colormap : str, optional
-		The pyplot colormap to use if color_by returns numerical values.
+		The pyplot colormap to use if ``color_by`` returns numerical values.
 		Defaults to ``'viridis'``.
 	alpha : float, optional
 		Alpha value of scatterpoints. Defaults to ``0.5``.
 	s : float, optional
 		Size of scatterpoints. Defaults to ``0.9``.
-	ax : {..., None}, optional
+	ax : {matplotlib.axes._subplots.AxesSubplot, None}, optional
 	 	Scatter axis. If ``None``, ``matplotlib.pyplot.gca()`` is used. Defaults
 		to ``None``.
-	cax : {..., None}, optional
+	cax : {matplotlib.axes._subplots.AxesSubplot, None}, optional
 		Colorbar axis. If ``None``, an axis is made. Defaults to ``None``.
 	shuffle : bool, optional
 		Whether to shuffle to zorder of points. Defaults to ``True``.

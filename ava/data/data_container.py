@@ -9,7 +9,7 @@ TO DO
 - make sure input directories are iterable
 - add features to existing files.
 """
-__date__ = "July-November 2019"
+__date__ = "July 2019 - June 2020"
 
 
 import h5py
@@ -280,7 +280,11 @@ class DataContainer():
 
 
 	def clear_projections(self):
-		"""Remove all projections."""
+		"""
+		Remove all projections.
+
+		This deletes all the ``.hdf5`` files in ``self.projection_dirs``.
+		"""
 		for proj_dir in self.projection_dirs:
 			if not os.path.exists(proj_dir):
 				continue
@@ -289,22 +293,6 @@ class DataContainer():
 			for fn in fns:
 				os.remove(fn)
 		self.fields = self._check_for_fields()
-
-
-	def clean_projections(self):
-		"""
-		Remove all projections.
-
-		Note
-		----
-		* This will be deprecated in 0.3.0. Use ``clear_projections`` instead.
-		"""
-		warnings.warn(
-			"clean_projections will be deprecated in v0.3.0. " + \
-			"Use clear_projections instead.",
-			UserWarning
-		)
-		self.clear_projections()
 
 
 	def _make_field(self, field):

@@ -2,29 +2,33 @@
 Useful functions for feeding data to the shotgun VAE.
 
 """
-__date__ = "August - November 2019"
+__date__ = "August 2019 - June 2020"
 
 
 from affinewarp import PiecewiseWarping
-from affinewarp.piecewisewarp import densewarp
 import h5py
-import joblib
 import numpy as np
 import os
 from scipy.interpolate import interp1d, interp2d
 from scipy.io import wavfile
-from scipy.ndimage import gaussian_filter
 from scipy.signal import stft
 import torch
 from torch.utils.data import Dataset, DataLoader
+import warnings
 
-EPSILON = 1e-12
+
+DEFAULT_WARP_PARAMS = {
+	'n_knots': 0,
+	'warp_reg_scale':1e-6,
+	'smoothness_reg_scale':20.0,
+}
+EPSILON = 1e-9
 
 
 
 def get_window_partition(audio_dirs, roi_dirs, split=0.8, shuffle=True):
 	"""
-	Get a train/test split.
+	Get a train/test split for fixed-duration shotgun VAE.
 
 	Parameters
 	----------
@@ -41,7 +45,9 @@ def get_window_partition(audio_dirs, roi_dirs, split=0.8, shuffle=True):
 	Returns
 	-------
 	partition : dict
-		Defines the test/train split.
+		Defines the test/train split. The keys ``'test'`` and ``'train'`` each
+		map to a dictionary with keys ``'audio'`` and ``'rois'``, which both
+		map to numpy arrays containing filenames.
 	"""
 	assert(split > 0.0 and split <= 1.0)
 	# Collect filenames.
@@ -76,7 +82,7 @@ def get_window_partition(audio_dirs, roi_dirs, split=0.8, shuffle=True):
 def get_fixed_window_data_loaders(partition, p, batch_size=64, \
 	shuffle=(True, False), num_workers=4):
 	"""
-	Get DataLoaders for training and testing.
+	Get DataLoaders for training and testing: fixed-duration shotgun VAE
 
 	Parameters
 	----------
@@ -111,58 +117,8 @@ def get_fixed_window_data_loaders(partition, p, batch_size=64, \
 	return {'train':train_dataloader, 'test':test_dataloader}
 
 
-def get_warped_window_data_loaders(audio_dirs, template_dir, p, batch_size=64, \
-	num_workers=3, load_warp=False, \
-	warp_fns=['temp_data/x_knots.npy', 'temp_data/y_knots.npy']):
-	"""
-	Get DataLoaders for training and testing.
-
-	Warning
-	-------
-	- Audio files must all be the same duration!
-
-	Note
-	----
-	- TO DO: add train/test split.
-
-	Parameters
-	----------
-	audio_dirs : list of str
-		Audio directories.
-	template_dir : str
-		Directory where templates are saved.
-	p : dict
-		Parameters. ADD REFERENCE!
-	batch_size : int, optional
-		DataLoader batch size. Defaults to ``64``.
-	num_workers : int, optional
-		Number of CPU workers to retrieve data for the model. Defaults to ``3``.
-	load_warp : bool, optional
-		Whether to load a previously saved time warping result. Defaults to
-		``False``.
-	warp_fns : list of str, optional
-		Where the x-knots and y-knots should be saved and loaded from. Defaults
-		to ``['temp_data/x_knots.npy', 'temp_data/y_knots.npy']``.
-
-	Returns
-	-------
-	loaders : dict
-		A dictionary ...
-	"""
-	audio_fns = []
-	for audio_dir in audio_dirs:
-		audio_fns += [os.path.join(audio_dir, i) for i in \
-			sorted(os.listdir(audio_dir)) if i[-4:] == '.wav']
-	dataset = WarpedWindowDataset(audio_fns, template_dir, p, \
-		transform=numpy_to_tensor, load_warp=load_warp, warp_fns=warp_fns)
-	dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, \
-		num_workers=num_workers)
-	return {'train': dataloader, 'test': dataloader}
-
-
 
 class FixedWindowDataset(Dataset):
-	"""torch.utils.data.Dataset for chunks of animal vocalization"""
 
 	def __init__(self, audio_filenames, roi_filenames, p, transform=None,
 		dataset_length=2048):
@@ -177,7 +133,9 @@ class FixedWindowDataset(Dataset):
 			List of files containing animal vocalization times.
 		transform : {``None``, function}, optional
 			Transformation to apply to each item. Defaults to ``None`` (no
-			transformation)
+			transformation).
+		dataset_length : int, optional
+			Arbitrary number that determines batch size. Defaults to ``2048``.
 		"""
 		self.audio = [wavfile.read(fn)[1] for fn in audio_filenames]
 		self.fs = wavfile.read(audio_filenames[0])[0]
@@ -244,9 +202,9 @@ class FixedWindowDataset(Dataset):
 		"""
 		Write hdf5 files containing spectrograms of random audio chunks.
 
-		To do
+		TO DO
 		-----
-		- Write to multiple directories.
+		* Write to multiple directories.
 
 		Note
 		----
@@ -275,30 +233,90 @@ class FixedWindowDataset(Dataset):
 
 
 
+def get_warped_window_data_loaders(audio_dirs, p, batch_size=64, num_workers=4,\
+	load_warp=False, warp_fn=None, warp_params={}):
+	"""
+	Get DataLoaders for training and testing: warped shotgun VAE
+
+	Warning
+	-------
+	- Audio files must all be the same duration! You can use
+	  `segmenting.utils.write_segments_to_audio` to extract audio from song
+	  segments, writing them as separate ``.wav`` files.
+
+	TO DO
+	-----
+	* Add a train/test split!
+
+	Parameters
+	----------
+	audio_dirs : list of str
+		Audio directories.
+	p : dict
+		Preprocessing parameters. Must contain keys: ``'window_length'``,
+		``'nperseg'``, ``'noverlap'``, ``'min_freq'``, ``'max_freq'``,
+		``'spec_min_val'``, and ``'spec_max_val'``.
+	batch_size : int, optional
+		DataLoader batch size. Defaults to ``64``.
+	num_workers : int, optional
+		Number of CPU workers to retrieve data for the model. Defaults to ``4``.
+	load_warp : bool, optional
+		Whether to load a previously saved time warping result. Defaults to
+		``False``.
+	warp_fn : {str, None}, optional
+		Where the x-knots and y-knots should be saved and loaded. Defaults to
+		``None``.
+	warp_params : dict, optional
+		Parameters passed to affinewarp. Defaults to ``{}``.
+
+	Returns
+	-------
+	loaders : dict
+		Maps the keys ``'train'`` and ``'test'`` to their respective
+		DataLoaders.
+	"""
+	assert type(p) == type({})
+	# Collect audio filenames.
+	audio_fns = []
+	for audio_dir in audio_dirs:
+		audio_fns += [os.path.join(audio_dir, i) for i in os.listdir(audio_dir)\
+				if _is_wav_file(i)]
+	# Make the Dataset and DataLoader.
+	dataset = WarpedWindowDataset(audio_fns, p, \
+		transform=numpy_to_tensor, load_warp=load_warp, warp_fn=warp_fn, \
+		warp_params=warp_params)
+	dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, \
+		num_workers=num_workers)
+	return {'train': dataloader, 'test': dataloader}
+
+
+
 class WarpedWindowDataset(Dataset):
-	"""torch.utils.data.Dataset for chunks of animal vocalization"""
 
-	def __init__(self, audio_filenames, template_dir, p, transform=None, \
-		dataset_length=2048, load_warp=False, start_q=-0.1, stop_q=1.1, \
-		warp_fns=['temp_data/x_knots.npy', 'temp_data/y_knots.npy']):
+	def __init__(self, audio_filenames, p, transform=None, dataset_length=2048,\
+		load_warp=False, start_q=-0.1, stop_q=1.1, warp_fn=None, \
+		warp_params={}):
 		"""
-		Create a torch.utils.data.Dataset for chunks of animal vocalization.
+		Dataset for time-warped chunks of animal vocalization
 
-		TO DO: change warp_fns to non-keyword arguments
+		TO DO
+		-----
+		* Use affinewarp functions instead of direct references to knots.
 
 		Parameters
 		----------
 		audio_filenames : list of strings
-			List of wav files.
-		template_dir : str
-			Directory containing audio files of the template.
+			List of .wav files.
 		p : dict
-			Preprocessing parameters. Must have keys: ...
+			Preprocessing parameters. Must contain keys: ``'window_length'``,
+			``'nperseg'``, ``'noverlap'``, ``'min_freq'``, ``'max_freq'``,
+			``'spec_min_val'``, and ``'spec_max_val'``.
 		transform : {None, function}, optional
 			Transformation to apply to each item. Defaults to ``None`` (no
-			transformation)
+			transformation).
 		dataset_length : int, optional
-			Defaults to ``2048``.
+			Defaults to ``2048``. This is an arbitrary number that determines
+			how many batches make up an epoch.
 		load_warp : bool, optional
 			Whether to load the results of a previous warp. Defaults to
 			``False``.
@@ -306,21 +324,24 @@ class WarpedWindowDataset(Dataset):
 			Start quantile. Defaults to ``-0.1``.
 		stop_q : float, optional
 			Stop quantile. Defaults to ``1.1``.
-		warp_fns : list of str, optional
-			The two elements specify where to save the x knots and y knots of
-			the warp, respectively. Defaults to
-			``['temp_data/x_knots.npy', 'temp_data/y_knots.npy']``.
+		warp_fn : {None, str}, optional
+			Where to save the x knots and y knots of the warp. If ``None``, then
+			nothing will be saved or loaded. Defaults to ``None``.
+		warp_params : dict, optional
+			Parameters passed to affinewarp. Defaults to ``{}``.
 		"""
-		self.audio_filenames = audio_filenames
+		self.audio_filenames = sorted(audio_filenames)
 		self.audio = [wavfile.read(fn)[1] for fn in audio_filenames]
 		self.fs = wavfile.read(audio_filenames[0])[0]
 		self.dataset_length = dataset_length
+		assert type(p) == type({})
 		self.p = p
 		self.transform = transform
 		self.start_q = start_q
 		self.stop_q = stop_q
-		self.warp_fns = warp_fns
-		self._compute_warp(template_dir, load_warp=load_warp)
+		self.warp_fn = warp_fn
+		self.warp_params = {**DEFAULT_WARP_PARAMS, **warp_params}
+		self._compute_warp(load_warp=load_warp)
 		self.window_frac = self.p['window_length'] / self.template_dur
 
 
@@ -336,7 +357,7 @@ class WarpedWindowDataset(Dataset):
 		Note
 		----
 	 	This should be consistent with
-		ava.preprocessing.preprocess.process_sylls.
+		``ava.preprocessing.preprocess.process_sylls``.
 
 		Parameters
 		----------
@@ -359,36 +380,10 @@ class WarpedWindowDataset(Dataset):
 				f.create_dataset('specs', data=specs)
 
 
-	def _get_template(self, feature_dir):
-		"""Adapted from segmentation/template_segmentation_v2.py"""
-		filenames = [os.path.join(feature_dir, i) for i in os.listdir(feature_dir) \
-			if _is_wav_file(i)]
-		specs = []
-		for i, filename in enumerate(filenames):
-			fs, audio = wavfile.read(filename)
-			assert fs == self.fs, "Found samplerate="+str(fs)+\
-				", expected "+str(self.fs)
-			spec, dt = self._get_spec(audio)
-			spec = gaussian_filter(spec, (0.5,0.5))
-			specs.append(spec)
-		min_time_bins = min(spec.shape[1] for spec in specs)
-		specs = np.array([i[:,:min_time_bins] for i in specs])
-		template = np.mean(specs, axis=0) # Average over all the templates.
-		self.template_dur = template.shape[1]*dt
-		return template
-
-
 	def _get_spec(self, audio, target_ts=None):
-		"""Not many options here."""
-		try:
-			f, t, spec = stft(audio, fs=self.fs, nperseg=self.p['nperseg'], \
+		"""Make a basic spectrogram."""
+		f, t, spec = stft(audio, fs=self.fs, nperseg=self.p['nperseg'], \
 				noverlap=self.p['noverlap'])
-		except:
-			print("caught in get spec")
-			print(type(audio))
-			print(self.fs)
-			print(type(self.p))
-			quit()
 		i1 = np.searchsorted(f, self.p['min_freq'])
 		i2 = np.searchsorted(f, self.p['max_freq'])
 		spec = spec[i1:i2]
@@ -407,7 +402,7 @@ class WarpedWindowDataset(Dataset):
 
 	def _get_unwarped_times(self, y_vals, k):
 		"""
-		Convert quantile times in [0,1] to real times in [0,1].
+		Convert warped quantile times in [0,1] to real quantile times.
 
 		Assumes y_vals is sorted.
 		"""
@@ -418,44 +413,105 @@ class WarpedWindowDataset(Dataset):
 		return x_vals
 
 
-	def _compute_warp(self, template_dir, load_warp=False):
+	def _compute_warp(self, load_warp=False):
 		"""
-		Warp each song rendition to the template.
+		Jointly warp all the song renditions.
+
+		Warping is performed on spectrograms summed over the frequency
+		dimension.
 		"""
-		template = self._get_template(template_dir)
+		# Load warps if we can.
 		if load_warp:
-			try:
-				self.x_knots = np.load(self.warp_fns[0])
-				self.y_knots = np.load(self.warp_fns[1])
-				return
-			except IOError:
-				pass
-		amp_traces = []
+			if self.warp_fn is None:
+				warnings.warn(
+					"Tried to load warps, but ``warp_fns`` is None.",
+					UserWarning
+				)
+			else:
+				try:
+					data = np.load(self.warp_fn, allow_pickle=True).item()
+					self.x_knots = data['x_knots']
+					self.y_knots = data['y_knots']
+					self.template_dur = data['template_dur']
+					temp_fns = data['audio_filenames']
+					assert np.all(temp_fns[:-1] <= temp_fns[1:]), "Filenames "+\
+							"in " + self.warp_fn + " are not sorted!"
+					self.audio_filenames = temp_fns.tolist()
+					self.warp_params = data['warp_params']
+					return
+				except IOError:
+					warnings.warn(
+						"Can't load warps from: "+str(self.warp_fn),
+						UserWarning
+					)
+		# Otherwise, make the warps.
 		specs = []
 		for i in range(len(self.audio)):
-			specs.append(self._get_spec(self.audio[i])[0].T)
-			amp_trace = np.sum(specs[-1], axis=1)
+			spec, dt = self._get_spec(self.audio[i])
+			specs.append(spec.T)
+		# Check to make sure everything's the same shape.
+		assert len(specs) > 0
+		min_time_bins = min(spec.shape[0] for spec in specs)
+		specs = [spec[:min_time_bins] for spec in specs]
+		min_freq_bins = min(spec.shape[1] for spec in specs)
+		specs = [spec[:,:min_freq_bins] for spec in specs]
+		self.num_time_bins = specs[0].shape[0]
+		assert self.num_time_bins == min_time_bins
+		self.template_dur = self.num_time_bins * dt
+		# Compute amplitude traces.
+		amps = []
+		for i in range(len(self.audio)):
+			amp_trace = np.sum(specs[i], axis=-1, keepdims=True)
 			amp_trace -= np.min(amp_trace)
-			amp_trace /= np.max(amp_trace)
-			amp_traces.append(amp_trace.reshape(-1,1))
-		specs = np.stack(specs)
-		amp_traces = np.stack(amp_traces)
-		# print("specs", specs.shape)
-		self.num_time_bins = specs.shape[1]
-		# print("amp_traces", amp_traces.shape) # 2413, 84, 1
-		model = PiecewiseWarping(n_knots=self.p['n_knots'], \
-			warp_reg_scale=1e-6, smoothness_reg_scale=20.0)
-		model.fit(specs, iterations=50, warp_iterations=200)
-		np.save(self.warp_fns[0], model.x_knots)
-		np.save(self.warp_fns[1], model.y_knots)
+			amp_trace /= np.max(amp_trace) + 1e-6
+			amps.append(amp_trace)
+		amps = np.stack(amps)
+
+		# model_1 = PiecewiseWarping(n_knots=0)
+		# model_1.fit(amps, iterations=50, warp_iterations=200)
+		# # Stack the amplitude traces and warp.
+		# print("specs[0]", specs[0].shape)
+		# specs = np.stack(specs)
+		# print("Computing warp:", specs.shape)
+		# model = PiecewiseWarping(**self.warp_params)
+		# model.copy_fit(model_1)
+		# model.fit(specs, iterations=50, warp_iterations=200)
+
+		print("Computing warp:", amps.shape)
+		model = PiecewiseWarping(**self.warp_params)
+		model.fit(amps, iterations=50, warp_iterations=200)
 		self.x_knots = model.x_knots
 		self.y_knots = model.y_knots
-
+		# Save warps.
+		if self.warp_fn is not None:
+			print("Saving warp to:", self.warp_fn)
+			to_save = {
+				'x_knots' : model.x_knots,
+				'y_knots' : model.y_knots,
+				'template_dur' : self.template_dur,
+				'audio_filenames' : self.audio_filenames,
+				'amplitude_traces': amps,
+				'warp_params': self.warp_params,
+			}
+			np.save(self.warp_fn, to_save)
 
 
 	def __getitem__(self, index, seed=None):
 		"""
 		Return a random window of birdsong.
+
+		Parameters
+		----------
+		index : {int, list of int}
+			Determines the number of spectrograms to return. Elements (ints)
+			themselves are ignored.
+		seed : {None, int}, optional
+			Random seed
+
+		Returns
+		-------
+		spec : {numpy.ndarray, list of numpy.ndarray}
+			Spectrograms
 		"""
 		result = []
 		single_index = False
@@ -481,26 +537,7 @@ class WarpedWindowDataset(Dataset):
 				spec, flag = self.p['get_spec'](0.0, self.template_dur, \
 					self.audio[file_index], self.p, fs=self.fs, \
 					max_dur=None, target_times=target_ts)
-				if not flag: # NOTE: HERE
-					print("flag")
-					print(start_t, stop_t)
-					print(start_wt, stop_wt)
-					print(len(self.audio[file_index])/self.fs)
-					t1, t2 = start_wt, stop_wt
-					fs = self.fs
-					s1, s2 = int(round(t1*fs)), int(round(t2*fs))
-					print("s: ", s1, s2, len(self.audio[file_index]))
-					print(t2 - t1)
-					print(self.p['max_dur'] + 1e-4)
-					import matplotlib.pyplot as plt
-					plt.switch_backend('agg')
-					plt.imshow(spec)
-					plt.savefig('temp.pdf')
-					print(start_wt, stop_wt)
-					print(start_t, stop_t)
-					print(y_knot)
-					print(flag)
-					quit()
+				assert flag
 				if self.transform:
 					spec = self.transform(spec)
 				result.append(spec)
@@ -514,8 +551,6 @@ class WarpedWindowDataset(Dataset):
 	def get_specific_item(self, query_filename, quantile):
 		"""
 		Return a specific window of birdsong as a numpy array.
-
-		TO DO: clean up the flag section
 
 		Parameters
 		----------
@@ -541,28 +576,38 @@ class WarpedWindowDataset(Dataset):
 		spec, flag = self.p['get_spec'](0.0, self.template_dur, \
 			self.audio[file_index], self.p, fs=self.fs, \
 			max_dur=None, target_times=target_ts)
-
-		if not flag: # NOTE: HERE
-			print("Invalid spectrogram!")
-			print(quantile)
-			print(start_wt, stop_wt)
-			print(len(self.audio[file_index])/self.fs)
-			t1, t2 = start_wt, stop_wt
-			fs = self.fs
-			s1, s2 = int(round(t1*fs)), int(round(t2*fs))
-			print("s: ", s1, s2, len(self.audio[file_index]))
-			print(t2 - t1)
-			print(self.p['max_dur'] + 1e-4)
-			import matplotlib.pyplot as plt
-			plt.switch_backend('agg')
-			plt.imshow(spec)
-			plt.savefig('temp.pdf')
-			print(start_wt, stop_wt)
-			print(start_t, stop_t)
-			print(y_knot)
-			print(flag)
-			assert False
+		assert flag
 		return spec
+
+
+	def get_whole_warped_spectrogram(self, query_filename, time_bins=128):
+		"""
+		Get an entire warped song motif.
+
+		Parameters
+		----------
+		query_filename : str
+			Which audio file to use.
+		time_bins : int, optional
+			Number of time bins.
+
+		Returns
+		-------
+		spec : numpy.ndarray
+			Spectrogram.
+		"""
+		file_index = self.audio_filenames.index(query_filename)
+		t_vals = np.linspace(self.start_q, self.stop_q, time_bins)
+		# Inverse warp.
+		target_ts = self._get_unwarped_times(t_vals, file_index)
+		target_ts *= self.template_dur
+		# Then make a spectrogram.
+		spec, flag = self.p['get_spec'](0.0, self.template_dur, \
+			self.audio[file_index], self.p, fs=self.fs, \
+			max_dur=None, target_times=target_ts)
+		assert flag
+		return spec
+
 
 
 def get_sylls_per_file(partition):

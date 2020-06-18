@@ -47,8 +47,12 @@ def get_onsets_offsets(audio, p, return_traces=False):
 		Offset times, in seconds
 	traces : list of a single numpy array
 		The amplitude trace used in segmenting decisions. Returned if
-		return_traces is `True`.
+		`return_traces` is `True`.
 	"""
+	if len(audio) < p['nperseg']:
+		if return_traces:
+			return [], [], None
+		return [], []
 	spec, dt, _ = get_spec(audio, p)
 	min_syll_len = int(np.floor(p['min_dur'] / dt))
 	max_syll_len = int(np.ceil(p['max_dur'] / dt))

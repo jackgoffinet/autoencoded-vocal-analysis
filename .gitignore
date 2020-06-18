@@ -14,3 +14,4 @@ AVA_Autoencoded_Vocal_Analysis.egg-info
 *.npy
 *.pyc
 *.sh
+*.mp4

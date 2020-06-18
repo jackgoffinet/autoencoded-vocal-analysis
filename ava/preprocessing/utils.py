@@ -16,7 +16,7 @@ EPSILON = 1e-12
 
 
 def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None, target_times=None, \
-	fill_value=-1/EPSILON, max_dur=None):
+	fill_value=-1/EPSILON, max_dur=None, remove_dc_offset=True):
 	"""
 	Norm, scale, threshold, strech, and resize a Short Time Fourier Transform.
 
@@ -45,7 +45,9 @@ def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None, target_times=None, \
 	fill_value : float, optional
 		Defaults to ``-1/EPSILON``.
 	max_dur : float, optional
-		Maximum duration.
+		Maximum duration. Defaults to ``None``.
+	remove_dc_offset : bool, optional
+		Whether to remove any DC offset from the audio. Defaults to ``True``.
 
 	Returns
 	-------
@@ -68,8 +70,11 @@ def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None, target_times=None, \
 	if temp < p['nperseg'] or s2 <= 0 or s1 >= len(audio):
 		return np.zeros((p['num_freq_bins'], p['num_time_bins'])), True
 	else:
-		f, t, spec = stft(audio[max(0,s1):min(len(audio),s2)], fs=fs, \
-			nperseg=p['nperseg'], noverlap=p['noverlap'])
+		temp_audio = audio[max(0,s1):min(len(audio),s2)]
+		if remove_dc_offset:
+			temp_audio = temp_audio - np.mean(temp_audio)
+		f, t, spec = stft(temp_audio, fs=fs, nperseg=p['nperseg'], \
+				noverlap=p['noverlap'])
 	t += max(0,t1)
 	spec = np.log(np.abs(spec) + EPSILON)
 	interp = interp2d(t, f, spec, copy=False, bounds_error=False, \

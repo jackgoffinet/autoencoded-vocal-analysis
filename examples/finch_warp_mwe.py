@@ -53,8 +53,8 @@ params = zebra_finch_params_warped_window
 audio_dirs = [os.path.join(root, i) for i in ['songs/DIR', 'songs/UNDIR']]
 template_dir = os.path.join(root, 'templates')
 spec_dirs = [os.path.join(root, 'h5s')]
-proj_dirs = [os.path.join(root+'projections')]
-model_filename = os.path.join(root, 'methods_checkpoint_200.tar')
+proj_dirs = [os.path.join(root, 'projections')]
+model_filename = os.path.join(root, 'checkpoint_200.tar')
 plots_dir = root
 
 

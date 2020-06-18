@@ -227,7 +227,7 @@ class VAE(nn.Module):
 		mu = F.relu(self.fc31(x))
 		mu = self.fc41(mu)
 		u = F.relu(self.fc32(x))
-		u = self.fc42(u).unsqueeze(-1) # Last dimension is rank of \Sigma = 1.
+		u = self.fc42(u).unsqueeze(-1) # Last dimension is rank \Sigma = 1.
 		d = F.relu(self.fc33(x))
 		d = torch.exp(self.fc43(d)) # d must be positive.
 		return mu, u, d
