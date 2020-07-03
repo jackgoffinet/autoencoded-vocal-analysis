@@ -566,7 +566,7 @@ class DataContainer():
 		"""
 		self._check_for_dirs( \
 			['spec_dirs', 'feature_dirs', 'projection_dirs'], field)
-		# FInd which column the field is stored in.
+		# Find which column the field is stored in.
 		if kind == 'mupet':
 			file_fields = MUPET_FIELDS
 			onset_col = MUPET_ONSET_COL

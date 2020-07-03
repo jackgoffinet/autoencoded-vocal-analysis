@@ -2,7 +2,7 @@
 Segment song motifs by finding maxima in spectrogram cross correlations.
 
 """
-__date__ = "April 2019 - June 2020"
+__date__ = "April 2019 - July 2020"
 
 
 from affinewarp import ShiftWarping
@@ -70,7 +70,7 @@ def get_template(feature_dir, p, smoothing_kernel=(0.5, 0.5), verbose=True):
 	template /= np.sum(np.power(template, 2)) + EPSILON
 	if verbose:
 		duration = min_time_bins * dt
-		print("Made template:", len(filenames), "files, duration:", duration)
+		print("Made template from", len(filenames), "files. Duration:", duration)
 	return template
 
 
@@ -105,8 +105,6 @@ def segment_files(audio_dirs, segment_dirs, template, p, num_mad=2.0, \
 	result : dict
 		Maps audio filenames to segments (numpy.ndarrays).
 	"""
-	if verbose:
-		print("Segmenting files...")
 	# Collect all the filenames we need to parallelize.
 	all_audio_fns = []
 	all_seg_dirs = []
@@ -118,21 +116,28 @@ def segment_files(audio_dirs, segment_dirs, template, p, num_mad=2.0, \
 		all_audio_fns = all_audio_fns + audio_fns
 		all_seg_dirs = all_seg_dirs + [segment_dir]*len(audio_fns)
 	# Segment.
+	if verbose:
+		print("Segmenting files. n =",len(all_audio_fns))
 	gen = zip(all_seg_dirs, all_audio_fns, repeat(template), repeat(p), \
 			repeat(num_mad), repeat(min_dt))
 	res = Parallel(n_jobs=n_jobs)(delayed(_segment_file)(*args) for args in gen)
 	# Write results.
 	result = {}
+	num_segments = 0
 	for segment_dir, audio_fn, segments in res:
 		result[audio_fn] = segments
 		segment_fn = os.path.split(audio_fn)[-1][:-4] + '.txt'
 		segment_fn = os.path.join(segment_dir, segment_fn)
 		np.savetxt(segment_fn, segments, fmt='%.5f')
+		num_segments += len(segments)
+	if verbose:
+		print("\tFound", num_segments, "segments.")
+		print("\tDone.")
 	# Return a dictionary mapping audio filenames to segments.
 	return result
 
 
-def read_segment_decisions(audio_dirs, segment_dirs):
+def read_segment_decisions(audio_dirs, segment_dirs, verbose=True):
 	"""
 	Returns the same data as ``segment_files``.
 
@@ -142,21 +147,30 @@ def read_segment_decisions(audio_dirs, segment_dirs):
 		Audio directories.
 	segment_dirs : list of str
 		Segment directories.
+	verbose : bool, optional
+		Defaults to ``True``.
 
 	Returns
 	-------
 	result : dict
 		Maps audio filenames to segments.
 	"""
+	if verbose:
+		print("Reading segments...")
 	result = {}
+	n_segs = 0
 	for audio_dir, segment_dir in zip(audio_dirs, segment_dirs):
 		audio_fns = [os.path.join(audio_dir, i) for i in os.listdir(audio_dir) \
 			if _is_wav_file(i)]
 		for audio_fn in audio_fns:
 			segment_fn = os.path.split(audio_fn)[-1][:-4] + '.txt'
 			segment_fn = os.path.join(segment_dir, segment_fn)
-			segments = np.loadtxt(segment_fn)
+			segments = np.loadtxt(segment_fn).reshape(-1,2)
 			result[audio_fn] = segments
+			n_segs += len(segments)
+	if verbose:
+		print("\tFound", n_segs, "segments.")
+		print("\tDone.")
 	return result
 
 
@@ -244,8 +258,22 @@ def _segment_file(segment_dir, filename, template, p, num_mad=2.0, min_dt=0.05,\
 def clean_collected_data(result, audio_dirs, segment_dirs, p, \
 	max_num_specs=10000, verbose=True, img_fn='temp.pdf', \
 	tooltip_plot_dir='html'):
+	"""Deprecated. See ``clean_collected_segments``."""
+	warnings.warn(
+		"ava.segmenting.template_segmentation.clean_collected_data has been" + \
+		" renamed to clean_collected_segments in v0.3.0.",
+		UserWarning
+	)
+	clean_collected_segments(result, audio_dirs, segment_dirs, p, \
+		max_num_specs=max_num_specs, verbose=verbose, img_fn=img_fn, \
+		tooltip_plot_dir=tooltip_plot_dir)
+
+
+def clean_collected_segments(result, audio_dirs, segment_dirs, p, \
+	max_num_specs=10000, verbose=True, img_fn='temp.pdf', \
+	tooltip_plot_dir='html'):
 	"""
-	Take a look at the collected data and discard false positives.
+	Take a look at the collected segments and discard false positives.
 
 	Parameters
 	----------
@@ -283,8 +311,8 @@ def clean_collected_data(result, audio_dirs, segment_dirs, p, \
 	if len(specs) == 0:
 		warnings.warn(
 			"Found no spectrograms in " + \
-			"ava.segmenting.template_segmentation.clean_collected_data.\n" + \
-			"Consider reducing the `num_mad` parameter in `segment_files`.",
+			"ava.segmenting.template_segmentation.clean_collected_segments.\n" \
+			+ "Consider reducing the `num_mad` parameter in `segment_files`.",
 			UserWarning
 		)
 		return
@@ -300,12 +328,18 @@ def clean_collected_data(result, audio_dirs, segment_dirs, p, \
 			" `num_mad`.",
 			UserWarning
 		)
+	if verbose:
+		print("\tCollected",len(specs),"spectrograms.")
+		print("\tSpectrogram shape:", specs.shape[1:])
+		if len(specs) > max_num_specs:
+			print("\tRandomly sampling", max_num_specs, "spectrograms.")
+		print("\tDone.")
 	np.random.seed(42)
 	specs = specs[np.random.permutation(len(specs))[:max_num_specs]]
 	np.random.seed(None)
 	# UMAP the spectrograms.
 	if verbose:
-		print("Running UMAP...")
+		print("Running UMAP. n =", len(specs))
 	transform = umap.UMAP(random_state=42, metric='correlation')
 	# https://github.com/lmcinnes/umap/issues/252
 	with warnings.catch_warnings():
@@ -315,6 +349,8 @@ def clean_collected_data(result, audio_dirs, segment_dirs, p, \
 		except NameError:
 			pass
 		embedding = transform.fit_transform(specs.reshape(len(specs), -1))
+	if verbose:
+		print("\tDone.")
 	# Plot and ask for user input.
 	bounds = {
 		'x1s':[],
@@ -330,7 +366,7 @@ def clean_collected_data(result, audio_dirs, segment_dirs, p, \
 	while True:
 		colors = ['b' if _in_region(embed, bounds) else 'r' for \
 				embed in embedding]
-		print("Selected ", \
+		print("Selected", \
 				len([c for c in colors if c=='b']), "out of", len(colors))
 		plt.scatter(X, Y, c=colors, s=0.9, alpha=0.5)
 		for x_tick in np.arange(np.floor(np.min(X)), np.ceil(np.max(X))):
@@ -347,6 +383,8 @@ def clean_collected_data(result, audio_dirs, segment_dirs, p, \
 				print("Writing tooltip plot...")
 			tooltip_plot(embedding, specs, output_dir=tooltip_plot_dir, \
 					num_imgs=1000, title=title, grid=True)
+			if verbose:
+				print("\tDone.")
 		# Get input from user.
 		for key, query in zip(bounds_keys, queries):
 			answer = 'initial input'
@@ -397,7 +435,8 @@ def clean_collected_data(result, audio_dirs, segment_dirs, p, \
 			new_segments = new_segments[:i]
 			np.savetxt(segment_fn, new_segments, fmt='%.5f')
 	if verbose:
-		print("deleted:", num_deleted, "remaining:", num_total)
+		print("\tdeleted:", num_deleted, "remaining:", num_total)
+		print("\tDone.")
 
 
 def segment_sylls_from_songs(audio_dirs, song_seg_dirs, syll_seg_dirs, p, \

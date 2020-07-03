@@ -2,7 +2,7 @@
 Useful functions for feeding data to the shotgun VAE.
 
 """
-__date__ = "August 2019 - June 2020"
+__date__ = "August 2019 - July 2020"
 
 
 from affinewarp import PiecewiseWarping
@@ -137,12 +137,12 @@ class FixedWindowDataset(Dataset):
 		dataset_length : int, optional
 			Arbitrary number that determines batch size. Defaults to ``2048``.
 		"""
-		self.audio = [wavfile.read(fn)[1] for fn in audio_filenames]
+		self.filenames = np.array(sorted(audio_filenames))
+		self.audio = [wavfile.read(fn)[1] for fn in self.filenames]
 		self.fs = wavfile.read(audio_filenames[0])[0]
 		self.roi_filenames = roi_filenames
 		self.dataset_length = dataset_length
 		self.p = p
-		self.filenames = np.array(audio_filenames)
 		self.rois = [np.loadtxt(i, ndmin=2) for i in roi_filenames]
 		self.file_weights = np.array([np.sum(np.diff(i)) for i in self.rois])
 		self.file_weights /= np.sum(self.file_weights)
@@ -234,7 +234,7 @@ class FixedWindowDataset(Dataset):
 
 
 def get_warped_window_data_loaders(audio_dirs, p, batch_size=64, num_workers=4,\
-	load_warp=False, warp_fn=None, warp_params={}):
+	load_warp=False, warp_fn=None, warp_params={}, warp_type='spectrogram'):
 	"""
 	Get DataLoaders for training and testing: warped shotgun VAE
 
@@ -268,6 +268,9 @@ def get_warped_window_data_loaders(audio_dirs, p, batch_size=64, num_workers=4,\
 		``None``.
 	warp_params : dict, optional
 		Parameters passed to affinewarp. Defaults to ``{}``.
+	warp_type : {``'amplitude'``, ``'spectrogram'``}, optional
+		Whether to time-warp using ampltidue traces or full spectrograms.
+		Defaults to ``'spectrogram'``.
 
 	Returns
 	-------
@@ -276,6 +279,7 @@ def get_warped_window_data_loaders(audio_dirs, p, batch_size=64, num_workers=4,\
 		DataLoaders.
 	"""
 	assert type(p) == type({})
+	assert warp_type in ['amplitude', 'spectrogram']
 	# Collect audio filenames.
 	audio_fns = []
 	for audio_dir in audio_dirs:
@@ -284,7 +288,7 @@ def get_warped_window_data_loaders(audio_dirs, p, batch_size=64, num_workers=4,\
 	# Make the Dataset and DataLoader.
 	dataset = WarpedWindowDataset(audio_fns, p, \
 		transform=numpy_to_tensor, load_warp=load_warp, warp_fn=warp_fn, \
-		warp_params=warp_params)
+		warp_params=warp_params, warp_type=warp_type)
 	dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, \
 		num_workers=num_workers)
 	return {'train': dataloader, 'test': dataloader}
@@ -294,8 +298,8 @@ def get_warped_window_data_loaders(audio_dirs, p, batch_size=64, num_workers=4,\
 class WarpedWindowDataset(Dataset):
 
 	def __init__(self, audio_filenames, p, transform=None, dataset_length=2048,\
-		load_warp=False, start_q=-0.1, stop_q=1.1, warp_fn=None, \
-		warp_params={}):
+		load_warp=False, save_warp=True, start_q=-0.1, stop_q=1.1, \
+		warp_fn=None, warp_params={}, warp_type='spectrogram'):
 		"""
 		Dataset for time-warped chunks of animal vocalization
 
@@ -320,6 +324,8 @@ class WarpedWindowDataset(Dataset):
 		load_warp : bool, optional
 			Whether to load the results of a previous warp. Defaults to
 			``False``.
+		save_warp : bool, optional
+			Whether to save the results of the warp. Defaults to ``True``.
 		start_q : float, optional
 			Start quantile. Defaults to ``-0.1``.
 		stop_q : float, optional
@@ -329,19 +335,24 @@ class WarpedWindowDataset(Dataset):
 			nothing will be saved or loaded. Defaults to ``None``.
 		warp_params : dict, optional
 			Parameters passed to affinewarp. Defaults to ``{}``.
+		warp_type : {``'amplitude'``, ``'spectrogram'``}, optional
+			Whether to time-warp using ampltidue traces or full spectrograms.
+			Defaults to ``'spectrogram'``.
 		"""
-		self.audio_filenames = sorted(audio_filenames)
-		self.audio = [wavfile.read(fn)[1] for fn in audio_filenames]
-		self.fs = wavfile.read(audio_filenames[0])[0]
-		self.dataset_length = dataset_length
 		assert type(p) == type({})
+		assert warp_type in ['amplitude', 'spectrogram']
+		self.audio_filenames = sorted(audio_filenames)
+		self.audio = [wavfile.read(fn)[1] for fn in self.audio_filenames]
+		self.fs = wavfile.read(self.audio_filenames[0])[0]
+		self.dataset_length = dataset_length
 		self.p = p
 		self.transform = transform
 		self.start_q = start_q
 		self.stop_q = stop_q
 		self.warp_fn = warp_fn
 		self.warp_params = {**DEFAULT_WARP_PARAMS, **warp_params}
-		self._compute_warp(load_warp=load_warp)
+		self._compute_warp(load_warp=load_warp, save_warp=save_warp, \
+				warp_type=warp_type)
 		self.window_frac = self.p['window_length'] / self.template_dur
 
 
@@ -400,25 +411,27 @@ class WarpedWindowDataset(Dataset):
 		return spec, t[1]-t[0]
 
 
-	def _get_unwarped_times(self, y_vals, k):
+	def _get_unwarped_times(self, y_vals, index):
 		"""
 		Convert warped quantile times in [0,1] to real quantile times.
 
 		Assumes y_vals is sorted.
 		"""
-		x_knots, y_knots = self.x_knots[k], self.y_knots[k]
+		x_knots, y_knots = self.x_knots[index], self.y_knots[index]
 		interp = interp1d(y_knots, x_knots, bounds_error=False, \
 				fill_value='extrapolate', assume_sorted=True)
 		x_vals = interp(y_vals)
 		return x_vals
 
 
-	def _compute_warp(self, load_warp=False):
+	def _compute_warp(self, load_warp=False, save_warp=True, \
+		warp_type='spectrogram'):
 		"""
 		Jointly warp all the song renditions.
 
-		Warping is performed on spectrograms summed over the frequency
-		dimension.
+		Warping is performed on spectrograms if ``warp_type == 'spectrogram'``.
+		Otherwise, if ``warp_type == 'amplitude'``, warping is performed on
+		spectrograms summed over the frequency dimension.
 		"""
 		# Load warps if we can.
 		if load_warp:
@@ -436,7 +449,29 @@ class WarpedWindowDataset(Dataset):
 					temp_fns = data['audio_filenames']
 					assert np.all(temp_fns[:-1] <= temp_fns[1:]), "Filenames "+\
 							"in " + self.warp_fn + " are not sorted!"
-					self.audio_filenames = temp_fns.tolist()
+					assert len(temp_fns) >= len(self.audio_filenames)
+					if len(temp_fns) == len(self.audio_filenames):
+						# If the saved filenames and the passed filenames have
+						# the same length, make sure they match.
+						assert np.array_equal(temp_fns, self.audio_filenames), \
+								"Input filenames do not match saved filenames!"
+					else:
+						# Otherwise, make sure the passed filenames are a subset
+						# of the saved filenames and keep track of the correct
+						# indices.
+						unique_fns = np.unique(self.audio_filenames)
+						assert len(self.audio_filenames) == len(unique_fns)
+						perm = np.zeros(len(self.audio_filenames), dtype='int')
+						for i in range(len(self.audio_filenames)):
+							assert self.audio_filenames[i] in temp_fns, \
+									"Could not find filename " + \
+									self.audio_filenames[i] + " in saved warps!"
+							index = temp_fns.index(self.audio_filenames[i])
+							perm[i] = index
+						self.x_knots = self.x_knots[perm]
+						self.y_knots = self.y_knots[perm]
+					if type(self.audio_filenames) == type(np.array([])):
+						self.audio_filenames = self.audio_filenames.tolist()
 					self.warp_params = data['warp_params']
 					return
 				except IOError:
@@ -444,6 +479,9 @@ class WarpedWindowDataset(Dataset):
 						"Can't load warps from: "+str(self.warp_fn),
 						UserWarning
 					)
+		if save_warp:
+			assert self.warp_fn is not None, "``warp_fn`` must be specified " +\
+					"to save warps!"
 		# Otherwise, make the warps.
 		specs = []
 		for i in range(len(self.audio)):
@@ -463,31 +501,28 @@ class WarpedWindowDataset(Dataset):
 		for i in range(len(self.audio)):
 			amp_trace = np.sum(specs[i], axis=-1, keepdims=True)
 			amp_trace -= np.min(amp_trace)
-			amp_trace /= np.max(amp_trace) + 1e-6
+			amp_trace /= np.max(amp_trace) + EPSILON
 			amps.append(amp_trace)
 		amps = np.stack(amps)
-
-		# model_1 = PiecewiseWarping(n_knots=0)
-		# model_1.fit(amps, iterations=50, warp_iterations=200)
-		# # Stack the amplitude traces and warp.
-		# print("specs[0]", specs[0].shape)
-		# specs = np.stack(specs)
-		# print("Computing warp:", specs.shape)
-		# model = PiecewiseWarping(**self.warp_params)
-		# model.copy_fit(model_1)
-		# model.fit(specs, iterations=50, warp_iterations=200)
-
-		print("Computing warp:", amps.shape)
+		specs = np.stack(specs)
+		# Warp.
 		model = PiecewiseWarping(**self.warp_params)
-		model.fit(amps, iterations=50, warp_iterations=200)
+		if warp_type == 'amplitude':
+			print("Computing amplitude warp:", amps.shape)
+			model.fit(amps, iterations=50, warp_iterations=200)
+		elif warp_type == 'spectrogram':
+			print("Computing spectrogram warp:", specs.shape)
+			model.fit(specs, iterations=50, warp_iterations=200)
+		else:
+			raise NotImplementedError
+		# Save the warps.
 		self.x_knots = model.x_knots
 		self.y_knots = model.y_knots
-		# Save warps.
-		if self.warp_fn is not None:
+		if save_warp:
 			print("Saving warp to:", self.warp_fn)
 			to_save = {
-				'x_knots' : model.x_knots,
-				'y_knots' : model.y_knots,
+				'x_knots' : self.x_knots,
+				'y_knots' : self.y_knots,
 				'template_dur' : self.template_dur,
 				'audio_filenames' : self.audio_filenames,
 				'amplitude_traces': amps,
@@ -503,7 +538,9 @@ class WarpedWindowDataset(Dataset):
 		Parameters
 		----------
 		index : {int, list of int}
-			Determines the number of spectrograms to return. Elements (ints)
+			Determines the number of spectrograms to return. If an int is
+			passed, a single spectrogram is returned. If a list is passed,
+			``len(index)`` spectrograms are returned. Elements (ints)
 			themselves are ignored.
 		seed : {None, int}, optional
 			Random seed
