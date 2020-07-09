@@ -28,7 +28,8 @@ import warnings
 
 from ava.models.vae import VAE
 from ava.models.vae_dataset import get_syllable_partition, \
-	get_syllable_data_loaders, get_hdf5s_from_dir
+	get_syllable_data_loaders
+from ava.models.utils import get_hdf5s_from_dir
 
 
 AUDIO_FIELDS = ['audio']

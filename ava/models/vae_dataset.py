@@ -1,27 +1,26 @@
 """
-Methods for handling syllable data using PyTorch.
+Methods for feeding syllable data to the VAE.
 
-Meant to be used in conjunction with `ava.models.vae.VAE` objects.
+Meant to be used in conjunction with `ava.models.vae.VAE`.
 """
-__date__ = "November 2018 - August 2019"
+__date__ = "November 2018 - July 2020"
+
 
 import h5py
-import joblib
 import numpy as np
-import os
-from scipy.interpolate import interp1d, interp2d
 from scipy.io import wavfile
-from scipy.ndimage import gaussian_filter
-from scipy.signal import stft
-import torch
 from torch.utils.data import Dataset, DataLoader
 
-EPSILON = 1e-12
+from ava.models.utils import _get_sylls_per_file, numpy_to_tensor, \
+		get_hdf5s_from_dir
+
+
+EPSILON = 1e-9
 
 
 def get_syllable_partition(dirs, split, shuffle=True, max_num_files=None):
 	"""
-	Partition the set filenames into a random test/train split.
+	Partition the filenames into a random test/train split.
 
 	Parameters
 	----------
@@ -137,67 +136,13 @@ class SyllableDataset(Dataset):
 			file_index = i % self.sylls_per_file
 			# Then collect fields from the file.
 			with h5py.File(load_filename, 'r') as f:
-				try:
-					spec = f['specs'][file_index]
-				except:
-					print(file_index, self.sylls_per_file)
-					print(i // self.sylls_per_file, len(self.filenames))
-					print(len(f['specs']))
-					print(load_filename)
-					quit()
+				spec = f['specs'][file_index]
 			if self.transform:
 				spec = self.transform(spec)
 			result.append(spec)
 		if single_index:
 			return result[0]
 		return result
-
-
-
-def _get_sylls_per_file(partition):
-	"""
-	Open an hdf5 file and see how many syllables it has.
-
-	.. note:: Assumes all hdf5 file referenced by `partition` have the same
-		number of syllables.
-
-	Parameters
-	----------
-	partition : dict
-		Contains two keys, ``'test'`` and ``'train'``, that map to lists of hdf5
-		files. Defines the random test/train split.
-
-	Returns
-	-------
-	sylls_per_file : int
-		How many syllables are in each file.
-	"""
-	key = 'train' if len(partition['train']) > 0 else 'test'
-	assert len(partition[key]) > 0
-	filename = partition[key][0] # Just grab the first file.
-	with h5py.File(filename, 'r') as f:
-		sylls_per_file = len(f['specs'])
-	return sylls_per_file
-
-
-def numpy_to_tensor(x):
-	"""Transform a numpy array into a torch.FloatTensor."""
-	return torch.from_numpy(x).type(torch.FloatTensor)
-
-
-def get_hdf5s_from_dir(dir):
-	"""
-	Return a sorted list of all hdf5s in a directory.
-
-	.. warning:: ava.data.data_container relies on this.
-	"""
-	return [os.path.join(dir, f) for f in sorted(os.listdir(dir)) if \
-		_is_hdf5_file(f)]
-
-
-def _is_hdf5_file(filename):
-	"""Is the given filename an hdf5 file?"""
-	return len(filename) > 5 and filename[-5:] == '.hdf5'
 
 
 

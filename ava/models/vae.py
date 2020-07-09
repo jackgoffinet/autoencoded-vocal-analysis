@@ -360,7 +360,7 @@ class VAE(nn.Module):
 
 	def test_epoch(self, test_loader):
 		"""
-		Test the model on a held-out validation set, return an ELBO estimate.
+		Test the model on a held-out test set, return an ELBO estimate.
 
 		Parameters
 		----------
@@ -425,7 +425,7 @@ class VAE(nn.Module):
 					(epoch > 0):
 				filename = "checkpoint_"+str(epoch).zfill(3)+'.tar'
 				self.save_state(filename)
-			# Visualize reconstructions.
+			# Plot reconstructions.
 			if (vis_freq is not None) and (epoch % vis_freq == 0):
 				self.visualize(loaders['test'])
 

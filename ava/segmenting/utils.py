@@ -67,9 +67,11 @@ def clean_segments_by_hand(audio_dirs, orig_seg_dirs, new_seg_dirs, p, \
 	The accepted segments are taken from `orig_seg_dirs` and copied to
 	`new_seg_dirs`.
 
-	Note
-	----
-	* This will not overwrite existing segmentation files.
+	Notes
+	-----
+	* Enter indices of false positive spectrograms separated by spaces.
+	* This will not overwrite existing segmentation files and will raise an
+	  `AssertionError` if any of the files already exist.
 
 	Parameters
 	----------
@@ -124,6 +126,7 @@ def clean_segments_by_hand(audio_dirs, orig_seg_dirs, new_seg_dirs, p, \
 	index = 0
 	while index < len(all_onsets):
 		print("orig_seg_fn:", all_orig_seg_fns[index])
+		print(str(index)+"/"+str(len(all_onsets))+" reviewed")
 		num_specs = min(len(all_onsets) - index, nrows*ncols)
 		_, axarr = plt.subplots(nrows=nrows, ncols=ncols)
 		axarr = axarr.flatten()
@@ -153,14 +156,15 @@ def clean_segments_by_hand(audio_dirs, orig_seg_dirs, new_seg_dirs, p, \
 		plt.tight_layout()
 		plt.savefig(img_filename)
 		plt.close('all')
-		# Collect user input. NOTE: HERE
+		# Collect user input.
 		response = 'invalid response'
 		while not _is_valid_response(response, num_specs):
-			response = input("[Good]? Or list bad spectrograms: ")
+			response = input("List bad spectrograms: ")
 		if response == '':
 			good_indices = [index+i for i in range(num_specs)]
 		else:
 			responses = [int(i) for i in response.split(' ')]
+			good_indices = []
 			for i in range(num_specs):
 				if i not in responses:
 					good_indices.append(index+i)
@@ -170,49 +174,8 @@ def clean_segments_by_hand(audio_dirs, orig_seg_dirs, new_seg_dirs, p, \
 			if index + i in good_indices:
 				with open(all_new_seg_fns[index+i], 'ab') as f:
 					seg = np.array([all_onsets[index+i], all_offsets[index+i]])
-					np.savetxt(f, seg, fmt='%.5f')
+					np.savetxt(f, seg.reshape(1,2), fmt='%.5f')
 		index += num_specs
-
-
-		#
-		# good_indices = []
-		# i = 0
-		# while i < len(onsets):
-		# 	num_specs = min(len(onsets) - i, 16)
-		# 	_, axarr = plt.subplots(nrows=4, ncols=4)
-		# 	axarr = axarr.flatten()
-		# 	for j in range(num_specs):
-		# 		onset, offset = onsets[i+j], offsets[i+j]
-		# 		i1 = max(0, int((onset - shoulder) / dt))
-		# 		i2 = min(spec.shape[1], int((offset + shoulder) / dt))
-		# 		t1 = max(0, onset-shoulder)
-		# 		t2 = min(len(audio)/fs, offset+shoulder)
-		# 		plt.sca(axarr[j])
-		# 		plt.imshow(spec[:,i1:i2], origin='lower', aspect='auto', \
-		# 				extent=[t1, t2, f[0]/1e3, f[-1]/1e3])
-		# 		plt.title(str(j))
-		# 		plt.axis('off')
-		# 		# plt.xlabel('Time (s)')
-		# 		plt.axvline(x=onset, c='r')
-		# 		plt.axvline(x=offset, c='r')
-		# 	plt.tight_layout()
-		# 	plt.savefig(img_filename)
-		# 	plt.close('all')
-		# 	response = 'invalid response'
-		# 	while not _is_valid_response(response, num_specs):
-		# 		response = input("[Good]? Or list bad spectrograms: ")
-		# 	if response == '':
-		# 		good_indices += [i+j for j in range(num_specs)]
-		# 	else:
-		# 		responses = [int(k) for k in response.split(' ')]
-		# 		for j in range(num_specs):
-		# 			if j not in responses:
-		# 				good_indices.append(i+j)
-		# 	i += num_specs
-		# good_indices = np.array(good_indices, dtype='int')
-		# onsets, offsets = onsets[good_indices], offsets[good_indices]
-		# combined = np.stack([onsets, offsets]).T
-		# np.savetxt(new_seg_fn, combined, fmt='%.5f', header=header)
 
 
 def copy_segments_to_standard_format(orig_seg_dirs, new_seg_dirs, seg_ext, \

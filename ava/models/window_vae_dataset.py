@@ -1,6 +1,7 @@
 """
-Useful functions for feeding data to the shotgun VAE.
+Methods for feeding randomly sampled spectrogram data to the shotgun VAE.
 
+Meant to be used in conjunction with `ava.models.vae.VAE`.
 """
 __date__ = "August 2019 - July 2020"
 
@@ -9,19 +10,22 @@ from affinewarp import PiecewiseWarping
 import h5py
 import numpy as np
 import os
-from scipy.interpolate import interp1d, interp2d
+from scipy.interpolate import interp1d
 from scipy.io import wavfile
-from scipy.signal import stft
-import torch
 from torch.utils.data import Dataset, DataLoader
 import warnings
 
+from ava.models.utils import numpy_to_tensor, _get_wavs_from_dir, \
+		_get_specs_and_amplitude_traces
+
 
 DEFAULT_WARP_PARAMS = {
-	'n_knots': 0,
-	'warp_reg_scale':1e-6,
-	'smoothness_reg_scale':20.0,
+	'n_knots': 0, # number of pieces minus one in the piecwise linear warp
+	'warp_reg_scale':1e-6, # penalizes distance of warp to identity line
+	'smoothness_reg_scale':20.0, # penalizes L2 norm of warp second derivatives
+	'l2_reg_scale': 1e-7, # penalizes L2 norm of warping template
 }
+"""Default time-warping parameters sent to affinewarp"""
 EPSILON = 1e-9
 
 
@@ -208,8 +212,8 @@ class FixedWindowDataset(Dataset):
 
 		Note
 		----
-	 	This should be consistent with
-		ava.preprocessing.preprocess.process_sylls.
+	 	* This should be consistent with
+		  `ava.preprocessing.preprocess.process_sylls`.
 
 		Parameters
 		----------
@@ -240,7 +244,7 @@ def get_warped_window_data_loaders(audio_dirs, p, batch_size=64, num_workers=4,\
 
 	Warning
 	-------
-	- Audio files must all be the same duration! You can use
+	* Audio files must all be the same duration! You can use
 	  `segmenting.utils.write_segments_to_audio` to extract audio from song
 	  segments, writing them as separate ``.wav`` files.
 
@@ -283,8 +287,7 @@ def get_warped_window_data_loaders(audio_dirs, p, batch_size=64, num_workers=4,\
 	# Collect audio filenames.
 	audio_fns = []
 	for audio_dir in audio_dirs:
-		audio_fns += [os.path.join(audio_dir, i) for i in os.listdir(audio_dir)\
-				if _is_wav_file(i)]
+		audio_fns += _get_wavs_from_dir(audio_dir)
 	# Make the Dataset and DataLoader.
 	dataset = WarpedWindowDataset(audio_fns, p, \
 		transform=numpy_to_tensor, load_warp=load_warp, warp_fn=warp_fn, \
@@ -305,7 +308,7 @@ class WarpedWindowDataset(Dataset):
 
 		TO DO
 		-----
-		* Use affinewarp functions instead of direct references to knots.
+		* Use `affinewarp` functions instead of direct references to knots.
 
 		Parameters
 		----------
@@ -383,32 +386,12 @@ class WarpedWindowDataset(Dataset):
 			os.mkdir(save_dir)
 		for write_file_num in range(num_files):
 			specs = self.__getitem__(np.arange(sylls_per_file),
-				seed=write_file_num)
+					seed=write_file_num)
 			specs = np.array([spec.detach().numpy() for spec in specs])
 			fn = "sylls_" + str(write_file_num).zfill(4) + '.hdf5'
 			fn = os.path.join(save_dir, fn)
 			with h5py.File(fn, "w") as f:
 				f.create_dataset('specs', data=specs)
-
-
-	def _get_spec(self, audio, target_ts=None):
-		"""Make a basic spectrogram."""
-		f, t, spec = stft(audio, fs=self.fs, nperseg=self.p['nperseg'], \
-				noverlap=self.p['noverlap'])
-		i1 = np.searchsorted(f, self.p['min_freq'])
-		i2 = np.searchsorted(f, self.p['max_freq'])
-		spec = spec[i1:i2]
-		f = f[i1:i2]
-		spec = np.log(np.abs(spec) + EPSILON)
-		if target_ts is not None:
-			interp = interp2d(t, f, spec, copy=False, bounds_error=False, \
-				fill_value=self.p['spec_min_val'])
-			interp_spec = interp(target_ts, f, assume_sorted=True)
-			spec = interp_spec
-		spec -= self.p['spec_min_val']
-		spec /= self.p['spec_max_val'] - self.p['spec_min_val'] + EPSILON
-		spec = np.clip(spec, 0.0, 1.0)
-		return spec, t[1]-t[0]
 
 
 	def _get_unwarped_times(self, y_vals, index):
@@ -427,7 +410,7 @@ class WarpedWindowDataset(Dataset):
 	def _compute_warp(self, load_warp=False, save_warp=True, \
 		warp_type='spectrogram'):
 		"""
-		Jointly warp all the song renditions.
+		Jointly warp all the song motifs.
 
 		Warping is performed on spectrograms if ``warp_type == 'spectrogram'``.
 		Otherwise, if ``warp_type == 'amplitude'``, warping is performed on
@@ -482,30 +465,11 @@ class WarpedWindowDataset(Dataset):
 		if save_warp:
 			assert self.warp_fn is not None, "``warp_fn`` must be specified " +\
 					"to save warps!"
-		# Otherwise, make the warps.
-		specs = []
-		for i in range(len(self.audio)):
-			spec, dt = self._get_spec(self.audio[i])
-			specs.append(spec.T)
-		# Check to make sure everything's the same shape.
-		assert len(specs) > 0
-		min_time_bins = min(spec.shape[0] for spec in specs)
-		specs = [spec[:min_time_bins] for spec in specs]
-		min_freq_bins = min(spec.shape[1] for spec in specs)
-		specs = [spec[:,:min_freq_bins] for spec in specs]
-		self.num_time_bins = specs[0].shape[0]
-		assert self.num_time_bins == min_time_bins
-		self.template_dur = self.num_time_bins * dt
-		# Compute amplitude traces.
-		amps = []
-		for i in range(len(self.audio)):
-			amp_trace = np.sum(specs[i], axis=-1, keepdims=True)
-			amp_trace -= np.min(amp_trace)
-			amp_trace /= np.max(amp_trace) + EPSILON
-			amps.append(amp_trace)
-		amps = np.stack(amps)
-		specs = np.stack(specs)
-		# Warp.
+		# Otherwise, first make the spectrograms.
+		amps, specs, template_dur = _get_specs_and_amplitude_traces(self.audio,\
+				self.fs, self.p)
+		self.template_dur = template_dur
+		# Then warp.
 		model = PiecewiseWarping(**self.warp_params)
 		if warp_type == 'amplitude':
 			print("Computing amplitude warp:", amps.shape)
@@ -572,8 +536,8 @@ class WarpedWindowDataset(Dataset):
 				target_ts *= self.template_dur
 				# Then make a spectrogram.
 				spec, flag = self.p['get_spec'](0.0, self.template_dur, \
-					self.audio[file_index], self.p, fs=self.fs, \
-					max_dur=None, target_times=target_ts)
+						self.audio[file_index], self.p, fs=self.fs, \
+						max_dur=None, target_times=target_ts)
 				assert flag
 				if self.transform:
 					spec = self.transform(spec)
@@ -587,7 +551,7 @@ class WarpedWindowDataset(Dataset):
 
 	def get_specific_item(self, query_filename, quantile):
 		"""
-		Return a specific window of birdsong as a numpy array.
+		Return a specific window of birdsong as a Numpy array.
 
 		Parameters
 		----------
@@ -611,8 +575,8 @@ class WarpedWindowDataset(Dataset):
 		target_ts *= self.template_dur
 		# Then make a spectrogram.
 		spec, flag = self.p['get_spec'](0.0, self.template_dur, \
-			self.audio[file_index], self.p, fs=self.fs, \
-			max_dur=None, target_times=target_ts)
+				self.audio[file_index], self.p, fs=self.fs, \
+				max_dur=None, target_times=target_ts)
 		assert flag
 		return spec
 
@@ -640,54 +604,10 @@ class WarpedWindowDataset(Dataset):
 		target_ts *= self.template_dur
 		# Then make a spectrogram.
 		spec, flag = self.p['get_spec'](0.0, self.template_dur, \
-			self.audio[file_index], self.p, fs=self.fs, \
-			max_dur=None, target_times=target_ts)
+				self.audio[file_index], self.p, fs=self.fs, \
+				max_dur=None, target_times=target_ts)
 		assert flag
 		return spec
-
-
-
-def get_sylls_per_file(partition):
-	"""Open an hdf5 file and see how many syllables it has."""
-	key = 'train' if len(partition['train']) > 0 else 'test'
-	assert len(partition[key]) > 0
-	filename = partition[key][0] # Just grab the first file.
-	with h5py.File(filename, 'r') as f:
-		sylls_per_file = len(f['specs'])
-	return sylls_per_file
-
-
-def numpy_to_tensor(x):
-	"""Transform a numpy array into a torch.FloatTensor"""
-	return torch.from_numpy(x).type(torch.FloatTensor)
-
-
-def get_hdf5s_from_dir(dir):
-	"""
-	Return a sorted list of all hdf5s in a directory.
-
-	Note
-	----
-	``ava.data.data_container`` relies on this.
-	"""
-	return [os.path.join(dir, f) for f in sorted(os.listdir(dir)) if \
-		_is_hdf5_file(f)]
-
-
-def _get_wavs_from_dir(dir):
-	"""Return a sorted list of wave files from a directory."""
-	return [os.path.join(dir, f) for f in sorted(os.listdir(dir)) if \
-		_is_wav_file(f)]
-
-
-def _is_hdf5_file(filename):
-	"""Is the given filename an hdf5 file?"""
-	return len(filename) > 5 and filename[-5:] == '.hdf5'
-
-
-def _is_wav_file(filename):
-	"""Is the given filename a wave file?"""
-	return len(filename) > 4 and filename[-4:] == '.wav'
 
 
 

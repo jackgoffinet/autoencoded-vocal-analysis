@@ -14,7 +14,7 @@ Reference
 
 	`<http://www.jmlr.org/papers/volume13/gretton12a/gretton12a.pdf>`_
 """
-__date__ = "August 2019 - June 2020"
+__date__ = "August 2019 - July 2020"
 
 
 from itertools import repeat
@@ -30,6 +30,8 @@ from scipy.cluster.hierarchy import linkage, leaves_list
 from scipy.spatial.distance import squareform
 from sklearn.manifold import TSNE, MDS
 
+
+EPSILON = 1e-8
 
 # Define a list of random colors, excluding near-white colors.
 NEAR_WHITE_COLORS = ['silver', 'whitesmoke', 'floralwhite', 'aliceblue', \
@@ -254,42 +256,46 @@ def mmd_tsne_plot_DC(dc, mmd2_fn=None, condition_fn=None, mmd2=None, \
 		plt.close('all')
 
 
-def _estimate_mmd2(latent, i1, i2, sigma=None, max_n=None):
-	"""From Gretton et. al. 2012"""
+def _estimate_mmd2(latent, i1, i2, sigma=None, max_n=None, seed=None):
+	"""
+	From Gretton et. al. 2012
+
+	Note
+	----
+	* `seed` parameter is not thread-safe!
+	"""
 	if sigma is None:
 		sigma = estimate_median_sigma(latent)
-	A = -0.5 / sigma
-	m, n = len(i1), len(i2)
+	A = -0.5 / (sigma**2)
+	n1, n2 = len(i1), len(i2)
 	if max_n is not None:
-		m, n = min(max_n,m), min(max_n,n)
-		if m < len(i1):
+		np.random.seed(seed)
+		n1, n2 = min(max_n,n1), min(max_n,n2)
+		if n1 < len(i1):
 			np.random.shuffle(i1)
-			i1 = i1[:m]
-		if n < len(i2):
+			i1 = i1[:n1]
+		if n2 < len(i2):
 			np.random.shuffle(i2)
-			i2 = i2[:n]
+			i2 = i2[:n2]
+		np.random.seed(None)
 	term_1 = 0.0
-	for i in range(m):
-		for j in range(m):
-			if j == i:
-				continue
+	for i in range(n1-1):
+		for j in range(i+1,n1):
 			dist = np.sum(np.power(latent[i1[i]] - latent[i1[j]], 2))
 			term_1 += np.exp(A * dist)
-	term_1 *= 1/(m*(m-1))
+	term_1 *= 2/(n1*(n1-1))
 	term_2 = 0.0
-	for i in range(n):
-		for j in range(n):
-			if j == i:
-				continue
+	for i in range(n2-1):
+		for j in range(i+1,n2):
 			dist = np.sum(np.power(latent[i2[i]] - latent[i2[j]], 2))
 			term_2 += np.exp(A * dist)
-	term_2 *= 1/(n*(n-1))
+	term_2 *= 2/(n2*(n2-1))
 	term_3 = 0.0
-	for i in range(m):
-		for j in range(n):
+	for i in range(n1):
+		for j in range(n2):
 			dist = np.sum(np.power(latent[i1[i]] - latent[i2[j]], 2))
 			term_3 += np.exp(A * dist)
-	term_3 *= 2/(m*n)
+	term_3 *= 2/(n1*n2)
 	return term_1 + term_2 - term_3
 
 
@@ -297,7 +303,7 @@ def _estimate_mmd2_linear_time(latent, i1, i2, sigma=None):
 	"""From Gretton et. al. 2012"""
 	if sigma is None:
 		sigma = estimate_median_sigma(latent)
-	A = -0.5 / sigma
+	A = -0.5 / (sigma**2)
 	n = min(len(i1), len(i2))
 	m = n // 2
 	assert m > 0
@@ -333,7 +339,7 @@ def _cluster_matrix(matrix, index=None):
 
 
 def _calculate_mmd2(dc, condition_from_fn, mmd2_fn=None, condition_fn=None, \
-	parallel=False, alg='quadratic', max_n=None, sigma=None):
+	parallel=False, alg='quadratic', max_n=None, sigma=None, verbose=True):
 	"""
 	Helper function for calculating MMD^2.
 
@@ -355,6 +361,8 @@ def _calculate_mmd2(dc, condition_from_fn, mmd2_fn=None, condition_fn=None, \
 		Maximum number of samples to consider
 	sigma : {``None``, float}, optional
 		Kernel bandwidth. Median distance heuristic is used if ``None``.
+	verbose : bool, optional
+		Defaults to ``True``.
 
 	Returns
 	-------
@@ -365,6 +373,10 @@ def _calculate_mmd2(dc, condition_from_fn, mmd2_fn=None, condition_fn=None, \
 	"""
 	assert alg in ['linear', 'quadratic']
 	assert mmd2_fn is not None
+	if verbose:
+		print("Estimating an MMD matrix...")
+		print("\talg:", alg)
+		print("\tparallel:", parallel)
 	# Collect.
 	latent = dc.request('latent_means')
 	audio_fns = dc.request('audio_filenames')
@@ -373,10 +385,11 @@ def _calculate_mmd2(dc, condition_from_fn, mmd2_fn=None, condition_fn=None, \
 	all_conditions = np.unique(condition) # np.unique sorts things
 	n = len(all_conditions)
 	result = np.zeros((n,n))
-	print("Number of conditions found:", n)
 	if sigma is None:
 		sigma = estimate_median_sigma(latent)
-	print("Sigma squared:", sigma)
+	if verbose:
+		print("\tconditions found:", n)
+		print("\tsigma:", sigma)
 	if parallel:
 		i_vals, j_vals = [], []
 		for i in range(n-1):
@@ -410,11 +423,15 @@ def _calculate_mmd2(dc, condition_from_fn, mmd2_fn=None, condition_fn=None, \
 				result[j,i] = temp
 	# Save.
 	if mmd2_fn is not None:
-		print("Saving MMD^2 to:", mmd2_fn)
+		if verbose:
+			print("\tSaving MMD^2 to:", mmd2_fn)
 		np.save(mmd2_fn, result)
 	if condition_fn is not None:
-		print("Saving conditions to:", condition_fn)
+		if verbose:
+			print("\tSaving conditions to:", condition_fn)
 		np.save(condition_fn, all_conditions)
+	if verbose:
+		print("\tDone.")
 	return result, all_conditions
 
 
@@ -431,7 +448,7 @@ def _mmd2_helper(i, j, condition, all_conditions, alg, latent, sigma, \
 	return i, j, mmd2
 
 
-def estimate_median_sigma(latent, n=10000):
+def estimate_median_sigma(latent, n=10000, seed=42):
 	"""
 	Estimate the median pairwise distance for use as a kernel bandwidth.
 
@@ -441,17 +458,21 @@ def estimate_median_sigma(latent, n=10000):
 		Latent means.
 	n : int, optional
 		Number of random pairs to draw. Defaults to `10000`.
+	seed : {None, int}
+		Random seed. Defaults to ``42``.
 
 	Returns
 	-------
 	sigma : float
-		Median pairwise euclidean distance between sampled latent means.
+		Median pairwise Euclidean distance between sampled latent means.
 	"""
+	np.random.seed(seed)
 	arr = np.zeros(n)
 	for i in range(n):
 		i1, i2 = np.random.randint(len(latent)), np.random.randint(len(latent))
 		arr[i] = np.sum(np.power(latent[i1]-latent[i2],2))
-	return np.median(arr)
+	np.random.seed(None)
+	return np.sqrt(np.median(arr) + EPSILON)
 
 
 def _matrix_from_txt(text_fn):

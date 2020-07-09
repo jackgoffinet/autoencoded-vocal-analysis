@@ -8,7 +8,7 @@ vocalizations using variational autoencoders. See our
 	Goffinet, J., Mooney, R., & Pearson, J. (2019) Inferring low-dimensional
 	latent representations of animal vocalizations, *biorXiv*, 811661.
 
-You can find the software
+You can find the code
 `on github <https://github.com/jackgoffinet/autoencoded-vocal-analysis>`_.
 
 

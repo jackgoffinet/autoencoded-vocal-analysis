@@ -6,6 +6,7 @@ __date__ = "April 2019 - July 2020"
 
 
 from affinewarp import ShiftWarping
+import h5py
 from itertools import repeat
 from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
@@ -31,7 +32,7 @@ EPSILON = 1e-9
 
 def get_template(feature_dir, p, smoothing_kernel=(0.5, 0.5), verbose=True):
 	"""
-	Create a linear template given exemplar spectrograms.
+	Create a linear feature template given exemplar spectrograms.
 
 	Parameters
 	----------
@@ -177,7 +178,7 @@ def read_segment_decisions(audio_dirs, segment_dirs, verbose=True):
 def _segment_file(segment_dir, filename, template, p, num_mad=2.0, min_dt=0.05,\
 	min_extra_time_bins=5):
 	"""
-	Match linear spetrogram features, extract times where features align.
+	Match linear spetrogram features and extract times where features align.
 
 	Parameters
 	----------
@@ -442,7 +443,10 @@ def clean_collected_segments(result, audio_dirs, segment_dirs, p, \
 def segment_sylls_from_songs(audio_dirs, song_seg_dirs, syll_seg_dirs, p, \
 	shoulder=0.05, img_fn='temp.pdf', verbose=True):
 	"""
-	Split song renditions into syllables.
+	Split song renditions into syllables, write segments.
+
+	Enter quantiles to determine where to split the song motif. Entering the
+	same quantile twice will remove it.
 
 	Parameters
 	----------
@@ -455,7 +459,7 @@ def segment_sylls_from_songs(audio_dirs, song_seg_dirs, syll_seg_dirs, p, \
 	p : dict
 		Segmenting parameters.
 	shoulder : float, optional
-		Duration of padding on either side of song segments.
+		Duration of padding on either side of song segments, in seconds.
 	img_fn : str, optional
 		Image filename. Defaults to ``'temp.pdf'``.
 	verbose : bool, optional
@@ -594,6 +598,134 @@ def segment_sylls_from_songs(audio_dirs, song_seg_dirs, syll_seg_dirs, p, \
 			os.makedirs(os.path.split(write_fn)[0])
 		header = "Syllables from song: " + fn
 		np.savetxt(write_fn, np.array([]), header=header)
+
+
+def segment_sylls_from_warped_songs(warped_window_dset, audio_dirs, spec_dirs, \
+	time_bins=512, num_specs=3, img_fn='temp.pdf', verbose=True):
+	"""
+	Split time-warped song renditions into time-warped syllables, save specs.
+
+	Enter quantiles to determine where to split the song motif. Entering the
+	same quantile twice will remove it.
+
+	Parameters
+	----------
+	warped_window_dset : ava.models.window_vae_dataset.WarpedWindowDataset
+		Dataset defining a warping.
+	audio_dirs : list of str
+		Audio directories.
+	spec_dirs : list of str
+		Spectrogram directories.
+	time_bins : int, optional
+		Number of spectrogram time bins to plot.
+	num_specs : int, optional
+		Number of spectrograms to plot. Defaults to `1`.
+	img_fn : str, optional
+		Image filename. Defaults to ``'temp.pdf'``.
+	verbose : bool, optional
+		Defaults to `True`.
+	"""
+	# Check the input.
+	audio_dir_to_spec_dir = dict(zip(audio_dirs,spec_dirs))
+	for audio_fn in warped_window_dset.audio_filenames:
+		assert os.path.split(audio_fn)[0] in audio_dirs, "Cannot find " + \
+				os.path.split(audio_fn)[0] + " in audio_dirs!"
+	# Collect segmenting quantiles.
+	start_q, stop_q = warped_window_dset.start_q, warped_window_dset.stop_q
+	error_msg = "Invalid input!\nMust be \'s\' or a float between " + \
+			"{0:.2f}".format(start_q) + " and " + "{0:.2f}".format(stop_q) + "."
+	p, fs = warped_window_dset.p, warped_window_dset.fs
+	quantiles = []
+	break_flag = False
+	while True:
+		# Plot.
+		_, axarr = plt.subplots(nrows=num_specs, sharex=True)
+		if num_specs == 1:
+			axarr = [axarr]
+		axarr[0].set_title('Enter segmenting quantiles:')
+		for i in range(num_specs):
+			plt.sca(axarr[i])
+			index = np.random.randint(len(warped_window_dset.audio_filenames))
+			audio_fn = warped_window_dset.audio_filenames[index]
+			warped_spec = warped_window_dset.get_whole_warped_spectrogram( \
+					audio_fn, time_bins=time_bins)
+			plt.imshow(warped_spec, origin='lower', aspect='auto', \
+					extent=[start_q,stop_q,p['min_freq']/1e3,p['max_freq']/1e3])
+			for q in quantiles:
+				plt.axvline(x=q, color='red')
+			plt.ylabel("Frequency (kHz)")
+		plt.xlabel('Warped Time Quantile')
+		plt.savefig(img_fn)
+		plt.close('all')
+		# Ask for segmenting decisions.
+		while True:
+			temp = input("Add or delete quantile or [s]top: ")
+			if temp == '':
+				break
+			elif temp == 's':
+				break_flag = True
+				break
+			try:
+				temp = float(temp)
+				assert start_q < temp and temp < stop_q
+				if temp in quantiles:
+					quantiles.remove(temp)
+				else:
+					quantiles.append(temp)
+				break
+			except:
+				print(error_msg)
+				continue
+		if break_flag:
+			break
+	assert len(quantiles) > 1, "Not enough quantiles to segment!"
+	# Write syllable spectrograms.
+	if verbose:
+		print("Making and saving syllable spectrograms...")
+	quantiles = sorted(quantiles)
+	segs = [[q1,q2] for q1, q2 in zip(quantiles[:-1],quantiles[1:])]
+	num_saved = 0
+	template_dur = warped_window_dset.template_dur
+	for audio_fn in warped_window_dset.audio_filenames:
+		syll_data = {
+			'specs':[],
+			'onsets':[],
+			'offsets':[],
+			'audio_filenames':[],
+		}
+		for q1, q2 in segs:
+			syll_data['onsets'].append(q1) # Quantiles are saved, not times.
+			syll_data['offsets'].append(q2)
+			syll_data['audio_filenames'].append(audio_fn)
+			# Make spectrogram.
+			index = warped_window_dset.audio_filenames.index(audio_fn)
+			t_vals = np.linspace(q1, q2, p['num_time_bins'])
+			# Inverse warp.
+			target_ts = warped_window_dset._get_unwarped_times(t_vals, index)
+			target_ts *= template_dur
+			# Then make a spectrogram.
+			spec, flag = p['get_spec'](0.0, template_dur, \
+					warped_window_dset.audio[index], p, fs=fs, max_dur=None, \
+					target_times=target_ts)
+			assert flag
+			syll_data['specs'].append(spec)
+			num_saved += 1
+		audio_dir = os.path.split(audio_fn)[0]
+		write_fn = os.path.split(audio_fn)[-1][:-4] + '.hdf5'
+		spec_dir = audio_dir_to_spec_dir[audio_dir]
+		if not os.path.exists(spec_dir):
+			os.makedirs(spec_dir)
+		write_fn = os.path.join(spec_dir, write_fn)
+		with h5py.File(write_fn, "w") as f:
+			# Add all the fields.
+			for key in ['onsets', 'offsets']:
+				f.create_dataset(key, data=np.array(syll_data[key]))
+			f.create_dataset('specs', data=np.stack(syll_data['specs']))
+			f.create_dataset('audio_filenames', \
+					data=np.array(syll_data['audio_filenames']).astype('S'))
+	if verbose:
+		print("\tSaved "+str(num_saved)+" spectrograms.")
+		print("\tDone.")
 
 
 def _get_spec(fs, audio, p):

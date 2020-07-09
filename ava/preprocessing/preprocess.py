@@ -1,10 +1,8 @@
 """
-Compute and process syllable spectrograms.
+Make and save syllable spectrograms.
 
-TO DO:
-	- support sliding/warped window for tune_preprocessing_params
 """
-__date__ = "December 2018 - April 2020"
+__date__ = "December 2018 - July 2020"
 
 
 import h5py
@@ -12,14 +10,10 @@ import matplotlib.pyplot as plt
 plt.switch_backend('agg')
 import numpy as np
 import os
-from scipy.io import wavfile, loadmat
+from scipy.io import wavfile
 import warnings
 
-from ava.preprocessing.utils import get_spec, _mel, _inv_mel
-
-# Silence numpy.loadtxt when reading empty files.
-warnings.filterwarnings("ignore", category=UserWarning)
-
+from ava.preprocessing.utils import _mel, _inv_mel
 
 EPSILON = 1e-12
 
@@ -88,23 +82,28 @@ def process_sylls(audio_dir, segment_dir, save_dir, p, shuffle=True, \
 			save_filename = os.path.join(save_dir, save_filename)
 			with h5py.File(save_filename, "w") as f:
 				# Add all the fields.
-				for k in ['onsets', 'offsets']:
-					f.create_dataset(k, \
-						data=np.array(syll_data[k][:sylls_per_file]))
+				for key in ['onsets', 'offsets']:
+					f.create_dataset(key, \
+							data=np.array(syll_data[key][:sylls_per_file]))
 				f.create_dataset('specs', \
-					data=np.stack(syll_data['specs'][:sylls_per_file]))
+						data=np.stack(syll_data['specs'][:sylls_per_file]))
 				temp = [os.path.join(audio_dir, i) for i in \
-					syll_data['audio_filenames'][:sylls_per_file]]
+						syll_data['audio_filenames'][:sylls_per_file]]
 				f.create_dataset('audio_filenames', \
-					data=np.array(temp).astype('S'))
+						data=np.array(temp).astype('S'))
 			write_file_num += 1
 			# Remove the written data from temporary storage.
-			for k in syll_data:
-				syll_data[k] = syll_data[k][sylls_per_file:]
+			for key in syll_data:
+				syll_data[key] = syll_data[key][sylls_per_file:]
 			# Stop if we've written `max_num_syllables`.
 			if p['max_num_syllables'] is not None and \
 					write_file_num*sylls_per_file >= p['max_num_syllables']:
+				if verbose:
+					print("\tSaved max_num_syllables (" + \
+							str(p['max_num_syllables'])+"). Returning.")
 				return
+	if verbose:
+		print("\tDone.")
 
 
 def get_syll_specs(onsets, offsets, audio_filename, p):
@@ -142,7 +141,8 @@ def get_syll_specs(onsets, offsets, audio_filename, p):
 	specs, valid_syllables = [], []
 	# For each syllable...
 	for i, t1, t2 in zip(range(len(onsets)), onsets, offsets):
-		spec, valid = get_spec(t1, t2, audio, p, fs, target_freqs=target_freqs)
+		spec, valid = p['get_spec'](t1, t2, audio, p, fs, \
+				target_freqs=target_freqs)
 		if valid:
 			valid_syllables.append(i)
 			specs.append(spec)
@@ -269,7 +269,7 @@ def tune_window_preprocessing_params(audio_dirs, p, img_fn='temp.pdf'):
 
 			# Get the preprocessed spectrogram.
 			spec, flag = p['get_spec'](0.0, duration, audio, p, fs=p['fs'], \
-				max_dur=None, target_times=target_times)
+					max_dur=None, target_times=target_times)
 			assert flag
 
 			# Plot.
@@ -329,8 +329,8 @@ def read_onsets_offsets_from_file(txt_filename, p):
 
 	Note
 	----
-	The text file must have two coulumns separated by whitespace and ``#``
-	prepended to header and footer lines.
+	* The text file must have two coulumns separated by whitespace and ``#``
+	  prepended to header and footer lines.
 	"""
 	segs = np.loadtxt(txt_filename).reshape(-1,2)
 	return segs[:,0], segs[:,1]

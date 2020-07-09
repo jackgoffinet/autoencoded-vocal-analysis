@@ -13,6 +13,9 @@
                  New filename convention for segmenting.utils.write_segments_to_audio
                  Changes to segmenting.utils.clean_segments_by_hand
                  segmenting.template_segmentation.clean_collected_data -> clean_collected_segments
-                 Warped shotgun approach described in docs
+                 Warped shotgun approach described in docs (TO DO!)
                  Breaking changes to plotting.mmd_plots
                  Breaking changes to models.window_vae_dataset
+                 Bug fix in preprocessing.preprocess
+                 segmenting.template_segmentation.segment_sylls_from_warped_songs added
+                 models.utils added, with time-warping parameter search functions

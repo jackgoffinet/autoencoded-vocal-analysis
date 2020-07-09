@@ -30,7 +30,7 @@ warnings.filterwarnings("ignore", message="Chunk (non-data) not understood*")
 
 
 def refine_segments_pre_vae(seg_dirs, audio_dirs, out_seg_dirs, p, \
-	n_samples=8000, num_imgs=1000, verbose=True, img_fn='temp.pdf', \
+	n_samples=10000, num_imgs=1000, verbose=True, img_fn='temp.pdf', \
 	tooltip_output_dir='temp'):
 	"""
 	Manually remove noise by selecting regions of UMAP spectrogram projections.

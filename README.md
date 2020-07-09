@@ -1,4 +1,4 @@
-## Autoencoded Vocal Analysis v0.3.0
+## Autoencoded Vocal Analysis v0.3.0 (dev)
 #### Modeling animal vocalizations with VAEs
 
 <img src="docs/source/logo.png" width="300" align="middle" alt="logo">

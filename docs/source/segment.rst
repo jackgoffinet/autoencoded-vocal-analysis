@@ -20,7 +20,10 @@ standard format:
 	from ava.segmenting.utils import copy_segments_to_standard_format
 	help(copy_segments_to_standard_format)
 
-
+This has been tested with MUPET and Deepsqueak file formats. Also check out
+`vak <https://github.com/NickleDave/vak>`_ and
+`TweetyNet <https://github.com/yardencsGitHub/tweetynet>`_ for syllable
+segmentation.
 
 Syllable segmenting in AVA
 ##########################
@@ -38,8 +41,8 @@ segmenting function and set a bunch of segmenting parameters:
 	    'max_freq': 110e3, # maximum frequency
 	    'nperseg': 1024, # FFT
 	    'noverlap': 512, # FFT
-	    'spec_min_val': 2.0, # minimum log-spectrogram value
-	    'spec_max_val': 6.0, # maximum log-spectrogram value
+	    'spec_min_val': 2.0, # minimum STFT log-modulus
+	    'spec_max_val': 6.0, # maximum STFT log-modulus
 	    'fs': 250000, # audio samplerate
 	    'th_1':1.5, # segmenting threshold 1
 	    'th_2':2.0, # segmenting threshold 2
@@ -157,8 +160,8 @@ the cluster that corresponds to song motifs.
 
 .. code:: Python3
 
-	from ava.segmenting.template_segmentation import clean_collected_data
-	clean_collected_data(result, audio_dirs, song_seg_dirs, params)
+	from ava.segmenting.template_segmentation import clean_collected_segments
+	clean_collected_segments(result, audio_dirs, song_seg_dirs, params)
 
 
 This will ask you for x and y coordinates of rectangles that surround the song
@@ -198,3 +201,11 @@ by default, :code:`temp.pdf`. Then the function will ask for quantiles (between
 quantile can be deleted by entering it again. When we press :code:`s` to stop,
 the syllables between each consecutive quantile are written to
 :code:`syll_seg_dirs`.
+
+
+You can also extract time-warped syllables from time-warped song segments. See
+:code:`ava.segmenting.template_segmentation.segment_sylls_from_warped_songs`.
+This works similarly to
+:code:`ava.segmenting.template_segmentation.segment_sylls_from_songs`, except it
+directly writes warped spectrograms to :code:`.hdf5` files instead of writing
+syllable segment to :code:`.txt` files.

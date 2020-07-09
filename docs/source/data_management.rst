@@ -70,7 +70,7 @@ The DataContainer has one main publicly-facing method: :code:`request`
 	latent = dc.request('latent_means')
 
 	print(type(latent)) # <class 'numpy.ndarray'>
-	print(latent.shape) # (18020, 32) == (num_sylls, latent_dim)
+	print(latent.shape) # (18020, 32) == (num_syllables, latent_dimension)
 
 
 Behind the scenes the DataContainer constructs a VAE, loads your model state,

@@ -94,6 +94,11 @@ Then training is the same as before:
 	model.train_loop(loaders, epochs=101)
 
 
+Note that we define segments for the shotgun VAE in :code:`roi_dirs`. These
+should have the same format as syllable segments, but should cover longer
+periods of vocalization.
+
+
 Warped Shotgun VAE Training
 ###########################
 
