@@ -51,7 +51,6 @@ def process_sylls(audio_dir, segment_dir, save_dir, p, shuffle=True, \
 		np.random.seed(None)
 		audio_filenames = np.array(audio_filenames)[perm]
 		seg_filenames = np.array(seg_filenames)[perm]
-
 	write_file_num = 0
 	syll_data = {
 		'specs':[],
@@ -60,7 +59,6 @@ def process_sylls(audio_dir, segment_dir, save_dir, p, shuffle=True, \
 		'audio_filenames':[],
 	}
 	sylls_per_file = p['sylls_per_file']
-
 	# For each pair of files...
 	for audio_filename, seg_filename in zip(audio_filenames, seg_filenames):
 		# Get onsets and offsets.

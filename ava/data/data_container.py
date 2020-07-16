@@ -522,7 +522,7 @@ class DataContainer():
 				pass
 			embedding = transform.fit_transform(latent_means)
 		if self.verbose:
-			print("Done.")
+			print("\tDone.")
 		# Write to files.
 		self._write_projection("latent_mean_umap", embedding)
 		return embedding
@@ -538,7 +538,7 @@ class DataContainer():
 			print("Running PCA...")
 		embedding = transform.fit_transform(latent_means)
 		if self.verbose:
-			print("Done.")
+			print("\tDone.")
 		# Write to files.
 		self._write_projection("latent_mean_pca", embedding)
 		return embedding

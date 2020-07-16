@@ -1,7 +1,7 @@
 """
 Methods for feeding randomly sampled spectrogram data to the shotgun VAE.
 
-Meant to be used in conjunction with `ava.models.vae.VAE`.
+Meant to be used with `ava.models.vae.VAE`.
 """
 __date__ = "August 2019 - July 2020"
 
@@ -21,8 +21,8 @@ from ava.models.utils import numpy_to_tensor, _get_wavs_from_dir, \
 
 DEFAULT_WARP_PARAMS = {
 	'n_knots': 0, # number of pieces minus one in the piecwise linear warp
-	'warp_reg_scale':1e-6, # penalizes distance of warp to identity line
-	'smoothness_reg_scale':20.0, # penalizes L2 norm of warp second derivatives
+	'warp_reg_scale': 1e-2, # penalizes distance of warp to identity line
+	'smoothness_reg_scale': 1e-1, # penalizes L2 norm of warp second derivatives
 	'l2_reg_scale': 1e-7, # penalizes L2 norm of warping template
 }
 """Default time-warping parameters sent to affinewarp"""
@@ -30,7 +30,8 @@ EPSILON = 1e-9
 
 
 
-def get_window_partition(audio_dirs, roi_dirs, split=0.8, shuffle=True):
+def get_window_partition(audio_dirs, roi_dirs, split=0.8, shuffle=True, \
+	exclude_empty_roi_files=True):
 	"""
 	Get a train/test split for fixed-duration shotgun VAE.
 
@@ -45,6 +46,8 @@ def get_window_partition(audio_dirs, roi_dirs, split=0.8, shuffle=True):
 		split.
 	shuffle : bool, optional
 		Whether to shuffle at the audio file level. Defaults to ``True``.
+	exclude_empty_roi_files : bool, optional
+		Defaults to ``True``.
 
 	Returns
 	-------
@@ -57,11 +60,17 @@ def get_window_partition(audio_dirs, roi_dirs, split=0.8, shuffle=True):
 	# Collect filenames.
 	audio_filenames, roi_filenames = [], []
 	for audio_dir, roi_dir in zip(audio_dirs, roi_dirs):
-		temp = _get_wavs_from_dir(audio_dir)
-		audio_filenames += temp
-		roi_filenames += \
-			[os.path.join(roi_dir, os.path.split(i)[-1][:-4]+'.txt') \
-			for i in temp]
+		temp_wavs = _get_wavs_from_dir(audio_dir)
+		temp_rois = [os.path.join(roi_dir, os.path.split(i)[-1][:-4]+'.txt') \
+				for i in temp_wavs]
+		if exclude_empty_roi_files:
+			for i in reversed(range(len(temp_wavs))):
+				segs = np.loadtxt(temp_rois[i])
+				if len(segs) == 0:
+					del temp_wavs[i]
+					del temp_rois[i]
+		audio_filenames += temp_wavs
+		roi_filenames += temp_rois
 	# Reproducibly shuffle.
 	audio_filenames = np.array(audio_filenames)
 	roi_filenames = np.array(roi_filenames)
@@ -84,7 +93,7 @@ def get_window_partition(audio_dirs, roi_dirs, split=0.8, shuffle=True):
 
 
 def get_fixed_window_data_loaders(partition, p, batch_size=64, \
-	shuffle=(True, False), num_workers=4):
+	shuffle=(True, False), num_workers=4, min_spec_val=None):
 	"""
 	Get DataLoaders for training and testing: fixed-duration shotgun VAE
 
@@ -109,15 +118,17 @@ def get_fixed_window_data_loaders(partition, p, batch_size=64, \
 		DataLoaders.
 	"""
 	train_dataset = FixedWindowDataset(partition['train']['audio'], \
-		partition['train']['rois'], p, transform=numpy_to_tensor)
+			partition['train']['rois'], p, transform=numpy_to_tensor, \
+			min_spec_val=min_spec_val)
 	train_dataloader = DataLoader(train_dataset, batch_size=batch_size, \
-		shuffle=shuffle[0], num_workers=num_workers)
+			shuffle=shuffle[0], num_workers=num_workers)
 	if not partition['test']:
 		return {'train':train_dataloader, 'test':None}
 	test_dataset = FixedWindowDataset(partition['test']['audio'], \
-		partition['test']['rois'], p, transform=numpy_to_tensor)
+			partition['test']['rois'], p, transform=numpy_to_tensor, \
+			min_spec_val=min_spec_val)
 	test_dataloader = DataLoader(test_dataset, batch_size=batch_size, \
-		shuffle=shuffle[1], num_workers=num_workers)
+			shuffle=shuffle[1], num_workers=num_workers)
 	return {'train':train_dataloader, 'test':test_dataloader}
 
 
@@ -125,7 +136,7 @@ def get_fixed_window_data_loaders(partition, p, batch_size=64, \
 class FixedWindowDataset(Dataset):
 
 	def __init__(self, audio_filenames, roi_filenames, p, transform=None,
-		dataset_length=2048):
+		dataset_length=2048, min_spec_val=None):
 		"""
 		Create a torch.utils.data.Dataset for chunks of animal vocalization.
 
@@ -140,12 +151,16 @@ class FixedWindowDataset(Dataset):
 			transformation).
 		dataset_length : int, optional
 			Arbitrary number that determines batch size. Defaults to ``2048``.
+		min_spec_val : {float, None}, optional
+			Used to disregard silence. If not `None`, spectrogram with a maximum
+			value less than `min_spec_val` will be disregarded.
 		"""
 		self.filenames = np.array(sorted(audio_filenames))
 		self.audio = [wavfile.read(fn)[1] for fn in self.filenames]
 		self.fs = wavfile.read(audio_filenames[0])[0]
 		self.roi_filenames = roi_filenames
 		self.dataset_length = dataset_length
+		self.min_spec_val = min_spec_val
 		self.p = p
 		self.rois = [np.loadtxt(i, ndmin=2) for i in roi_filenames]
 		self.file_weights = np.array([np.sum(np.diff(i)) for i in self.rois])
@@ -158,11 +173,30 @@ class FixedWindowDataset(Dataset):
 
 
 	def __len__(self):
+		"""NOTE: length is arbitrary"""
 		return self.dataset_length
 
 
-	def __getitem__(self, index, seed=None, shoulder=0.05):
-		result = []
+	def __getitem__(self, index, seed=None, shoulder=0.05, \
+		return_seg_info=False):
+		"""
+		Get spectrograms.
+
+		Parameters
+		----------
+		index :
+		seed :
+		shoulder :
+		return_seg_info :
+
+		Returns
+		-------
+		specs :
+		file_indices :
+		onsets :
+		offsets :
+		"""
+		specs, file_indices, onsets, offsets = [], [], [], []
 		single_index = False
 		try:
 			iterator = iter(index)
@@ -192,14 +226,25 @@ class FixedWindowDataset(Dataset):
 						fs=self.fs, target_times=target_times)
 				if not flag:
 					continue
+				# Remake the spectrogram if it's silent.
+				if self.min_spec_val is not None and \
+						np.max(spec) < self.min_spec_val:
+					continue
 				if self.transform:
 					spec = self.transform(spec)
-				result.append(spec)
+				specs.append(spec)
+				file_indices.append(file_index)
+				onsets.append(onset)
+				offsets.append(offset)
 				break
 		np.random.seed(None)
+		if return_seg_info:
+			if single_index:
+				return specs[0], file_indices[0], onsets[0], offsets[0]
+			return specs, file_indices, onsets, offsets
 		if single_index:
-			return result[0]
-		return result
+			return specs[0]
+		return specs
 
 
 	def write_hdf5_files(self, save_dir, num_files=500, sylls_per_file=100):
@@ -227,13 +272,16 @@ class FixedWindowDataset(Dataset):
 		if not os.path.exists(save_dir):
 			os.mkdir(save_dir)
 		for write_file_num in range(num_files):
-			specs = self.__getitem__(np.arange(sylls_per_file),
-				seed=write_file_num)
+			specs, file_indices, _, _ = \
+					self.__getitem__(np.arange(sylls_per_file), \
+					seed=write_file_num, return_seg_info=True)
 			specs = np.array([spec.detach().numpy() for spec in specs])
+			filenames = np.array([self.filenames[i] for i in file_indices])
 			fn = "syllables_" + str(write_file_num).zfill(4) + '.hdf5'
 			fn = os.path.join(save_dir, fn)
 			with h5py.File(fn, "w") as f:
 				f.create_dataset('specs', data=specs)
+				f.create_dataset('audio_filenames', data=filenames.astype('S'))
 
 
 
@@ -272,9 +320,9 @@ def get_warped_window_data_loaders(audio_dirs, p, batch_size=64, num_workers=4,\
 		``None``.
 	warp_params : dict, optional
 		Parameters passed to affinewarp. Defaults to ``{}``.
-	warp_type : {``'amplitude'``, ``'spectrogram'``}, optional
-		Whether to time-warp using ampltidue traces or full spectrograms.
-		Defaults to ``'spectrogram'``.
+	warp_type : {``'amplitude'``, ``'spectrogram'``, ``'null'``}, optional
+		Whether to time-warp using ampltidue traces, full spectrograms, or not
+		warp at all. Defaults to ``'spectrogram'``.
 
 	Returns
 	-------
@@ -283,7 +331,7 @@ def get_warped_window_data_loaders(audio_dirs, p, batch_size=64, num_workers=4,\
 		DataLoaders.
 	"""
 	assert type(p) == type({})
-	assert warp_type in ['amplitude', 'spectrogram']
+	assert warp_type in ['amplitude', 'spectrogram', 'null']
 	# Collect audio filenames.
 	audio_fns = []
 	for audio_dir in audio_dirs:
@@ -338,12 +386,12 @@ class WarpedWindowDataset(Dataset):
 			nothing will be saved or loaded. Defaults to ``None``.
 		warp_params : dict, optional
 			Parameters passed to affinewarp. Defaults to ``{}``.
-		warp_type : {``'amplitude'``, ``'spectrogram'``}, optional
-			Whether to time-warp using ampltidue traces or full spectrograms.
-			Defaults to ``'spectrogram'``.
+		warp_type : {``'amplitude'``, ``'spectrogram'``, ``'null'``}, optional
+			Whether to time-warp using ampltidue traces, full spectrograms, or
+			not warp at all. Defaults to ``'spectrogram'``.
 		"""
 		assert type(p) == type({})
-		assert warp_type in ['amplitude', 'spectrogram']
+		assert warp_type in ['amplitude', 'spectrogram', 'null']
 		self.audio_filenames = sorted(audio_filenames)
 		self.audio = [wavfile.read(fn)[1] for fn in self.audio_filenames]
 		self.fs = wavfile.read(self.audio_filenames[0])[0]
@@ -373,6 +421,11 @@ class WarpedWindowDataset(Dataset):
 	 	This should be consistent with
 		``ava.preprocessing.preprocess.process_sylls``.
 
+		TO DO
+		-----
+		* Add the option to also write segments. This could be useful for noise
+		  removal.
+
 		Parameters
 		----------
 		save_dir : str
@@ -399,6 +452,12 @@ class WarpedWindowDataset(Dataset):
 		Convert warped quantile times in [0,1] to real quantile times.
 
 		Assumes y_vals is sorted.
+
+		In affinewarp, x-values are empirical times, stored as quantiles from
+		0 to 1, and y-values are template times. Here, we're given template
+		times and converting to empirical times. In other words we're
+		considering measured times as ``unwarped'' and aligned times as
+		``warped''.
 		"""
 		x_knots, y_knots = self.x_knots[index], self.y_knots[index]
 		interp = interp1d(y_knots, x_knots, bounds_error=False, \
@@ -416,6 +475,30 @@ class WarpedWindowDataset(Dataset):
 		Otherwise, if ``warp_type == 'amplitude'``, warping is performed on
 		spectrograms summed over the frequency dimension.
 		"""
+		if save_warp:
+			assert self.warp_fn is not None, "``warp_fn`` must be specified " +\
+					"to save warps!"
+		# If it's a null warp, make it and return.
+		if warp_type == 'null':
+			knots = np.zeros((len(self.audio),2))
+			knots[:,1] = 1.0
+			self.x_knots = knots
+			self.y_knots = np.copy(knots)
+			_, _, template_dur = _get_specs_and_amplitude_traces(self.audio,\
+					self.fs, self.p)
+			self.template_dur = template_dur
+			print("Made null warp.")
+			if save_warp:
+				print("Saving warp to:", self.warp_fn)
+				to_save = {
+					'x_knots' : self.x_knots,
+					'y_knots' : self.y_knots,
+					'template_dur' : self.template_dur,
+					'audio_filenames' : self.audio_filenames,
+					'warp_params': self.warp_params,
+				}
+				np.save(self.warp_fn, to_save)
+			return
 		# Load warps if we can.
 		if load_warp:
 			if self.warp_fn is None:
@@ -462,9 +545,6 @@ class WarpedWindowDataset(Dataset):
 						"Can't load warps from: "+str(self.warp_fn),
 						UserWarning
 					)
-		if save_warp:
-			assert self.warp_fn is not None, "``warp_fn`` must be specified " +\
-					"to save warps!"
 		# Otherwise, first make the spectrograms.
 		amps, specs, template_dur = _get_specs_and_amplitude_traces(self.audio,\
 				self.fs, self.p)

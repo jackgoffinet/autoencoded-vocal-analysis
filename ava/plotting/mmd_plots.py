@@ -377,6 +377,7 @@ def _calculate_mmd2(dc, condition_from_fn, mmd2_fn=None, condition_fn=None, \
 		print("Estimating an MMD matrix...")
 		print("\talg:", alg)
 		print("\tparallel:", parallel)
+		print("\tmax_n:", max_n)
 	# Collect.
 	latent = dc.request('latent_means')
 	audio_fns = dc.request('audio_filenames')

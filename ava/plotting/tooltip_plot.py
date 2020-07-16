@@ -16,7 +16,7 @@ import umap
 
 
 def tooltip_plot_DC(dc, embedding_type='latent_mean_umap', output_dir='html', \
-	num_imgs=5000, title="", n=30000, grid=False, img_format='.jpg'):
+	num_imgs=1000, title="", n=30000, grid=False, img_format='.jpg'):
 	"""
 	DataContainer version of tooltip_plot.
 
@@ -29,7 +29,7 @@ def tooltip_plot_DC(dc, embedding_type='latent_mean_umap', output_dir='html', \
 	output_dir : str, optional
 		Directory where html and jpegs are written. Deafaults to ``'temp'``.
 	num_imgs : int, optional
-		Number of points with tooltip images. Defaults to ``10000``.
+		Number of points with tooltip images. Defaults to ``1000``.
 	title : str, optional
 		Title of plot. Defaults to ``''``.
 	n : int, optional
@@ -51,6 +51,10 @@ def tooltip_plot(embedding, images, output_dir='temp', num_imgs=10000, title="",
 	n=30000, grid=False):
 	"""
 	Create a scatterplot of the embedding with spectrogram tooltips.
+
+	TO DO
+	-----
+	* Set the aspect ratio to 1
 
 	Parameters
 	----------

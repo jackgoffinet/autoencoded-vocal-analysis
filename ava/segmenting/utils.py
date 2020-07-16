@@ -192,7 +192,7 @@ def copy_segments_to_standard_format(orig_seg_dirs, new_seg_dirs, seg_ext, \
 	orig_seg_dirs : list of str
 		Directories containing original segments.
 	new_seg_dirs : list of str
-		Directories for new segments.
+		Corresponding directories for new segments.
 	seg_ext : str
 		Input filename extension.
 	delimiter : str
@@ -271,9 +271,74 @@ def write_segments_to_audio(in_audio_dirs, out_audio_dirs, seg_dirs, n_zfill=3,\
 		print("\tDone.")
 
 
+def merge_segments(orig_seg_dirs, new_seg_dirs, merge_threshold, \
+	left_shoulder=0.0, right_shoulder=0.0, min_duration=0.0, verbose=True):
+	"""
+	Merge nearby segments into larger segments.
+
+	Parameters
+	----------
+	orig_seg_dirs : list of str
+		Directories containing original segments.
+	new_seg_dirs : list of str
+		Corresponding directories for new segments.
+	merge_threshold : float
+		All segments closer than this duration are merged.
+	left_shoulder : float, optional
+		Extra time to add before merged segments. Defaults to `0.0`
+	right_shoulder : float, optional
+		Extra time to add after merged segments. Defaults to `0.0`.
+	min_duration : float, optional
+		Minumum duration of a merged segment. Defaults to `0.0`.
+	"""
+	if verbose:
+		print("Merging segments:")
+	# Make new directories, if needed.
+	for new_seg_dir in new_seg_dirs:
+		if not os.path.exists(new_seg_dir):
+			os.makedirs(new_seg_dir)
+	# Merge segments.
+	for orig_seg_dir, new_seg_dir in zip(orig_seg_dirs, new_seg_dirs):
+		orig_seg_fns = [os.path.join(orig_seg_dir,i) for i in \
+				os.listdir(orig_seg_dir) if _is_txt_file(i)]
+		new_seg_fns = [os.path.join(new_seg_dir,os.path.split(i)[1]) for i in \
+				orig_seg_fns]
+		for orig_seg_fn, new_seg_fn in zip(orig_seg_fns, new_seg_fns):
+			header = "Merged segments from " + orig_seg_fn
+			segs = np.loadtxt(orig_seg_fn).reshape(-1,2)
+			if len(segs) == 0:
+				np.savetxt(new_seg_fn, np.array([]), header=header)
+				continue
+			# Collect merged onsets/offsets.
+			merged_segs = []
+			current_onset, current_offset = segs[0,0], segs[0,1]
+			for i in range(1,len(segs)):
+				if segs[i,0] - current_offset < merge_threshold: # merge
+					current_offset = segs[i,1]
+				else: # or don't merge
+					# Apply shoulders.
+					current_onset = max(0.0, current_onset - left_shoulder)
+					current_offset = current_offset + right_shoulder
+					# Add to segments list.
+					merged_segs.append([current_onset, current_offset])
+					# Set up next segment.
+					current_onset, current_offset = segs[i,0], segs[i,1]
+			merged_segs.append([current_onset, current_offset])
+			# Delete segments that are too short.
+			if min_duration > 0.0:
+				for i in reversed(range(len(merged_segs)):
+					if merged_segs[i][1] - merged_segs[i][0] < min_duration:
+						del merged_segs[i]
+			# Save segments.
+			merged_segs = np.array(merged_segs).reshape(-1,2)
+			np.savetxt(new_seg_fn, merged_segs, fmt='%.5f', header=header)
+	if verbose:
+		print("\tDone.")
+
+
 def get_audio_seg_filenames(audio_dirs, seg_dirs):
 	"""
-	Return lists of audio and corresponding segment filenames.
+	Return lists of audio filenames and corresponding segment filenames.
 
 	Parameters
 	----------

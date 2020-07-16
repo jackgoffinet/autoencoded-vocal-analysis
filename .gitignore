@@ -15,3 +15,4 @@ AVA_Autoencoded_Vocal_Analysis.egg-info
 *.pyc
 *.sh
 *.mp4
+*.DS_Store

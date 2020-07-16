@@ -19,3 +19,4 @@
                  Bug fix in preprocessing.preprocess
                  segmenting.template_segmentation.segment_sylls_from_warped_songs added
                  models.utils added, with time-warping parameter search functions
+                 segmenting.utils.merge_segments added
