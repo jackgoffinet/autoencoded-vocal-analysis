@@ -510,7 +510,7 @@ class DataContainer():
 		latent_means = self.request('latent_means')
 		# UMAP them.
 		transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, \
-			metric='euclidean', random_state=42)
+				metric='euclidean', random_state=42)
 		if self.verbose:
 			print("Running UMAP... (n="+str(len(latent_means))+")")
 		# https://github.com/lmcinnes/umap/issues/252

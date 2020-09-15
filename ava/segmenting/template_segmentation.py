@@ -2,7 +2,7 @@
 Segment song motifs by finding maxima in spectrogram cross correlations.
 
 """
-__date__ = "April 2019 - July 2020"
+__date__ = "April 2019 - September 2020"
 
 
 from affinewarp import ShiftWarping
@@ -448,6 +448,10 @@ def segment_sylls_from_songs(audio_dirs, song_seg_dirs, syll_seg_dirs, p, \
 	Enter quantiles to determine where to split the song motif. Entering the
 	same quantile twice will remove it.
 
+	Note
+	----
+	* All the song segments must be the same duration!
+
 	Parameters
 	----------
 	audio_dirs : list of str
@@ -476,8 +480,6 @@ def segment_sylls_from_songs(audio_dirs, song_seg_dirs, syll_seg_dirs, p, \
 			# Make spectrogram.
 			onset, offset = seg[0] - shoulder, seg[1] + shoulder
 			i1, i2 = int(fs*onset), int(fs*offset)
-			# assert i1 >= 0, "Negative index! Decrease `shoulder`."
-			# assert i2 <= len(audio), "Index > len(audio)! Decrease `shoulder`."
 			spec, dt = _get_spec(fs, audio[max(i1,0):i2], p)
 			# Pad spectrogram if it's near the edge of the file.
 			if i1 < 0 or i2 > len(audio):
@@ -502,11 +504,21 @@ def segment_sylls_from_songs(audio_dirs, song_seg_dirs, syll_seg_dirs, p, \
 		amps -= np.mean(amps)
 		amps /= np.std(amps) + EPSILON
 		amp_traces.append(amps)
+	# Truncate the amplitude traces if they aren't exactly the same length.
+	min_time_bins = min(len(amp_trace) for amp_trace in amp_traces)
+	max_time_bins = max(len(amp_trace) for amp_trace in amp_traces)
+	if verbose and (min_time_bins != max_time_bins):
+		print("Found different numbers of time bins in segments!")
+		print("\tmin:" + str(min_time_bins) + ", max:", max_time_bins)
+		print("\tTruncating to minimum number of time bins.")
+	if min_time_bins != max_time_bins:
+		amp_traces = [amp_trace[:min_time_bins] for amp_trace in amp_traces]
 	amp_traces = np.array(amp_traces)
+	# Warp the amplitude traces.
 	max_t = amp_traces.shape[1]*dt*1e3
 	num_time_bins = amp_traces.shape[1]
-	model = ShiftWarping(maxlag=.1, smoothness_reg_scale=10.)
-	model.fit(amp_traces[:,:,np.newaxis], iterations=100)
+	model = ShiftWarping(maxlag=0.2, smoothness_reg_scale=10.0)
+	model.fit(amp_traces[:,:,np.newaxis], iterations=50)
 	aligned = model.predict().squeeze()
 	max_raw_val = np.max(amp_traces)
 	max_aligned_val = np.max(aligned)
@@ -516,8 +528,9 @@ def segment_sylls_from_songs(audio_dirs, song_seg_dirs, syll_seg_dirs, p, \
 	while True:
 		# Plot.
 		_, axarr = plt.subplots(3,1, sharex=True)
-		axarr[0].imshow(specs[0], origin='lower', aspect='auto', \
-				extent=[0,max_t,p['min_freq']/1e3,p['max_freq']/1e3])
+		axarr[0].imshow(specs[np.random.randint(len(specs))], origin='lower', \
+				aspect='auto', extent=[0,max_t,p['min_freq']/1e3, \
+				p['max_freq']/1e3])
 		temp = np.copy(amp_traces)
 		for q in quantiles:
 			for i in range(len(temp)):

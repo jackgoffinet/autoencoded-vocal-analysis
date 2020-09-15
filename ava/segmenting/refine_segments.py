@@ -59,10 +59,10 @@ def refine_segments_pre_vae(seg_dirs, audio_dirs, out_seg_dirs, p, \
 	if verbose:
 		print("\nCleaning segments\n-----------------")
 		print("Collecting spectrograms...")
-	specs, max_len, _ = _get_specs(audio_dirs, seg_dirs, p, n_samples=n_samples)
+	specs, max_len, _ = _get_specs(audio_dirs, seg_dirs, p, max_num_specs=n_samples)
 	specs = np.stack(specs)
 	if verbose:
-		print("Running UMAP...")
+		print("Running UMAP... n =", len(specs))
 	transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, \
 			metric='euclidean', random_state=42)
 	with warnings.catch_warnings():
@@ -86,7 +86,7 @@ def refine_segments_pre_vae(seg_dirs, audio_dirs, out_seg_dirs, p, \
 			first_iteration = False
 			title = "Select unwanted sounds:"
 			tooltip_plot(embed, specs, num_imgs=num_imgs, title=title, \
-					output_dir=tooltip_output_dir)
+					output_dir=tooltip_output_dir, grid=True)
 			if verbose:
 				print("\tDone.")
 		if input("Press [q] to quit drawing rectangles or [return] continue: ") == 'q':
@@ -200,7 +200,7 @@ def refine_segments_post_vae(dc, seg_dirs, audio_dirs, out_seg_dirs, \
 		print(msg)
 
 
-def _get_specs(audio_dirs, seg_dirs, p, n_samples=None, max_len=None):
+def _get_specs(audio_dirs, seg_dirs, p, max_num_specs=None, max_len=None):
 	"""
 	Make a bunch of spectrograms.
 
@@ -212,7 +212,7 @@ def _get_specs(audio_dirs, seg_dirs, p, n_samples=None, max_len=None):
 		Directories containing segmenting decisions
 	p : dict
 		Segementing parameters. TO DO: ADD REFERENCE!
-	n_samples : {int, None}, optional
+	max_num_specs : {int, None}, optional
 		Defaults to ``None``.
 	max_len : {int, None}, optional
 		Maximum number of spectrogram time bins.
@@ -245,9 +245,9 @@ def _get_specs(audio_dirs, seg_dirs, p, n_samples=None, max_len=None):
 			spec, _, _ = get_spec(audio[i1:i2], p)
 			specs.append(spec)
 			all_fns.append(os.path.split(seg_fn)[-1])
-			if len(specs) >= n_samples:
+			if max_num_specs is not None and len(specs) >= max_num_specs:
 				break
-		if len(specs) >= n_samples:
+		if max_num_specs is not None and len(specs) >= max_num_specs:
 			break
 	# Zero-pad.
 	assert len(specs) > 0, "Found no spectrograms!"
