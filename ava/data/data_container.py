@@ -9,13 +9,13 @@ TO DO
 - make sure input directories are iterable
 - add features to existing files.
 """
-__date__ = "July 2019 - June 2020"
+__date__ = "July 2019 - September 2020"
 
 
 import h5py
 try:
 	from numba.errors import NumbaPerformanceWarning
-except NameError:
+except (NameError, ModuleNotFoundError):
 	pass
 import numpy as np
 import os
