@@ -10,9 +10,7 @@ plt.switch_backend('agg')
 import numpy as np
 import os
 from scipy.signal import stft
-from scipy.interpolate import interp1d
 from scipy.io import wavfile
-from scipy.optimize import minimize
 
 
 EPSILON = 1e-9
@@ -23,7 +21,7 @@ def get_spec(audio, p):
 	"""
 	Get a spectrogram.
 
-	Much simpler than ``ava.preprocessing.utils.get_spec``
+	Much simpler than ``ava.preprocessing.utils.get_spec``.
 
 	Raises
 	------
@@ -385,98 +383,6 @@ def softmax(arr, t=0.5):
 	temp = np.exp(arr/t)
 	temp /= np.sum(temp, axis=0) + EPSILON
 	return np.sum(np.multiply(arr, temp), axis=0)
-
-
-def _align_specs(specs, linear_warp=False, warp_iterations=3, \
-	shift_bounds=(-20,20), slope_bounds=(0.9,1.1), verbose=True):
-	"""
-	Align the spectrograms, return warping parameters and warped specs.
-
-	Minimizes an l2 loss.
-
-	TO DO
-	-----
-	* Initialize linear warps with the result of a shift-only run.
-
-	Parameters
-	----------
-	specs : numpy.ndarray
-		Spectrograms, shape: [n_specs, freq_bins, time_bins]
-	linear_warp : bool, optional
-		Use a linear warp? Otherwise, use a shift-only warp. Defaults to
-		``False''.
-	warp_iterations : int, optional
-		Defaults to ``3``.
-
-	Returns
-	-------
-	warped_specs : numpy.ndarray
-		Warped spectrograms. Same shape as input spectrograms.
-	warp_params : dictionary
-		Maps `'shifts'` and `'slopes'` to the inferred values with. Units are
-		time bins.
-	"""
-	# Set up some things.
-	specs = np.copy(specs)
-	warped_specs = np.copy(specs)
-	if linear_warp:
-		x0 = np.zeros((len(specs),2))
-		bounds = [shift_bounds, slope_bounds]
-	else:
-		x0 = np.zeros((len(specs),1))
-		bounds = [shift_bounds]
-	interps = []
-	for i in range(len(specs)):
-		spec = specs[i]
-		f = interp1d(np.arange(spec.shape[1]), spec, assume_sorted=True, \
-				bounds_error=False, fill_value=(spec[:,0],spec[:,-1]))
-		interps.append(f)
-	# Warp to average spectrogram, recalculate average, repeat.
-	for warp_iter in range(warp_iterations):
-		mean_spec = np.mean(warped_specs, axis=0)
-		squared_errors = np.zeros(len(specs))
-		for i in range(len(specs)):
-			# Get an objective.
-			if linear_warp:
-				objective = _get_linear_objective(specs[i], mean_spec, interps[i])
-			else:
-				objective = _get_shift_objective(specs[i], mean_spec, interps[i])
-			# Optimize.
-			res = minimize(objective, x0[i], bounds=bounds, method='Powell')
-			if not res.success:
-				print("Optimization failed:", res.message)
-				return None, None
-			x0[i] = res.x
-			squared_errors = res.fun
-			# Update warped specs.
-			if linear_warp:
-				warped_specs[i] = interps[i](res.x[0] + res.x[1]*np.arange(specs[i].shape[1]))
-			else:
-				warped_specs[i] = interps[i](res.x + np.arange(specs[i].shape[1]))
-		if verbose:
-			print("Warp iteration "+str(warp_iter)+", MSE =", np.mean(squared_errors))
-	warp_params = {'shifts': x0[:,0]}
-	if linear_warp:
-		warp_params['slopes'] = x0[:,1]
-	else:
-		warp_params['slopes'] = np.zeros(len(x0))
-	return warped_specs, warp_params
-
-
-def _get_linear_objective(spec, target_spec, f):
-	""" """
-	def objective(x):
-		pred_spec = f(x[0] + x[1]*np.arange(spec.shape[1]))
-		return np.sum(np.power(pred_spec - target_spec, 2))
-	return objective
-
-
-def _get_shift_objective(spec, target_spec, f):
-	""" """
-	def objective(x):
-		pred_spec = f(x[0] + np.arange(spec.shape[1]))
-		return np.sum(np.power(pred_spec - target_spec, 2))
-	return objective
 
 
 def _read_onsets_offsets(filename):

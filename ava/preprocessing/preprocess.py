@@ -306,11 +306,17 @@ def _tune_input_helper(p):
 
 def get_audio_seg_filenames(audio_dir, segment_dir, p):
 	"""Return lists of sorted filenames."""
+	# Collect all the audio filenames.
 	temp_filenames = [i for i in sorted(os.listdir(audio_dir)) if \
 			is_audio_file(i)]
 	audio_filenames = [os.path.join(audio_dir, i) for i in temp_filenames]
 	temp_filenames = [i[:-4] + '.txt' for i in temp_filenames]
 	seg_filenames = [os.path.join(segment_dir, i) for i in temp_filenames]
+	# Remove filenames with segments that don't exist.
+	for i in range(len(seg_filenames)-1,-1,-1):
+		if not os.path.exists(seg_filenames[i]):
+			del seg_filenames[i]
+			del audio_filenames[i]
 	return audio_filenames, seg_filenames
 
 
@@ -330,7 +336,9 @@ def read_onsets_offsets_from_file(txt_filename, p):
 	* The text file must have two coulumns separated by whitespace and ``#``
 	  prepended to header and footer lines.
 	"""
-	segs = np.loadtxt(txt_filename).reshape(-1,2)
+	segs = np.loadtxt(txt_filename)
+	assert segs.size % 2 == 0, "Incorrect formatting: " + txt_filename
+	segs = segs.reshape(-1,2)
 	return segs[:,0], segs[:,1]
 
 

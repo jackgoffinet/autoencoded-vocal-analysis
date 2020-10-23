@@ -2,10 +2,13 @@
 Plot a latent mean projection.
 
 """
-__date__ = "July 2019 - February 2020"
+__date__ = "July 2019 - October 2020"
 
 
-from numba.errors import NumbaPerformanceWarning
+try:
+	from numba.errors import NumbaPerformanceWarning
+except (NameError, ModuleNotFoundError):
+	pass
 import matplotlib
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
@@ -130,7 +133,10 @@ def latent_projection_plot_with_noise_DC(dc, noise_box,
 	transform = umap.UMAP(n_components=2, n_neighbors=20, min_dist=0.1, \
 		metric='euclidean', random_state=42)
 	with warnings.catch_warnings():
-		warnings.filterwarnings("ignore", category=NumbaPerformanceWarning)
+		try:
+			warnings.filterwarnings("ignore", category=NumbaPerformanceWarning)
+		except NameError:
+			pass
 		embedding = transform.fit_transform(latent)
 	if color_by is None:
 		color = default_color

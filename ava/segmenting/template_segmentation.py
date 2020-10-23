@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 plt.switch_backend('agg')
 try:
 	from numba.errors import NumbaPerformanceWarning
-except NameError:
+except (NameError, ModuleNotFoundError):
 	pass
 import numpy as np
 from scipy.io import wavfile

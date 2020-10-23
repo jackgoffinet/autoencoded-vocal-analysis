@@ -2,7 +2,7 @@
 Remove noise from segmenting files.
 
 """
-__date__ = "August-November 2019"
+__date__ = "August 2019 - October 2020"
 
 
 from itertools import repeat
@@ -12,7 +12,7 @@ plt.switch_backend('agg')
 import numpy as np
 try:
 	from numba.errors import NumbaPerformanceWarning
-except NameError:
+except (NameError, ModuleNotFoundError):
 	pass
 import os
 from scipy.io import wavfile
@@ -200,7 +200,8 @@ def refine_segments_post_vae(dc, seg_dirs, audio_dirs, out_seg_dirs, \
 		print(msg)
 
 
-def _get_specs(audio_dirs, seg_dirs, p, max_num_specs=None, max_len=None):
+def _get_specs(audio_dirs, seg_dirs, p, max_num_specs=None, max_len=None, \
+	return_segs=False):
 	"""
 	Make a bunch of spectrograms.
 
@@ -216,6 +217,8 @@ def _get_specs(audio_dirs, seg_dirs, p, max_num_specs=None, max_len=None):
 		Defaults to ``None``.
 	max_len : {int, None}, optional
 		Maximum number of spectrogram time bins.
+	return_segs : bool, optional
+		Defaults to ``False``.
 
 	Returns
 	-------
@@ -225,6 +228,8 @@ def _get_specs(audio_dirs, seg_dirs, p, max_num_specs=None, max_len=None):
 		Maximum number of spectrogram time bins.
 	all_fns : ...
 		...
+	segs : numpy.ndarray
+		Onsets and offsets for each spectrogram. Returned if ``return_segs``.
 	"""
 	# Get the filenames.
 	audio_fns, seg_fns = get_audio_seg_filenames(audio_dirs, seg_dirs)
@@ -235,16 +240,20 @@ def _get_specs(audio_dirs, seg_dirs, p, max_num_specs=None, max_len=None):
 	np.random.seed(None)
 	audio_fns, seg_fns = audio_fns[perm], seg_fns[perm]
 	# Collect spectrograms.
-	specs, all_fns = [], []
+	specs, all_fns, segs = [], [], []
 	for audio_fn, seg_fn in zip(audio_fns, seg_fns):
 		onsets, offsets = _read_onsets_offsets(seg_fn)
 		fs, audio = wavfile.read(audio_fn)
+		assert len(audio) >= p['nperseg'], "Short audio file: " + audio_fn
 		for onset, offset in zip(onsets, offsets):
 			i1, i2 = int(onset * fs), int(offset * fs)
+			if i2-i1 <= p['nperseg']:
+				continue
 			assert i1 >= 0, audio_fn + ", " + seg_fn
-			spec, _, _ = get_spec(audio[i1:i2], p)
+			spec, dt, _ = get_spec(audio[i1:i2], p)
 			specs.append(spec)
 			all_fns.append(os.path.split(seg_fn)[-1])
+			segs.append(np.array([onset, 0.0])) # Offsets added below.
 			if max_num_specs is not None and len(specs) >= max_num_specs:
 				break
 		if max_num_specs is not None and len(specs) >= max_num_specs:
@@ -258,6 +267,10 @@ def _get_specs(audio_dirs, seg_dirs, p, max_num_specs=None, max_len=None):
 		spec = np.zeros((n_freq_bins, max_len))
 		spec[:,:specs[i].shape[1]] = specs[i][:,:max_len]
 		specs[i] = spec
+		segs[i][1] = segs[i][0] + dt * max_len
+	if return_segs:
+		segs = np.array(segs)
+		return specs, max_len, all_fns, segs
 	return specs, max_len, all_fns
 
 
