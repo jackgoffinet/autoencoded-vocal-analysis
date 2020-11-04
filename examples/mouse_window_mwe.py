@@ -4,7 +4,8 @@ Minimal working example for shotgun VAE using mouse USVs.
 0) Define directories and parameters.
 1) Tune preprocessing parameters.
 2) Warp song renditions & train a generative model.
-3) Plot and analyze.
+3) Plot.
+4) The world is your oyster.
 
 """
 
@@ -78,15 +79,29 @@ model = VAE(save_dir=root)
 model.train_loop(loaders, epochs=101, save_freq=20, test_freq=None)
 
 
-########################
-# 3) Plot and analyze. #
-########################
+#############
+# 3) Plot . #
+#############
 from ava.plotting.tooltip_plot import tooltip_plot_DC
 from ava.plotting.latent_projection import latent_projection_plot_DC
 
+# Write random spectrograms into a single directory.
 loaders['test'].dataset.write_hdf5_files(spec_dirs[0], num_files=1000)
-latent_projection_plot_DC(dc, alpha=0.25, s=0.5)
-tooltip_plot_DC(dc, num_imgs=2000)
+
+# Redefine the DataContainer so it only looks in that single directory.
+temp_dc = DataContainer(projection_dirs=proj_dirs[:1], \
+	audio_dirs=audio_dirs[:1], spec_dirs=spec_dirs[:1], plots_dir=root, \
+	model_filename=model_filename)
+
+latent_projection_plot_DC(temp_dc, alpha=0.25, s=0.5)
+tooltip_plot_DC(temp_dc, num_imgs=2000)
+
+
+################################
+# 4) The world is your oyster. #
+################################
+latent = dc.request('latent_means')
+pass
 
 
 

@@ -1,7 +1,7 @@
 """
 Methods for feeding syllable data to the VAE.
 
-Meant to be used in conjunction with `ava.models.vae.VAE`.
+Meant to be used with `ava.models.vae.VAE`.
 """
 __date__ = "November 2018 - July 2020"
 

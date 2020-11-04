@@ -2,8 +2,13 @@
 Methods for feeding randomly sampled spectrogram data to the shotgun VAE.
 
 Meant to be used with `ava.models.vae.VAE`.
+
+TO DO
+-----
+- replace `affinewarp` with `ava.preprocessing.warping`
+
 """
-__date__ = "August 2019 - July 2020"
+__date__ = "August 2019 - November 2020"
 
 
 from affinewarp import PiecewiseWarping
@@ -12,6 +17,7 @@ import numpy as np
 import os
 from scipy.interpolate import interp1d
 from scipy.io import wavfile
+from scipy.io.wavfile import WavFileWarning
 from torch.utils.data import Dataset, DataLoader
 import warnings
 
@@ -26,6 +32,7 @@ DEFAULT_WARP_PARAMS = {
 	'l2_reg_scale': 1e-7, # penalizes L2 norm of warping template
 }
 """Default time-warping parameters sent to affinewarp"""
+
 EPSILON = 1e-9
 
 
@@ -156,8 +163,10 @@ class FixedWindowDataset(Dataset):
 			value less than `min_spec_val` will be disregarded.
 		"""
 		self.filenames = np.array(sorted(audio_filenames))
-		self.audio = [wavfile.read(fn)[1] for fn in self.filenames]
-		self.fs = wavfile.read(audio_filenames[0])[0]
+		with warnings.catch_warnings():
+			warnings.filterwarnings("ignore", category=WavFileWarning)
+			self.audio = [wavfile.read(fn)[1] for fn in self.filenames]
+			self.fs = wavfile.read(audio_filenames[0])[0]
 		self.roi_filenames = roi_filenames
 		self.dataset_length = dataset_length
 		self.min_spec_val = min_spec_val
@@ -393,8 +402,10 @@ class WarpedWindowDataset(Dataset):
 		assert type(p) == type({})
 		assert warp_type in ['amplitude', 'spectrogram', 'null']
 		self.audio_filenames = sorted(audio_filenames)
-		self.audio = [wavfile.read(fn)[1] for fn in self.audio_filenames]
-		self.fs = wavfile.read(self.audio_filenames[0])[0]
+		with warnings.catch_warnings():
+			warnings.filterwarnings("ignore", category=WavFileWarning)
+			self.audio = [wavfile.read(fn)[1] for fn in self.audio_filenames]
+			self.fs = wavfile.read(self.audio_filenames[0])[0]
 		self.dataset_length = dataset_length
 		self.p = p
 		self.transform = transform

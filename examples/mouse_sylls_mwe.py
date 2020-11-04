@@ -8,7 +8,8 @@ Minimal working example for mouse syllables.
 3) Tune preprocessing parameters.
 4) Preprocess.
 5) Train a generative model on these syllables.
-6) Plot and analyze.
+6) Plot.
+7) The world is your oyster.
 
 """
 
@@ -27,6 +28,7 @@ from ava.preprocessing.utils import get_spec
 from ava.segmenting.refine_segments import refine_segments_pre_vae
 from ava.segmenting.segment import tune_segmenting_params, segment
 from ava.segmenting.amplitude_segmentation import get_onsets_offsets
+
 
 
 #########################################
@@ -136,14 +138,19 @@ loaders['test'] = loaders['train']
 model.train_loop(loaders, epochs=151, test_freq=None)
 
 
-########################
-# 6) Plot and analyze. #
-########################
+############
+# 6) Plot. #
+############
 from ava.plotting.tooltip_plot import tooltip_plot_DC
 from ava.plotting.latent_projection import latent_projection_plot_DC
 latent_projection_plot_DC(dc)
 tooltip_plot_DC(dc, num_imgs=2000)
 
+
+################################
+# 7) The world is your oyster. #
+################################
+pass
 
 
 

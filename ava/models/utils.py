@@ -2,7 +2,7 @@
 Useful functions related to the `ava.models` subpackage.
 
 """
-__date__ = "July 2020"
+__date__ = "July - November 2020"
 
 
 from affinewarp import PiecewiseWarping
@@ -14,8 +14,10 @@ import numpy as np
 import os
 from scipy.interpolate import interp1d
 from scipy.io import wavfile
+from scipy.io.wavfile import WavFileWarning
 from scipy.signal import stft
 import torch
+import warnings
 
 
 DEFAULT_SEARCH_PARAMS = {
@@ -92,8 +94,10 @@ def cross_validation_warp_parameter_search(audio_dirs, spec_params, \
 	for audio_dir in audio_dirs:
 		audio_fns += _get_wavs_from_dir(audio_dir)
 	# Make spectrograms.
-	all_audio = [wavfile.read(audio_fn)[1] for audio_fn in audio_fns]
-	fs = wavfile.read(audio_fns[0])[0]
+	with warnings.catch_warnings():
+		warnings.filterwarnings("ignore", category=WavFileWarning)
+		all_audio = [wavfile.read(audio_fn)[1] for audio_fn in audio_fns]
+		fs = wavfile.read(audio_fns[0])[0]
 	specs, amps, _  = _get_specs_and_amplitude_traces(all_audio, fs, \
 			spec_params)
 	if verbose:
@@ -215,8 +219,10 @@ def anchor_point_warp_parameter_search(audio_dirs, anchor_dir, spec_params, \
 	for audio_dir in audio_dirs + [anchor_dir]: # annotated audio is at the end
 		audio_fns += _get_wavs_from_dir(audio_dir)
 	# Make spectrograms.
-	all_audio = [wavfile.read(audio_fn)[1] for audio_fn in audio_fns]
-	fs = wavfile.read(audio_fns[0])[0]
+	with warnings.catch_warnings():
+		warnings.filterwarnings("ignore", category=WavFileWarning)
+		all_audio = [wavfile.read(audio_fn)[1] for audio_fn in audio_fns]
+		fs = wavfile.read(audio_fns[0])[0]
 	specs, amps, template_dur  = _get_specs_and_amplitude_traces(all_audio, fs,\
 			spec_params)
 	if warp_type == 'amplitude':

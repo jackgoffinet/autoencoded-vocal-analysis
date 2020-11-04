@@ -2,7 +2,7 @@
 Remove noise from segmenting files.
 
 """
-__date__ = "August 2019 - October 2020"
+__date__ = "August 2019 - November 2020"
 
 
 from itertools import repeat
@@ -16,16 +16,13 @@ except (NameError, ModuleNotFoundError):
 	pass
 import os
 from scipy.io import wavfile
+from scipy.io.wavfile import WavFileWarning
 import umap
 import warnings
 
 from ava.plotting.tooltip_plot import tooltip_plot
 from ava.segmenting.utils import get_spec, get_audio_seg_filenames, \
 		_read_onsets_offsets
-
-
-# Silence scipy.io.wavfile.read metadata warnings.
-warnings.filterwarnings("ignore", message="Chunk (non-data) not understood*")
 
 
 
@@ -243,8 +240,11 @@ def _get_specs(audio_dirs, seg_dirs, p, max_num_specs=None, max_len=None, \
 	specs, all_fns, segs = [], [], []
 	for audio_fn, seg_fn in zip(audio_fns, seg_fns):
 		onsets, offsets = _read_onsets_offsets(seg_fn)
-		fs, audio = wavfile.read(audio_fn)
-		assert len(audio) >= p['nperseg'], "Short audio file: " + audio_fn
+		with warnings.catch_warnings():
+			warnings.filterwarnings("ignore", category=WavFileWarning)
+			fs, audio = wavfile.read(audio_fn)
+		assert len(audio) >= p['nperseg'], "Short audio file: " + audio_fn + \
+				", duration: " + str(len(audio)/fs)
 		for onset, offset in zip(onsets, offsets):
 			i1, i2 = int(onset * fs), int(offset * fs)
 			if i2-i1 <= p['nperseg']:

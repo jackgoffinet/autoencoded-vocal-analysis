@@ -6,9 +6,10 @@ TO DO:
 	- Plot in kHz, with labels
 	- tune window size
 	- segment could be sped up if it operated file by file.
+	- Track all the variables needed in `p` arguments.
 
 """
-__date__ = "December 2018 - August 2019"
+__date__ = "December 2018 - November 2020"
 
 
 import matplotlib.pyplot as plt
@@ -16,6 +17,7 @@ plt.switch_backend('agg')
 import numpy as np
 import os
 from scipy.io import wavfile, loadmat
+from scipy.io.wavfile import WavFileWarning
 from scipy.signal import stft
 import warnings
 
@@ -28,7 +30,7 @@ EPSILON = 1e-12
 
 def segment(audio_dir, seg_dir, p, verbose=True):
 	"""
-	Segment audio files in audio_dir and write decisions to seg_dir.
+	Segment audio files in `audio_dir` and write decisions to `seg_dir`.
 
 	Parameters
 	----------
@@ -37,7 +39,10 @@ def segment(audio_dir, seg_dir, p, verbose=True):
 	seg_dir : str
 		Directory containing segmenting decisions.
 	p : dict
-		Segmenting parameters. TO DO: ADD REFERENCE!
+		Segmenting parameters. Must map the key `'algorithm'` to a segmenting
+		algorithm, for example
+		`ava.segmenting.amplitude_segmentation.get_onsets_offsets`. Must
+		additionally contain keys requested by the segmenting algorithm.
 	verbose : bool, optional
 		Defaults to ``True``.
 	"""
@@ -46,10 +51,12 @@ def segment(audio_dir, seg_dir, p, verbose=True):
 	if not os.path.exists(seg_dir):
 		os.makedirs(seg_dir)
 	num_sylls = 0
-	audio_fns, seg_fns = get_audio_seg_filenames(audio_dir, seg_dir, p)
+	audio_fns, seg_fns = get_audio_seg_filenames(audio_dir, seg_dir, None)
 	for audio_fn, seg_fn in zip(audio_fns, seg_fns):
 		# Collect audio.
-		fs, audio = wavfile.read(audio_fn)
+		with warnings.catch_warnings():
+			warnings.filterwarnings("ignore", category=WavFileWarning)
+			fs, audio = wavfile.read(audio_fn)
 		# Segment.
 		onsets, offsets = p['algorithm'](audio, p)
 		combined = np.stack([onsets, offsets]).T
@@ -65,12 +72,19 @@ def tune_segmenting_params(audio_dirs, p, img_fn='temp.pdf'):
 	"""
 	Tune segementing parameters by visualizing segmenting decisions.
 
+	Chunks of audio will be drawn at random, segmented, and a plot showing the
+	segmenting decisions will be saved as ``img_fn``, by default ``'temp.pdf'``.
+
 	Parameters
 	----------
 	audio_dirs : list of str
 		Directories containing audio files.
 	p : dict
-		Segmenting parameters. TO DO: ADD REFERENCE!
+		Segmenting parameters. Must contain the keys:
+			-`'max_dur'`: maximum segment duration, in seconds
+			-`'algorithm'`: segmenting algorithm, for example
+			 `ava.segmenting.amplitude_segmentation.get_onsets_offsets`.
+		in addition to the keys required by `ava.segmenting.utils.get_spec`.
 	img_fn : str, optional
 		Where to save segmenting images.
 
@@ -109,7 +123,7 @@ def tune_segmenting_params(audio_dirs, p, img_fn='temp.pdf'):
 			if temp != '':
 				p[key] = float(temp)
 
-		# Visualize segmenting decisions.
+		# Plot segmenting decisions.
 		temp = 'not (s or r)'
 		iteration = 0
 		while temp != 's' and temp != 'r':
@@ -119,13 +133,15 @@ def tune_segmenting_params(audio_dirs, p, img_fn='temp.pdf'):
 			filename = filenames[file_index]
 
 			# Get spectrogram.
-			fs, audio = wavfile.read(filename)
+			with warnings.catch_warnings():
+				warnings.filterwarnings("ignore", category=WavFileWarning)
+				fs, audio = wavfile.read(filename)
 			assert fs == p['fs'], 'Found fs='+str(fs)+', expected '+str(p['fs'])
 			if len(audio) < 3*window_samples + 1:
 				temp = len(audio) / p['fs']
 				print("Skipping short file: "+filename+" ("+str(temp)+"s)")
 				continue
-			start_index = np.random.randint(len(audio) - 3*window_samples)			
+			start_index = np.random.randint(len(audio) - 3*window_samples)
 			stop_index = start_index + 3*window_samples
 			audio = audio[start_index:stop_index]
 			spec, dt, f = get_spec(audio, p)
@@ -178,8 +194,23 @@ def tune_segmenting_params(audio_dirs, p, img_fn='temp.pdf'):
 				return p
 
 
-def get_audio_seg_filenames(audio_dir, segment_dir, p):
-	"""Return lists of sorted filenames."""
+def get_audio_seg_filenames(audio_dir, segment_dir, p=None):
+	"""
+	Return lists of sorted filenames.
+
+	Warning
+	-------
+	- `p` is unused. This will be removed in a future version!
+
+	Parameters
+	----------
+	audio_dir : str
+		Audio directory.
+	segment_dir : str
+		Segments directory.
+	p : dict, optional
+		Unused! Defaults to ``None``.
+	"""
 	temp_filenames = [i for i in sorted(os.listdir(audio_dir)) if \
 			_is_audio_file(i)]
 	audio_filenames = [os.path.join(audio_dir, i) for i in temp_filenames]

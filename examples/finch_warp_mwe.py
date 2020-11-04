@@ -4,7 +4,8 @@ Minimal working example for shotgun VAE using time-warped birdsong.
 0) Define directories and parameters.
 1) Tune preprocessing parameters.
 2) Warp song renditions & train a generative model.
-3) Plot and analyze.
+3) Plot.
+4) The world is your oyster.
 
 """
 
@@ -56,8 +57,6 @@ spec_dirs = [os.path.join(root, 'h5s')]
 proj_dirs = [os.path.join(root, 'projections')]
 model_filename = os.path.join(root, 'checkpoint_200.tar')
 plots_dir = root
-
-
 dc = DataContainer(projection_dirs=proj_dirs, audio_dirs=audio_dirs, \
 	spec_dirs=spec_dirs, plots_dir=root, model_filename=model_filename, \
 	template_dir=template_dir)
@@ -80,15 +79,20 @@ model = VAE(save_dir=root)
 model.train_loop(loaders, epochs=201, save_freq=50, test_freq=None)
 
 
-########################
-# 3) Plot and analyze. #
-########################
+############
+# 3) Plot. #
+############
 from ava.plotting.tooltip_plot import tooltip_plot_DC
 from ava.plotting.latent_projection import latent_projection_plot_DC
-
 latent_projection_plot_DC(dc)
 tooltip_plot_DC(dc, num_imgs=2000)
 
+
+################################
+# 4) The world is your oyster. #
+################################
+latent = dc.request('latent_means')
+pass
 
 
 

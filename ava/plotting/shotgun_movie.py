@@ -8,7 +8,7 @@ Reduce speed by 50%:
 ffmpeg -i out.mp4 -filter_complex "[0:v]setpts=PTS/0.5[v];[0:a]atempo=0.5[a]" -map "[v]" -map "[a]" -strict -2 out.mp4
 
 """
-__date__ = "Novemeber 2019"
+__date__ = "November 2019 - November 2020"
 
 
 import joblib
@@ -17,11 +17,13 @@ plt.switch_backend('agg')
 import numpy as np
 import os
 from scipy.io import wavfile
+from scipy.io.wavfile import WavFileWarning
 from scipy.spatial.distance import euclidean, correlation
 from sklearn.neighbors import NearestNeighbors
 import subprocess
 import torch
 from torch.utils.data import Dataset, DataLoader
+import warnings
 
 from ava.models.vae import VAE
 
@@ -86,7 +88,9 @@ def shotgun_movie_DC(dc, audio_file, p, method='spectrogram_correlation', \
 			if len(fn) > 4 and fn[-4:] == '.jpg':
 				os.remove(os.path.join(output_dir, fn))
 	# Read the audio file.
-	fs, audio = wavfile.read(audio_file)
+	with warnings.catch_warnings():
+		warnings.filterwarnings("ignore", category=WavFileWarning)
+		fs, audio = wavfile.read(audio_file)
 	assert fs == p['fs'], "found fs="+str(fs)+", expected "+str(p['fs'])
 	# Make spectrograms.
 	specs = []

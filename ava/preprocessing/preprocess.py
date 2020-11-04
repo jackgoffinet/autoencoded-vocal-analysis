@@ -11,6 +11,7 @@ plt.switch_backend('agg')
 import numpy as np
 import os
 from scipy.io import wavfile
+from scipy.io.wavfile import WavFileWarning
 import warnings
 
 from ava.preprocessing.utils import _mel, _inv_mel
@@ -127,7 +128,9 @@ def get_syll_specs(onsets, offsets, audio_filename, p):
 	valid_syllables : list of int
 		Indices of `specs` containing valid syllables.
 	"""
-	fs, audio = wavfile.read(audio_filename)
+	with warnings.catch_warnings():
+		warnings.filterwarnings("ignore", category=WavFileWarning)
+		fs, audio = wavfile.read(audio_filename)
 	assert p['nperseg'] % 2 == 0 and p['nperseg'] > 2
 	if p['mel']:
 		target_freqs = np.linspace( \
@@ -255,7 +258,9 @@ def tune_window_preprocessing_params(audio_dirs, p, img_fn='temp.pdf'):
 			# Grab a random file.
 			file_index = np.random.randint(len(audio_filenames))
 			audio_filename = audio_filenames[file_index]
-			fs, audio = wavfile.read(audio_filename)
+			with warnings.catch_warnings():
+				warnings.filterwarnings("ignore", category=WavFileWarning)
+				fs, audio = wavfile.read(audio_filename)
 			assert fs == p['fs'], "Found fs="+str(fs)+", expected "+str(p['fs'])
 
 			# Get a random onset & offset.

@@ -2,7 +2,7 @@
 Useful functions for segmenting.
 
 """
-__date__ = "August 2019 - September 2020"
+__date__ = "August 2019 - November 2020"
 
 
 import matplotlib.pyplot as plt
@@ -11,6 +11,8 @@ import numpy as np
 import os
 from scipy.signal import stft
 from scipy.io import wavfile
+from scipy.io.wavfile import WavFileWarning
+import warnings
 
 
 EPSILON = 1e-9
@@ -142,7 +144,9 @@ def clean_segments_by_hand(audio_dirs, orig_seg_dirs, new_seg_dirs, p, \
 				orig_seg_fn = all_orig_seg_fns[index+i]
 				new_seg_fn = all_new_seg_fns[index+i]
 				# Get spectrogram.
-				fs, audio = wavfile.read(audio_fn)
+				with warnings.catch_warnings():
+					warnings.filterwarnings("ignore", category=WavFileWarning)
+					fs, audio = wavfile.read(audio_fn)
 				assert fs == p['fs'], "Found fs="+str(fs)+", expected fs="+\
 						str(p['fs'])
 				spec, dt, f = get_spec(audio, p)
@@ -272,7 +276,9 @@ def write_segments_to_audio(in_audio_dirs, out_audio_dirs, seg_dirs, n_zfill=3,\
 			segs = np.loadtxt(seg_fn).reshape(-1,2)
 			if len(segs) == 0:
 				continue
-			fs, audio = wavfile.read(audio_fn)
+			with warnings.catch_warnings():
+				warnings.filterwarnings("ignore", category=WavFileWarning)
+				fs, audio = wavfile.read(audio_fn)
 			for j in range(segs.shape[0]):
 				num_samples = int(round(fs * (segs[j,1]-segs[j,0])))
 				i1 = int(round(fs * segs[j,0]))

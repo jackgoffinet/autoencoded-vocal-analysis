@@ -2,7 +2,7 @@
 Segment song motifs by finding maxima in spectrogram cross correlations.
 
 """
-__date__ = "April 2019 - September 2020"
+__date__ = "April 2019 - November 2020"
 
 
 from affinewarp import ShiftWarping
@@ -17,6 +17,7 @@ except (NameError, ModuleNotFoundError):
 	pass
 import numpy as np
 from scipy.io import wavfile
+from scipy.io.wavfile import WavFileWarning
 from scipy.signal import stft
 from scipy.ndimage.filters import gaussian_filter
 import os
@@ -56,7 +57,9 @@ def get_template(feature_dir, p, smoothing_kernel=(0.5, 0.5), verbose=True):
 		if _is_wav_file(i)]
 	specs = []
 	for i, filename in enumerate(filenames):
-		fs, audio = wavfile.read(filename)
+		with warnings.catch_warnings():
+			warnings.filterwarnings("ignore", category=WavFileWarning)
+			fs, audio = wavfile.read(filename)
 		assert fs == p['fs'], "Found samplerate="+str(fs)+\
 			", expected "+str(p['fs'])
 		spec, dt = _get_spec(fs, audio, p)
@@ -208,7 +211,9 @@ def _segment_file(segment_dir, filename, template, p, num_mad=2.0, min_dt=0.05,\
 	segments : numpy.ndarray
 		Onsets and offsets.
 	"""
-	fs, audio = wavfile.read(filename)
+	with warnings.catch_warnings():
+		warnings.filterwarnings("ignore", category=WavFileWarning)
+		fs, audio = wavfile.read(filename)
 	assert fs == p['fs'], "Found samplerate="+str(fs)+", expected "+str(p['fs'])
 	if len(audio) < p['nperseg']:
 		warnings.warn(
@@ -301,7 +306,9 @@ def clean_collected_segments(result, audio_dirs, segment_dirs, p, \
 		print("Collecting spectrograms...")
 	specs = []
 	for filename in result.keys():
-		fs, audio = wavfile.read(filename)
+		with warnings.catch_warnings():
+			warnings.filterwarnings("ignore", category=WavFileWarning)
+			fs, audio = wavfile.read(filename)
 		assert fs == p['fs'], "Found samplerate=" + str(fs) + \
 				", expected " + str(p['fs'])
 		for segment in result[filename]:
@@ -405,7 +412,9 @@ def clean_collected_segments(result, audio_dirs, segment_dirs, p, \
 		audio_fns = [os.path.join(audio_dir, i) for i in os.listdir(audio_dir) \
 			if _is_wav_file(i)]
 		for audio_fn in audio_fns:
-			fs, audio = wavfile.read(audio_fn)
+			with warnings.catch_warnings():
+				warnings.filterwarnings("ignore", category=WavFileWarning)
+				fs, audio = wavfile.read(audio_fn)
 			assert fs == p['fs'], "Found samplerate=" + str(fs) + \
 					", expected " + str(p['fs'])
 			segment_fn = os.path.split(audio_fn)[-1][:-4] + '.txt'
@@ -475,7 +484,9 @@ def segment_sylls_from_songs(audio_dirs, song_seg_dirs, syll_seg_dirs, p, \
 	empty_audio_files = []
 	specs, fns, song_onsets = [], [], []
 	for audio_fn in song_segs:
-		fs, audio = wavfile.read(audio_fn)
+		with warnings.catch_warnings():
+			warnings.filterwarnings("ignore", category=WavFileWarning)
+			fs, audio = wavfile.read(audio_fn)
 		for seg in song_segs[audio_fn].reshape(-1,2):
 			# Make spectrogram.
 			onset, offset = seg[0] - shoulder, seg[1] + shoulder

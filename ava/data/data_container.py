@@ -9,7 +9,7 @@ TO DO
 - make sure input directories are iterable
 - add features to existing files.
 """
-__date__ = "July 2019 - September 2020"
+__date__ = "July 2019 - November 2020"
 
 
 import h5py
@@ -20,6 +20,7 @@ except (NameError, ModuleNotFoundError):
 import numpy as np
 import os
 from scipy.io import wavfile
+from scipy.io.wavfile import WavFileWarning
 from sklearn.decomposition import PCA
 from time import strptime, mktime
 import torch
@@ -28,7 +29,7 @@ import warnings
 
 from ava.models.vae import VAE
 from ava.models.vae_dataset import get_syllable_partition, \
-	get_syllable_data_loaders
+		get_syllable_data_loaders
 from ava.models.utils import get_hdf5s_from_dir
 
 
@@ -239,7 +240,8 @@ class DataContainer():
 		self.verbose = verbose
 		self.sylls_per_file = None # syllables in each hdf5 file in spec_dirs
 		self.fields = self._check_for_fields()
-		if self.plots_dir not in [None, ''] and not os.path.exists(self.plots_dir):
+		if self.plots_dir not in [None, ''] and \
+					not os.path.exists(self.plots_dir):
 			os.makedirs(self.plots_dir)
 
 
@@ -383,7 +385,9 @@ class DataContainer():
 			audio_fns = [i for i in os.listdir(audio_dir) if _is_wav_file(i) \
 				and i in segments[audio_dir]]
 			for audio_fn in audio_fns:
-				fs, audio = wavfile.read(os.path.join(audio_dir, audio_fn))
+				with warnings.catch_warnings():
+					warnings.filterwarnings("ignore", category=WavFileWarning)
+					fs, audio = wavfile.read(os.path.join(audio_dir, audio_fn))
 				fn_result = []
 				for seg in segments[audio_dir][audio_fn]:
 					i1 = int(round(seg[0]*fs))

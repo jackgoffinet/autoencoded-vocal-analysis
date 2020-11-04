@@ -22,3 +22,4 @@
                  segmenting.utils.merge_segments added
                  preprocessing.warping added
                  Changes to preprocessing.preprocess.get_audio_seg_filenames
+                 Catching scipy.io.wavfile.WavFileWarning
