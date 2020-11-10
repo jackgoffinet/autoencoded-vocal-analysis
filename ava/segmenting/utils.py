@@ -50,7 +50,7 @@ def get_spec(audio, p):
 	assert len(audio) >= p['nperseg'], \
 			"len(audio): " + str(len(audio)) + ", nperseg: " + str(p['nperseg'])
 	f, t, spec = stft(audio, fs=p['fs'], nperseg=p['nperseg'], \
-		noverlap=p['noverlap'])
+			noverlap=p['noverlap'])
 	i1 = np.searchsorted(f, p['min_freq'])
 	i2 = np.searchsorted(f, p['max_freq'])
 	f, spec = f[i1:i2], spec[i1:i2]

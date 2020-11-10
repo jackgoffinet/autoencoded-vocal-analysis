@@ -346,7 +346,7 @@ def _update_segs_helper(seg_dir, audio_dir, out_seg_dir, p, max_len,
 				_write_segs(out_segs, out_seg_fn, audio_fn)
 				out_segs = []
 			prev_fn = all_fns[i]
-			prev_segs = np.loadtxt(os.path.join(seg_dir, prev_fn))
+			prev_segs = np.loadtxt(os.path.join(seg_dir, prev_fn)).reshape(-1,2)
 			index = 0 # within-file index
 		if not _in_bounds(embed[i], bounds):
 			out_segs.append(prev_segs[index])

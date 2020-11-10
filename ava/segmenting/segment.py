@@ -2,11 +2,8 @@
 Segment audio files and write segmenting decisions.
 
 TO DO:
-	- Toggle booleans
-	- Plot in kHz, with labels
 	- tune window size
 	- segment could be sped up if it operated file by file.
-	- Track all the variables needed in `p` arguments.
 
 """
 __date__ = "December 2018 - November 2020"
