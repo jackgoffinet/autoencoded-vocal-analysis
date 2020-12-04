@@ -52,7 +52,7 @@ def align_specs(specs, shift_λs, slope_λs, verbose=True):
 	Minimizes the following regularized L2 loss:
 		||warped_spec - target_spec||_2^2 +
 		shift_λ[iter] shift^2 +
-		slope_λ[iter] log2(slope)^2
+		slope_λ[iter] (log slope)^2
 
 	where `target_spec` is the average warped spectrogram, updated after every
 	optimization iteration. It's a good idea to start with large values of
@@ -120,7 +120,7 @@ def align_specs(specs, shift_λs, slope_λs, verbose=True):
 			res = minimize(objective, x0[i], method='Powell')
 			x0[i] = res.x
 			if slope_λ == np.inf:
-				x0[i,1] = 0.0
+				x0[i,1] = 0.0 # slope = 1, log slope = 0
 			if not res.success:
 				print("Optimization failed:", res.message)
 				return None, None
