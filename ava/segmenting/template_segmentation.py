@@ -11,10 +11,13 @@ from itertools import repeat
 from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
-try:
-	from numba.errors import NumbaPerformanceWarning
-except (NameError, ModuleNotFoundError):
-	pass
+try: # Numba >= 0.52
+	from numba.core.errors import NumbaPerformanceWarning
+except ModuleNotFoundError:
+	try: # Numba <= 0.45
+		from numba.errors import NumbaPerformanceWarning
+	except (NameError, ModuleNotFoundError):
+		pass
 import numpy as np
 from scipy.io import wavfile
 from scipy.io.wavfile import WavFileWarning

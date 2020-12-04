@@ -13,10 +13,13 @@ __date__ = "July 2019 - November 2020"
 
 
 import h5py
-try:
-	from numba.errors import NumbaPerformanceWarning
-except (NameError, ModuleNotFoundError):
-	pass
+try: # Numba >= 0.52
+	from numba.core.errors import NumbaPerformanceWarning
+except ModuleNotFoundError:
+	try: # Numba <= 0.45
+		from numba.errors import NumbaPerformanceWarning
+	except (NameError, ModuleNotFoundError):
+		pass
 import numpy as np
 import os
 from scipy.io import wavfile

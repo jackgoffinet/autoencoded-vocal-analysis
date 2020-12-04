@@ -5,10 +5,13 @@ Plot a latent mean projection.
 __date__ = "July 2019 - October 2020"
 
 
-try:
-	from numba.errors import NumbaPerformanceWarning
-except (NameError, ModuleNotFoundError):
-	pass
+try: # Numba >= 0.52
+	from numba.core.errors import NumbaPerformanceWarning
+except ModuleNotFoundError:
+	try: # Numba <= 0.45
+		from numba.errors import NumbaPerformanceWarning
+	except (NameError, ModuleNotFoundError):
+		pass
 import matplotlib
 import matplotlib.patches as mpatches
 import matplotlib.pyplot as plt
