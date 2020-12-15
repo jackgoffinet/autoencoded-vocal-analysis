@@ -9,7 +9,7 @@
                  segmenting.refine_segments.refine_segments_post_vae added
 0.2.5  12/20/19  preprocessing.preprocess.process_sylls now shuffles by default.
                  Small changes to DataContainer.
-0.3.0  ??/??/20  Changes to segmenting.template_segmentation
+0.3.0  12/15/20  Changes to segmenting.template_segmentation
                  New filename convention for segmenting.utils.write_segments_to_audio
                  Changes to segmenting.utils.clean_segments_by_hand
                  segmenting.template_segmentation.clean_collected_data -> clean_collected_segments
@@ -23,3 +23,4 @@
                  preprocessing.warping added
                  Changes to preprocessing.preprocess.get_audio_seg_filenames
                  Catching scipy.io.wavfile.WavFileWarning
+                 NumbaPerformanceWarning imports changed
