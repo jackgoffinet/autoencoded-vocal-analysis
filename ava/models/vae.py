@@ -282,7 +282,7 @@ class VAE(nn.Module):
 		conditional distribution, :math:`\mathbb{H}[q(z|x)]` . ELBO can then be
 		estimated as:
 
-		.. math:: 1/N \sum_{i=1}^N \mathbb{E}_{\hat{z} \sim q(z|x_i)}
+		.. math:: \\frac{1}{N} \sum_{i=1}^N \mathbb{E}_{\hat{z} \sim q(z|x_i)}
 			\log p(x_i,\hat{z}) + \mathbb{H}[q(z|x_i)]
 
 		where :math:`N` denotes the number of samples from the data distribution

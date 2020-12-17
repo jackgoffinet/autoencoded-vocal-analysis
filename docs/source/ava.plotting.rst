@@ -1,6 +1,11 @@
 ava.plotting package
 ====================
 
+.. automodule:: ava.plotting
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Submodules
 ----------
 
@@ -28,19 +33,18 @@ ava.plotting.mmd\_plots module
     :undoc-members:
     :show-inheritance:
 
-ava.plotting.tooltip\_plot module
----------------------------------
+ava.plotting.shotgun\_movie module
+----------------------------------
 
-.. automodule:: ava.plotting.tooltip_plot
+.. automodule:: ava.plotting.shotgun_movie
     :members:
     :undoc-members:
     :show-inheritance:
 
+ava.plotting.tooltip\_plot module
+---------------------------------
 
-Module contents
----------------
-
-.. automodule:: ava.plotting
+.. automodule:: ava.plotting.tooltip_plot
     :members:
     :undoc-members:
     :show-inheritance:

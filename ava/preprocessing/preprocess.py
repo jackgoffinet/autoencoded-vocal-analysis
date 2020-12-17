@@ -118,13 +118,13 @@ def get_syll_specs(onsets, offsets, audio_filename, p):
 	audio_filename : str
 		Audio filename.
 	p : dict
-		A dictionary mapping preprocessing parameters to their values.
-		NOTE: ADD REFERENCE HERE
+		A dictionary mapping preprocessing parameters to their values. NOTE: ADD
+		REFERENCE HERE!
 
 	Returns
 	-------
 	specs : list of {numpy.ndarray, None}
-		Spectrograms
+		Spectrograms.
 	valid_syllables : list of int
 		Indices of `specs` containing valid syllables.
 	"""
@@ -161,7 +161,7 @@ def tune_syll_preprocessing_params(audio_dirs, seg_dirs, p, img_fn='temp.pdf'):
 	seg_dirs : list of str
 		Segment directories
 	p : dict
-		Preprocessing parameters ADD REFERENCE
+		Preprocessing parameters: Add a reference!
 
 	Returns
 	-------
@@ -362,6 +362,7 @@ def _is_number(s):
 
 
 def is_audio_file(fn):
+	"""Return whether the given filename is an audio filename."""
 	return len(fn) >= 4 and fn[-4:] == '.wav'
 
 

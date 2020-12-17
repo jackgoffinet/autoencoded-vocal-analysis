@@ -2,7 +2,7 @@
 Plot a syllable projection with spectrograms appearing as tooltips.
 
 """
-__date__ = "March 2019 - July 2019"
+__date__ = "March 2019 - December 2020"
 
 from bokeh.plotting import figure, output_file, show, ColumnDataSource
 from bokeh.models import HoverTool
@@ -18,12 +18,12 @@ import umap
 def tooltip_plot_DC(dc, embedding_type='latent_mean_umap', output_dir='html', \
 	num_imgs=1000, title="", n=30000, grid=False, img_format='.jpg'):
 	"""
-	DataContainer version of tooltip_plot.
+	DataContainer version of `tooltip_plot`.
 
 	Parameters
 	----------
 	dc : ava.data.data_container.DataContainer
-		See ava.data.data_container for details.
+		DataContainer object
 	embedding_type : str, optional
 		Defaults to ``'latent_mean_umap'``.
 	output_dir : str, optional
@@ -83,7 +83,7 @@ def tooltip_plot(embedding, images, output_dir='temp', num_imgs=10000, title="",
 
 	n = min(len(embedding), n)
 	num_imgs = min(len(images), num_imgs)
-	write_images(embedding, images, output_dir=output_dir, num_imgs=num_imgs, n=n)
+	_write_images(embedding, images, output_dir=output_dir, num_imgs=num_imgs, n=n)
 	output_file(os.path.join(output_dir, "main.html"))
 	source = ColumnDataSource(
 			data=dict(
@@ -124,7 +124,7 @@ def tooltip_plot(embedding, images, output_dir='temp', num_imgs=10000, title="",
 	show(p)
 
 
-def save_image(data, filename):
+def _save_image(data, filename):
 	"""https://fengl.org/2014/07/09/matplotlib-savefig-without-borderframe/"""
 	sizes = np.shape(data)
 	height = float(sizes[0])
@@ -139,13 +139,13 @@ def save_image(data, filename):
 	plt.close('all')
 
 
-def write_images(embedding, images, output_dir='temp/', num_imgs=100, n=30000):
+def _write_images(embedding, images, output_dir='temp/', num_imgs=100, n=30000):
 	if not os.path.exists(output_dir):
 		os.makedirs(output_dir)
 	X = embedding[:,0]
 	Y = embedding[:,1]
 	for i in range(num_imgs):
-		save_image(images[i], os.path.join(output_dir, str(i) + '.jpg'))
+		_save_image(images[i], os.path.join(output_dir, str(i) + '.jpg'))
 	return embedding
 
 

@@ -1,5 +1,5 @@
 """
-AVA preprocessing module
+AVA for making spectrograms
 
 Contains
 --------
@@ -7,4 +7,6 @@ Contains
 	Preprocess syllable spectrograms.
 `ava.preprocessing.utils`
 	Useful functions for preprocessing.
+`ava.preprocessing.warping`
+	Simple shift-only and linear time-warping functions.
 """

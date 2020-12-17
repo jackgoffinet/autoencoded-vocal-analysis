@@ -18,13 +18,13 @@ EPSILON = 1e-12
 def get_spec(t1, t2, audio, p, fs=32000, target_freqs=None, target_times=None, \
 	fill_value=-1/EPSILON, max_dur=None, remove_dc_offset=True):
 	"""
-	Norm, scale, threshold, strech, and resize a Short Time Fourier Transform.
+	Norm, scale, threshold, stretch, and resize a Short Time Fourier Transform.
 
 	Notes
 	-----
 	* ``fill_value`` necessary?
 	* Look at all references and see what can be simplified.
-	* Why is there a flag returned?
+	* Why is a flag returned?
 
 	Parameters
 	----------

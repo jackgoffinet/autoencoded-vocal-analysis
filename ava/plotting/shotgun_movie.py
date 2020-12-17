@@ -7,6 +7,10 @@ Reduce speed by 50%:
 
 ffmpeg -i out.mp4 -filter_complex "[0:v]setpts=PTS/0.5[v];[0:a]atempo=0.5[a]" -map "[v]" -map "[a]" -strict -2 out.mp4
 
+TO DO
+-----
+* Check whether ffmpeg is installed.
+
 """
 __date__ = "November 2019 - November 2020"
 
@@ -196,6 +200,7 @@ class SimpleDataset(Dataset):
 
 	def __getitem__(self, index):
 		return torch.from_numpy(self.specs[index]).type(torch.FloatTensor)
+
 
 
 if __name__ == '__main__':

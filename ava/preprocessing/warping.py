@@ -2,6 +2,11 @@
 Simple shift-only and linear time-warping functions.
 
 This is an alternative to `affinewarp` time warping.
+
+Warning
+-------
+* `ava.preprocessing.warping` is experimental and may change in a future version
+  of AVA!
 """
 __date__ = "September 2020 - November 2020"
 
@@ -19,7 +24,7 @@ WARNING_MSG = "ava.preprocessing.warping is experimental and may change in " + \
 
 def apply_warp(specs, warp_params):
 	"""
-	Take real spectrograms and apply the linear warps.
+	Take real spectrograms, apply linear warps, making warped spectrograms.
 
 	Parameters
 	----------
@@ -50,9 +55,14 @@ def align_specs(specs, shift_λs, slope_λs, verbose=True):
 	Align the spectrograms, return warping parameters and warped specs.
 
 	Minimizes the following regularized L2 loss:
-		||warped_spec - target_spec||_2^2 +
-		shift_λ[iter] shift^2 +
-		slope_λ[iter] (log slope)^2
+
+
+	.. math::
+
+		\| \\textrm{warped_spec} - \\textrm{target_spec} \|_2^2 +
+		\\textrm{shift_λ} \cdot \\textrm{shift}^2 +
+		\\textrm{slope_λ} \cdot (\log \\textrm{slope})^2
+
 
 	where `target_spec` is the average warped spectrogram, updated after every
 	optimization iteration. It's a good idea to start with large values of
@@ -72,8 +82,8 @@ def align_specs(specs, shift_λs, slope_λs, verbose=True):
 
 	Raises
 	------
-	* A `UserWarning` telling you this is experimental and may change in future
-	  versions of AVA.
+	`UserWarning`
+		Tells you this is experimental and may change in future versions of AVA.
 
 	Parameters
 	----------
@@ -88,8 +98,8 @@ def align_specs(specs, shift_λs, slope_λs, verbose=True):
 	warped_specs : numpy.ndarray
 		Warped spectrograms. Same shape as input spectrograms.
 	warp_params : dictionary
-		Maps `'shifts'` and `'slopes'` to the inferred values with. Units are
-		time bins.
+		Maps `'shifts'` and `'slopes'` to their inferred values. Values are in
+		units of time bins.
 	"""
 	warnings.warn(WARNING_MSG)
 	# Set up some things.

@@ -1,6 +1,11 @@
 ava.segmenting package
 ======================
 
+.. automodule:: ava.segmenting
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Submodules
 ----------
 
@@ -40,15 +45,6 @@ ava.segmenting.utils module
 ---------------------------
 
 .. automodule:: ava.segmenting.utils
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
-
-Module contents
----------------
-
-.. automodule:: ava.segmenting
     :members:
     :undoc-members:
     :show-inheritance:

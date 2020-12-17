@@ -19,6 +19,6 @@ subpackages in this order:
 
 The remaining sections go through each subpackage in more detail.
 
-If you prefer to learn from examples, see the :code:`example/` subdirectory
+If you prefer to learn from examples, see the :code:`examples/` subdirectory
 in the `code <https://github.com/jackgoffinet/autoencoded-vocal-analysis/>`__,
 which contains python scripts implementing these three sorts of analysis.

@@ -49,7 +49,7 @@ this: ``write_hdf5_files``
 	loaders['test'].dataset.write_hdf5_files(spec_dir, num_files=1000)
 
 
-	Warped Shotgun VAE
-	##################
+Warped Shotgun VAE
+##################
 
-	TO DO
+TO DO

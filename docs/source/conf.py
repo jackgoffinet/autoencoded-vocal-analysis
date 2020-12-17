@@ -15,21 +15,21 @@
 import os
 import sys
 # sys.path.insert(0, os.path.abspath('.'))
-sys.path.insert(0, os.path.abspath('../../../autoencoded-vocal-analysis/'))
+# sys.path.insert(0, os.path.abspath('../../../autoencoded-vocal-analysis/'))
 
 
 # -- Project information -----------------------------------------------------
 
 project = 'autoencoded-vocal-analysis'
-copyright = '2019, Jack Goffinet'
+copyright = '2020, Jack Goffinet'
 author = 'Jack Goffinet'
 
-# The short X.Y version
-version = ''
 # The full version, including alpha/beta/rc tags
-release = '0.2.2'
+release = '0.3.0'
+# The short X.Y version
+version = '.'.join(release.split('.')[:2])
 
-autodoc_mock_imports = ['torch', 'bokeh', 'affinewarp', 'numba']
+autodoc_mock_imports = ['torch', 'bokeh', 'affinewarp', 'numba', 'umap']
 
 
 # -- General configuration ---------------------------------------------------
@@ -42,6 +42,7 @@ autodoc_mock_imports = ['torch', 'bokeh', 'affinewarp', 'numba']
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
+    'sphinx.ext.intersphinx',
     'sphinx.ext.autodoc',
     'sphinx.ext.napoleon',
     'sphinx.ext.mathjax',
@@ -84,7 +85,7 @@ pygments_style = None
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinx_rtd_theme'
+html_theme = 'sphinx_rtd_theme' 
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the

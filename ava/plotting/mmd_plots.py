@@ -177,10 +177,6 @@ def mmd_tsne_plot_DC(dc, mmd2_fn=None, condition_fn=None, mmd2=None, \
 	Either pass ``mmd2`` and ``conditions`` directly, or specify ``mmd2_fn`` and
 	``condition_fn`` and set ``load_data=True``.
 
-	TO DO:
-	-----
-	* add option to calculate MMD^2.
-
 	Parameters
 	----------
 	dc : ava.data.data_container.DataContainer

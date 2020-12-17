@@ -40,6 +40,15 @@ See the `examples/` subdirectory
    plotting_analysis
 
 
+.. toctree::
+   :maxdepth: 1
+   :caption: Docs:
+
+   ava.segmenting
+   ava.preprocessing
+   ava.models
+   ava.plotting
+
 
 Indices and tables
 ==================

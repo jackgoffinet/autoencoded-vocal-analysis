@@ -1,6 +1,11 @@
 ava.preprocessing package
 =========================
 
+.. automodule:: ava.preprocessing
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 Submodules
 ----------
 
@@ -20,11 +25,10 @@ ava.preprocessing.utils module
     :undoc-members:
     :show-inheritance:
 
+ava.preprocessing.warping module
+--------------------------------
 
-Module contents
----------------
-
-.. automodule:: ava.preprocessing
+.. automodule:: ava.preprocessing.warping
     :members:
     :undoc-members:
     :show-inheritance:

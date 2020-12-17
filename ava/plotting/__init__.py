@@ -1,5 +1,5 @@
 """
-AVA plotting module
+AVA package for plotting and analysis
 
 Contains
 --------
@@ -9,6 +9,8 @@ Contains
 	Plot scatterplots of latent means.
 `ava.plotting.mmd_plots`
 	Plot MMD matrices.
+`ava.plotting.shotgun_movie`
+	Make a movie out of a shotgun VAE projection and an audio file.
 `ava.models.tooltip_plot`
 	Plot an html plot with spectrogram tooltips.
 """

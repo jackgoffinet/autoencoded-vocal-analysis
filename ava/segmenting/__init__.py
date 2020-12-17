@@ -1,5 +1,5 @@
 """
-AVA segmenting module
+AVA package for segmenting audio
 
 Contains
 --------

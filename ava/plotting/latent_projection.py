@@ -2,7 +2,7 @@
 Plot a latent mean projection.
 
 """
-__date__ = "July 2019 - October 2020"
+__date__ = "July 2019 - December 2020"
 
 
 try: # Numba >= 0.52
@@ -67,7 +67,7 @@ def latent_projection_plot_DC(dc, embedding_type='latent_mean_umap', \
 	cax : {matplotlib.axes._subplots.AxesSubplot, None}, optional
 		Colorbar axis. If ``None``, an axis is made. Defaults to ``None``.
 	shuffle : bool, optional
-		Whether to shuffle to zorder of points. Defaults to ``True``.
+		Whether to shuffle the zorder of points. Defaults to ``True``.
 	save_and_close : bool, optional
 		Defaults to ``True``.
 	show_axis : bool, optional
@@ -105,20 +105,20 @@ def latent_projection_plot_with_noise_DC(dc, noise_box,
 	s=0.9, ax=None, cax=None, shuffle=True, save_and_close=True, \
 	show_axis=False, default_color='b', condition_func=None):
 	"""
-	Same as latent_projection_plot_DC, but with noise to exclude.
+	Same as `latent_projection_plot_DC`, but with noise to exclude.
 
 	Parameters
 	----------
 	dc : ava.data.data_container.DataContainer
-		See ava.data.data_container.
+		DataContainer object.
 	noise_box : list of float
 		Must contain four elements: ``[x1, x2, y1, y2]``, which are interpreted
-		as a region of the latent mean UMAP embedding containing noise. The
-		points within this rectangle are excluded.
+		as a region of the latent mean embedding containing noise. The points
+		within this rectangle are excluded.
 
 	Note
 	----
-	For other parameters, see latent_projection_plot_DC.
+	For more parameters, see latent_projection_plot_DC.
 	"""
 	embedding = dc.request(embedding_type)
 	indices = []
@@ -164,11 +164,12 @@ def projection_plot(embedding, color='b', title=None,
 	colormap='viridis', alpha=0.6, s=0.9, ax=None, cax=None, \
 	save_and_close=True, show_axis=False):
 	"""
+	Plot a projection of the data.
 
 	Parameters
 	----------
 	embedding : numpy.ndarray
-		...
+		Data embedding.
 	color : {str, numpy.ndarray}, optional
 		Defaults to ``'b'``.
 	title : {str, None}, optional
@@ -176,9 +177,25 @@ def projection_plot(embedding, color='b', title=None,
 	save_filename : str, optional
 		Defaults to ``'temp.pdf'``.
 	colorbar : bool, optional
-		...
+		Whether to include a colorbar. Defaults to ``False``.
 	shuffle : bool, optional
-		...
+		Whether to shuffle the zorder of points. Defaults to ``True``.
+	colormap : str, optional
+		The pyplot colormap to use if ``color_by`` returns numerical values.
+		Defaults to ``'viridis'``.
+	alpha : float, optional
+		Alpha value of scatterpoints. Defaults to ``0.5``.
+	s : float, optional
+		Size of scatterpoints. Defaults to ``0.9``.
+	ax : {matplotlib.axes._subplots.AxesSubplot, None}, optional
+	 	Scatter axis. If ``None``, ``matplotlib.pyplot.gca()`` is used. Defaults
+		to ``None``.
+	cax : {matplotlib.axes._subplots.AxesSubplot, None}, optional
+		Colorbar axis. If ``None``, an axis is made. Defaults to ``None``.
+	save_and_close : bool, optional
+		Defaults to ``True``.
+	show_axis : bool, optional
+		Defaults to ``False``.
 	"""
 	X, Y = embedding[:,0], embedding[:,1]
 	if shuffle:
