@@ -66,7 +66,7 @@ def align_specs(specs, shift_λs, slope_λs, verbose=True):
 
 	where `target_spec` is the average warped spectrogram, updated after every
 	optimization iteration. It's a good idea to start with large values of
-	``shift_λ`` and ``slope_λ`` that gradually decrease to zero, if you want to
+	``shift_λ`` and ``slope_λ`` that gradually decrease to zero if you want to
 	end up with a maximum likelihood estimate. In particular, I've found it's
 	helpful to do a shift-only warp the first few iterations by setting
 	``slope_λ`` to ``np.inf``.

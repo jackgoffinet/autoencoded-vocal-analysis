@@ -36,22 +36,22 @@ from ava.segmenting.amplitude_segmentation import get_onsets_offsets
 #########################################
 params = {
 	'segment': {
-		'min_freq': 30e3,
-		'max_freq': 110e3,
+		'min_freq': 30e3, # minimum frequency
+		'max_freq': 110e3, # maximum frequency
 		'nperseg': 1024, # FFT
 		'noverlap': 512, # FFT
-		'spec_min_val': 2.0,
-		'spec_max_val': 6.0,
-		'fs': 250000,
-		'th_1':1.5,
-		'th_2':2.0,
-		'th_3':2.5,
-		'max_dur': 0.2,
-		'min_dur':0.03,
-		'smoothing_timescale': 0.007,
-		'softmax': False,
-		'temperature': 0.5,
-		'algorithm': get_onsets_offsets,
+		'spec_min_val': 2.0, # minimum log-spectrogram value
+		'spec_max_val': 6.0, # maximum log-spectrogram value
+		'fs': 250000, # audio samplerate
+		'th_1':0.1, # segmenting threshold 1
+		'th_2':0.2, # segmenting threshold 2
+		'th_3':0.3, # segmenting threshold 2
+		'max_dur': 0.2, # maximum syllable duration
+		'min_dur':0.03, # minimum syllable duration
+		'smoothing_timescale': 0.007, # timescale for smoothing amplitude trace
+		'softmax': True, # puts amplitude values in [0,1]
+		'temperature': 0.5, # temperature parameter for softmax
+		'algorithm': get_onsets_offsets, # segmentation algorithm
 	},
 	'preprocess': {
 		'get_spec': get_spec,
