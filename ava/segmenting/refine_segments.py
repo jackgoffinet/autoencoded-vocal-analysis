@@ -2,7 +2,7 @@
 Remove noise from segmenting files.
 
 """
-__date__ = "August 2019 - November 2020"
+__date__ = "August 2019 - January 2021"
 
 
 from itertools import repeat
@@ -34,6 +34,19 @@ def refine_segments_pre_vae(seg_dirs, audio_dirs, out_seg_dirs, p, \
 	tooltip_output_dir='temp'):
 	"""
 	Manually remove noise by selecting regions of UMAP spectrogram projections.
+
+	First, a tooltip plot of the UMAPed spectrograms will be made (using
+	`ava.plotting.tooltip_plot`) and saved to `tooltip_output_dir`. You should
+	open this plot and see which regions of the UMAP contain noise. Then, when
+	prompted, press return to identify noise, Then enter the coordinates of a
+	rectangle (x1, x2, y1, and y2) in the UMAP projection containing noise,
+	following the prompts. You will be able to see the selected noise regions in
+	the image save at `img_fn`, by default `'temp.pdf'`. When you are finished
+	identifying noise regions, press `'q'` and the original segments from
+	`seg_dirs` that aren't identified as noise (contained in one of the
+	rectangles) are copied to segment files in `out_seg_dirs`.
+
+	Doesn't support datasets that are too large to fit in memory.
 
 	Parameters
 	----------
@@ -84,14 +97,15 @@ def refine_segments_pre_vae(seg_dirs, audio_dirs, out_seg_dirs, p, \
 			if verbose:
 				print("Writing html plot:")
 			first_iteration = False
-			title = "Select unwanted sounds:"
+			title = "Identify unwanted sounds:"
 			tooltip_plot(embed, specs, num_imgs=num_imgs, title=title, \
 					output_dir=tooltip_output_dir, grid=True)
 			if verbose:
 				print("\tDone.")
-		if input("Press [q] to quit drawing rectangles or [return] continue: ") == 'q':
+		if input("Press [q] to quit identifying noise or \
+				[return] to continue: ") == 'q':
 			break
-		print("Select a rectangle containing noise:")
+		print("Enter the coordinates of a rectangle containing noise:")
 		x1 = _get_input("x1: ")
 		x2 = _get_input("x2: ")
 		y1 = _get_input("y1: ")
@@ -111,9 +125,21 @@ def refine_segments_pre_vae(seg_dirs, audio_dirs, out_seg_dirs, p, \
 
 
 def refine_segments_post_vae(dc, seg_dirs, audio_dirs, out_seg_dirs, \
-	verbose=True, num_imgs=2000, tooltip_output_dir='temp', make_tooltip=True):
+	verbose=True, num_imgs=2000, tooltip_output_dir='temp', make_tooltip=True, \
+	img_fn='temp.pdf'):
 	"""
-	Manually remove noise by selecting regions of UMAP latent mean projections.
+	Manually remove noise by selecting regions of UMAP latent mean projection.
+
+	First, a tooltip plot of the spectrogram latent means will be made (using
+	`ava.plotting.tooltip_plot`) and saved to `tooltip_output_dir`. You should
+	open this plot and see which regions of the UMAP contain noise. Then, when
+	prompted, press return to identify noise, Then enter the coordinates of a
+	rectangle (x1, x2, y1, and y2) in the UMAP projection containing noise,
+	following the prompts. You will be able to see the selected noise regions in
+	the image save at `img_fn`, by default `'temp.pdf'`. When you are finished
+	identifying noise regions, press `'q'` and the original segments from
+	`seg_dirs` that aren't identified as noise (contained in one of the
+	rectangles) are copied to segment files in `out_seg_dirs`.
 
 	Doesn't support datasets that are too large to fit in memory.
 
@@ -133,6 +159,8 @@ def refine_segments_post_vae(dc, seg_dirs, audio_dirs, out_seg_dirs, \
 		Where to save tooltip plot. Defaults to ``'temp'``.
 	make_tooltip : bool, optional
 		Defaults to ``True``.
+	img_fn : str, optional
+		Where to save
 	"""
 	# Get UMAP embedding.
 	embed = dc.request('latent_mean_umap')
@@ -141,20 +169,21 @@ def refine_segments_post_vae(dc, seg_dirs, audio_dirs, out_seg_dirs, \
 	first_iteration = True
 	# Keep drawing boxes around noise.
 	while True:
-		_plot_helper(embed, colors, verbose=verbose)
+		_plot_helper(embed, colors, filename=img_fn, verbose=verbose)
 		if first_iteration and make_tooltip:
 			if verbose:
 				print("Writing html plot:")
 			first_iteration = False
-			title = "Select unwanted sounds:"
+			title = "Identify unwanted sounds:"
 			specs = dc.request('specs')
 			tooltip_plot(embed, specs, num_imgs=num_imgs, title=title, \
 					output_dir=tooltip_output_dir, grid=True)
 			if verbose:
 				print("\tDone.")
-		if input("Press [q] to quit drawing or [return] to continue: ") == 'q':
+		if input("Press [q] to quit identifying noise or \
+				[return] to continue: ") == 'q':
 			break
-		print("Select a rectangle containing noise:")
+		print("Enter the coordinates of a rectangle containing noise:")
 		x1 = _get_input("x1: ")
 		x2 = _get_input("x2: ")
 		y1 = _get_input("y1: ")
