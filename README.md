@@ -1,4 +1,4 @@
-## Autoencoded Vocal Analysis v0.3.0
+## Autoencoded Vocal Analysis v0.3.1
 #### Modeling animal vocalizations with VAEs
 
 <img src="docs/source/logo.png" width="300" align="middle" alt="logo">
@@ -23,7 +23,7 @@ $ pip install .
 * [UMAP](https://umap-learn.readthedocs.io/)
 * [affinewarp](https://github.com/ahwillia/affinewarp)
 
-Issues and/or pull requests are appreciated!
+Issues and pull requests are appreciated!
 
 #### See also:
 * [Animal Vocalization Generative Network](https://github.com/timsainb/AVGN), a

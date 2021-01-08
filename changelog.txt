@@ -24,3 +24,4 @@
                  Changes to preprocessing.preprocess.get_audio_seg_filenames
                  Catching scipy.io.wavfile.WavFileWarning
                  NumbaPerformanceWarning imports changed
+0.3.1 ??/??/??   ...
