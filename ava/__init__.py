@@ -30,3 +30,4 @@ Contents
 		├── template_segmentation
 		└── utils
 """
+__version__ = "0.3.1"

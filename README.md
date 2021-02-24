@@ -3,7 +3,7 @@
 
 <img src="docs/source/logo.png" width="300" align="middle" alt="logo">
 
-See our [preprint](https://doi.org/10.1101/811661) on bioRxiv for details.
+See our [preprint](https://doi.org/10.1101/811661) on bioRxiv for details (updated February 2021!).
 
 See `examples/` for usage.
 

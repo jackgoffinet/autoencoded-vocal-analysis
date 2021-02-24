@@ -14,6 +14,8 @@
 #
 import os
 import sys
+
+import ava
 # sys.path.insert(0, os.path.abspath('.'))
 # sys.path.insert(0, os.path.abspath('../../../autoencoded-vocal-analysis/'))
 
@@ -25,7 +27,7 @@ copyright = '2021, Jack Goffinet'
 author = 'Jack Goffinet'
 
 # The full version, including alpha/beta/rc tags
-release = '0.3.1'
+release = ava.__version__
 # The short X.Y version
 version = '.'.join(release.split('.')[:2])
 

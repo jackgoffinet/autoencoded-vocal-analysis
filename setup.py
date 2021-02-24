@@ -1,11 +1,13 @@
 import setuptools
 
+import ava
+
 with open("README.md", "r") as fh:
 	long_description = fh.read()
 
 setuptools.setup(
 	name="AVA: Autoencoded Vocal Analysis",
-	version="0.3.1",
+	version=ava.__version__,
 	author="Jack Goffinet",
 	author_email="jack.goffinet@duke.edu",
 	description="Generative modeling of animal vocalizations",
