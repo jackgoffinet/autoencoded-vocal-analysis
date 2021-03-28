@@ -2,7 +2,7 @@
 Useful functions for segmenting.
 
 """
-__date__ = "August 2019 - November 2020"
+__date__ = "August 2019 - March 2021"
 
 
 import matplotlib.pyplot as plt
@@ -214,15 +214,20 @@ def copy_segments_to_standard_format(orig_seg_dirs, new_seg_dirs, seg_ext, \
 	seg_ext : str
 		Input filename extension.
 	delimiter : str
-		Input filename delimiter.
+		Input filename delimiter. For a CSV file, for example, this would be a
+		comma: `','`
 	usecols : tuple
-		Input file onset and offset column.
+		Input file onset and offset columns, zero-indexed.
 	skiprows : int
-		Number of rows to skip.
+		Number of rows to skip. For example, if there is a single-line header
+		set `skiprows=1`.
 	max_duration : {None, float}, optional
 		Maximum segment duration. If None, no max is set. Defaults to `None`.
 	"""
 	assert len(seg_ext) == 4
+	assert len(orig_seg_dirs) == len(new_seg_dirs), \
+			f"{len(orig_seg_dirs)} != {len(new_seg_dirs)}"
+	assert len(usecols) == 2, "Expected two columns (for onsets and offsets)!"
 	for orig_seg_dir, new_seg_dir in zip(orig_seg_dirs, new_seg_dirs):
 		if not os.path.exists(new_seg_dir):
 			os.makedirs(new_seg_dir)
@@ -264,6 +269,10 @@ def write_segments_to_audio(in_audio_dirs, out_audio_dirs, seg_dirs, n_zfill=3,\
 	verbose : bool, optional
 		Deafults to ``True``.
 	"""
+	assert len(in_audio_dirs) == len(out_audio_dirs), \
+			f"{len(in_audio_dirs)} != {len(out_audio_dirs)}"
+	assert len(in_audio_dirs) == len(seg_dirs), \
+			f"{len(in_audio_dirs)} != {len(seg_dirs)}"
 	if verbose:
 		print("Writing segments to audio,", len(in_audio_dirs), "directories")
 	for in_dir, out_dir, seg_dir in zip(in_audio_dirs, out_audio_dirs, seg_dirs):
@@ -311,6 +320,8 @@ def merge_segments(orig_seg_dirs, new_seg_dirs, merge_threshold, \
 	min_duration : float, optional
 		Minumum duration of a merged segment. Defaults to `0.0`.
 	"""
+	assert len(orig_seg_dirs) == len(new_seg_dirs), \
+			f"{len(orig_seg_dirs)} != {len(new_seg_dirs)}"
 	if verbose:
 		print("Merging segments:")
 	# Make new directories, if needed.
@@ -374,6 +385,8 @@ def get_audio_seg_filenames(audio_dirs, seg_dirs):
 	seg_fns : list of str
 		Corresponding segment filenames
 	"""
+	assert len(audio_dirs) == len(seg_dirs), \
+			f"{len(audio_dirs)} != {len(seg_dirs)}"
 	audio_fns, seg_fns = [], []
 	for audio_dir, seg_dir in zip(audio_dirs, seg_dirs):
 		temp_fns = [i for i in sorted(os.listdir(audio_dir)) if \
@@ -417,11 +430,11 @@ def _read_onsets_offsets(filename):
 
 
 def _is_audio_file(filename):
-	return len(filename) > 4 and filename[-4:] == '.wav'
+	return filename.endswith('.wav')
 
 
 def _is_txt_file(filename):
-	return len(filename) > 4 and filename[-4:] == '.txt'
+	return filename.endswith('.txt')
 
 
 def _is_valid_response(response, num_specs):

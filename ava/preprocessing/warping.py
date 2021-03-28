@@ -139,7 +139,8 @@ def align_specs(specs, shift_λs, slope_λs, verbose=True):
 			warped_specs[i] = interps[i](x0[i,0] + \
 					np.exp(x0[i,1])*np.arange(specs[i].shape[1]))
 		if verbose:
-			print("Iteration "+str(warp_iter)+", loss =", np.mean(loss))
+			temp_loss = round(np.mean(loss),3)
+			print("Iteration {}, loss={}".format(warp_iter, temp_loss))
 	warp_params = {'shifts': x0[:,0], 'slopes': np.exp(x0[:,1])}
 	return warped_specs, warp_params
 

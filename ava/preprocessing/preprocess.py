@@ -178,6 +178,7 @@ def tune_syll_preprocessing_params(audio_dirs, seg_dirs, p, img_fn='temp.pdf'):
 		seg_filenames += temp_seg
 	audio_filenames = np.array(audio_filenames)
 	seg_filenames = np.array(seg_filenames)
+	assert len(audio_filenames) > 0, "Didn't find any audio files!"
 
 	# Main loop: keep tuning parameters ...
 	while True:
