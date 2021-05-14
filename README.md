@@ -3,7 +3,9 @@
 
 <img src="docs/source/logo.png" width="300" align="middle" alt="logo">
 
-See our [preprint](https://doi.org/10.1101/811661) on bioRxiv for details (updated February 2021!).
+See our article for details:
+
+> Goffinet, J., Brudner, S., Mooney, R., & Pearson, J. (2021). Low-dimensional learned feature spaces quantify individual and group differences in vocal repertoires. *eLife*, 10:e67855. [https://doi.org/10.7554/eLife.67855](https://doi.org/10.7554/eLife.67855)
 
 See `examples/` for usage.
 
