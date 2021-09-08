@@ -1,3 +1,5 @@
+### Update 9/8/2021: AVA has been moved [here](https://github.com/pearsonlab/autoencoded-vocal-analysis). This copy of AVA will no longer be maintained.
+
 ## Autoencoded Vocal Analysis v0.3.1
 #### Modeling animal vocalizations with VAEs
 
