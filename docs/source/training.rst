@@ -61,6 +61,15 @@ You may also want to continue training a previously saved model:
 	model.train_loop(loaders, epochs=51)
 
 
+
+Another VAE parameter worth knowing about is :code:`model_precision`, which
+controls the reconstruction/regularization tradeoff of the model. Very large
+positive values will make the VAE behave more like a deterministic autoencoder,
+encouraging better reconstructions. Small positive values produce
+better-behaved latents, but with poorer reconstructions.
+The default value is 10.  
+
+
 Shotgun VAE Training
 ####################
 

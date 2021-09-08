@@ -36,3 +36,11 @@ GPU Acceleration
 Like most neural network models, the VAE trains much faster on GPU than on
 CPU. Training times on GPU are about a few minutes to an hour and roughly
 10x slower on CPU. If you have a GPU, make sure to install PyTorch with CUDA.
+
+New to Python?
+##############
+
+Python has an official `tutorial <https://docs.python.org/3/tutorial/index.html>`__
+that goes through many of the basic concepts of the language. I'll also
+recommend `Jupyter <https://jupyter.org/>`__ notebooks as a convenient way to
+write and run code in a single application.

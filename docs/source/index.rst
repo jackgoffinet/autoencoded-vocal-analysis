@@ -2,12 +2,12 @@ AVA: autoencoded vocal analysis
 ===============================
 
 Welcome to AVA, a python package for inferring latent descriptions of animal
-vocalizations using variational autoencoders. See our
-`preprint <https://doi.org/10.1101/811661>`_ for details:
+vocalizations using variational autoencoders. See our article for details:
 
-	Goffinet, J., Brudner, S., Mooney, R., & Pearson, J. (2021) Low-dimensional
+	Goffinet, J., Brudner, S., Mooney, R., & Pearson, J. (2021). Low-dimensional
 	learned feature spaces quantify individual and group differences in vocal
-	repertoires, *biorXiv*, 811661.
+	repertoires. *eLife*, 10:e67855.
+	`https://doi.org/10.7554/eLife.67855 <https://doi.org/10.7554/eLife.67855>`_
 
 You can find the code
 `on github <https://github.com/jackgoffinet/autoencoded-vocal-analysis>`_.
